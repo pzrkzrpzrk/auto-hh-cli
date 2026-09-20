@@ -8,6 +8,10 @@
   },
   "scripts": {
     "start": "node bin/auto-hh search",
+    "search": "node bin/auto-hh search",
+    "digest": "node bin/auto-hh digest",
+    "digest:show": "node bin/auto-hh digest show",
+    "cover": "node bin/auto-hh cover",
     "apply": "node bin/auto-hh apply",
     "login": "node bin/auto-hh apply --login",
     "schedule": "node bin/auto-hh schedule",

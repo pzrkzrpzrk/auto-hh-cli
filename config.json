@@ -20,7 +20,8 @@
     "apiKey": ""
   },
   "schedule": {
-    "cron": "0 12 * * *"
+    "cron": "0 12 * * *",
+    "steps": ["search", "digest", "cover"]
   },
   "adaptResume": true,
   "apply": {
