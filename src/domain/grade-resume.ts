@@ -1,5 +1,5 @@
 import { loadConfig } from "../config.js";
-import { getClient } from "../clients/ai-client";
+import { getClient, getModel, getMaxTokens } from "../clients/ai-client";
 import { loadResume } from "../resume.js";
 import { retryOnTransient } from "../retry.js";
 import log from "../logger.js";
@@ -101,7 +101,7 @@ async function gradeResume(resume?: any, resumeName?: string): Promise<Record<st
     return null;
   }
 
-  const model = process.env.CLAUDE_MODEL || "gpt-4o";
+  const model = getModel(apiConfig);
 
   const r = resume || loadResume(resumeName);
   if (!r) {
@@ -123,7 +123,7 @@ async function gradeResume(resume?: any, resumeName?: string): Promise<Record<st
     const resp = await retryOnTransient(() =>
       client.chat.completions.create({
         model,
-        max_tokens: 50000,
+        max_tokens: getMaxTokens(),
         messages,
         response_format: { type: "json_object" },
       })

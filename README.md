@@ -319,8 +319,9 @@ npm run ui          # или: npx auto-hh ui (алиасы: menu, interactive)
 
 | Поле | Что задаёт |
 | --- | --- |
-| `baseUrl` | Базовый URL OpenAI-совместимого API (по умолчанию — DeepSeek) |
+| `baseUrl` | Базовый URL OpenAI-совместимого API. В репозитории прописан Z.ai: `https://api.z.ai/api/paas/v4/` |
 | `apiKey` | Ключ. Запасные источники: `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` в `.env` |
+| `model` | Модель для судьи, писем и оценки резюме. По умолчанию `glm-4.7-flash`; перебивается переменной `CLAUDE_MODEL` |
 
 Если ключ не задан — ИИ-судья и генерация писем выключаются, остаётся только локальный фильтр.
 
@@ -359,9 +360,15 @@ npm run ui          # или: npx auto-hh ui (алиасы: menu, interactive)
 
 | Переменная | По умолчанию | Что задаёт |
 | --- | --- | --- |
-| `ANTHROPIC_API_KEY` | — | Запасной ключ, если нет `api.apiKey` в `config.json` |
-| `OPENAI_API_KEY` | — | То же, второй запасной вариант |
-| `CLAUDE_MODEL` | `gpt-4o` | Модель для судьи и писем. **Должна** соответствовать `api.baseUrl` (для DeepSeek — например `deepseek-chat`) |
+| `OPENAI_API_KEY` | — | Ключ провайдера (проверяется раньше `ANTHROPIC_API_KEY`), если не задан `api.apiKey` |
+| `OPENAI_BASE_URL` | — | Перебивает `api.baseUrl` из `config.json` (шлюз, прокси, локальный мок) |
+| `ANTHROPIC_API_KEY` | — | То же, второй запасной вариант |
+| `CLAUDE_MODEL` | — | Перебивает `api.model`. Модель **должна** соответствовать `api.baseUrl` (Z.ai → `glm-4.7-flash`, DeepSeek → `deepseek-chat`) |
+| `AI_MAX_TOKENS` | `32768` | Максимум токенов на ответ модели (у GLM-4.7 предел — `131072`) |
+| `AI_CONCURRENCY` | `10` | Сколько ИИ-запросов выполнять параллельно. Бесплатные тарифы часто дают 429 — снижайте до 1–3 |
+| `AI_RETRY_ATTEMPTS` | `5` | Всего попыток на один ИИ-запрос (повторяются только 429/5xx/сетевые ошибки) |
+| `AI_RETRY_BASE_MS` | `1000` | Базовая пауза между попытками, растёт экспоненциально |
+| `AI_RETRY_MAX_MS` | `30000` | Потолок паузы между попытками; `Retry-After` от сервера учитывается |
 | `JUDGE_BATCH_SIZE` | `10` | Сколько вакансий в одной пачке на судейство |
 | `COVER_BATCH_SIZE` | `20` | Сколько писем генерировать за один запрос |
 | `COVER_SIGNATURE` | `Telegram: <your-telegram>, e-mail: <your-email>` | Подпись сопроводительного письма — идёт в системный промпт ИИ и в плейсхолдер `{signature}` шаблона из `config.json` |
@@ -458,4 +465,6 @@ npm run ui          # или: npx auto-hh ui (алиасы: menu, interactive)
 - **Порядок шагов.** `digest` без предварительного `search` скажет «Кэш поиска пуст»; `cover` без `digest` — «Дайджест пуст»; `apply` пропускает вакансии, для которых нет письма (сгенерируйте `npm run cover`).
 - **`digest --dry-run`** ничего не записывает: ни дайджест, ни историю просмотров — удобно проверять фильтр и лимит.
 - **ИИ без ключа.** Без `api.apiKey` / `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` судья и письма отключаются — работает только локальный фильтр.
-- **Модель и провайдер должны совпадать**: `CLAUDE_MODEL` выбирается под `api.baseUrl` (DeepSeek → `deepseek-chat`, OpenAI → `gpt-4o` и т.д.).
+- **Модель и провайдер живут вместе**: `api.baseUrl` и `api.model` в `config.json` (перебить модель можно через `CLAUDE_MODEL`). Для Z.ai — `https://api.z.ai/api/paas/v4/` + `glm-4.7-flash`, для DeepSeek — `https://api.deepseek.com` + `deepseek-chat`.
+- **GLM-4.7-Flash думает всегда.** У GLM-4.7 режим рассуждений принудительный: ответ приходит медленнее и часть лимита `AI_MAX_TOKENS` уходит на «размышления». Если нужен другой баланс — `glm-4.7-flashx` (платная, дешевле `glm-4.7`) или `glm-4.7`.
+- **429 на бесплатном тарифе**: снижайте `AI_CONCURRENCY` (до 1–3) и/или `JUDGE_BATCH_SIZE` / `COVER_BATCH_SIZE`; повторы с паузами делает `AI_RETRY_*`.

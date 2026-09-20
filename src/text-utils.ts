@@ -7,5 +7,14 @@ export function parseJSON(text: string): any {
   let cleaned = text.trim();
   cleaned = cleaned.replace(/^```json\s*\n?/i, '').replace(/\n?```\s*$/i, '');
   cleaned = cleaned.replace(/^\*\*+/, '').replace(/\*\*+$/, '');
-  return JSON.parse(cleaned);
+  try {
+    return JSON.parse(cleaned);
+  } catch (err) {
+    // Модель иногда добавляет пояснения вокруг JSON — берём фрагмент между
+    // первой { и последней }. На валидном JSON поведение не меняется.
+    const start = cleaned.indexOf('{');
+    const end = cleaned.lastIndexOf('}');
+    if (start === -1 || end <= start) throw err;
+    return JSON.parse(cleaned.slice(start, end + 1));
+  }
 }

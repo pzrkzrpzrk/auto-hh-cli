@@ -1,7 +1,7 @@
 import log from "../../logger.js";
 import { retryOnTransient } from "../../retry.js";
 import { loadConfig } from "../../config.js";
-import { getClient, buildResumeBlock } from "../../clients/ai-client";
+import { getClient, buildResumeBlock, getModel, getMaxTokens, getConcurrency } from "../../clients/ai-client";
 import { stripHtml, parseJSON } from "../../text-utils.js";
 import { adaptResumeForVacancy } from "../adapt-resume.js";
 import { buildBatchSystemText, coverSignature } from "./system-text.js";
@@ -23,7 +23,7 @@ async function buildWithClaude(vacancy, resume = null, adaptResume = false) {
   if (!client) return null;
 
   const profile = process.env.APPLICANT_PROFILE || 'опытный разработчик';
-  const model = process.env.CLAUDE_MODEL || 'gpt-4o';
+  const model = getModel(apiConfig);
 
   const description = stripHtml(vacancy.description).slice(0, 1000);
   const skills = (vacancy.key_skills || []).map(s => s.name).join(', ');
@@ -109,7 +109,7 @@ async function buildCoverLettersBatch(resume, items, batchSize = 20, onBatch = n
   const result = new Map();
   if (!client || !items.length) return result;
 
-  const model = process.env.CLAUDE_MODEL;
+  const model = getModel(apiConfig);
   const profile = process.env.APPLICANT_PROFILE || 'опытный разработчик';
   const cfg = loadConfig();
   const adapt = cfg.adaptResume !== false;
@@ -139,7 +139,7 @@ async function buildCoverLettersBatch(resume, items, batchSize = 20, onBatch = n
   }
 
   let nextBatchIdx = 0;
-  const CONCURRENCY = 10;
+  const CONCURRENCY = getConcurrency();
 
   async function runBatch(ii) {
     const { idx, batch, text } = batchTexts[ii];
@@ -156,8 +156,9 @@ async function buildCoverLettersBatch(resume, items, batchSize = 20, onBatch = n
     try {
       const resp = await retryOnTransient(() => client.chat.completions.create({
         model,
-        max_completion_tokens: 1000000,
+        max_tokens: getMaxTokens(),
         messages,
+        response_format: { type: 'json_object' },
       }));
 
       const r = resp as any;
