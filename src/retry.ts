@@ -1,9 +1,13 @@
 import OpenAI from "openai";
 import log from "./logger.js";
 
-const DEFAULT_ATTEMPTS = 5;
-const BASE_DELAY_MS = parseInt(process.env.AI_RETRY_BASE_MS || '1000', 10);
-const MAX_DELAY_MS = parseInt(process.env.AI_RETRY_MAX_MS || '30000', 10);
+const ENV_ATTEMPTS = parseInt(process.env.AI_RETRY_ATTEMPTS || '', 10);
+const ENV_BASE = parseInt(process.env.AI_RETRY_BASE_MS || '', 10);
+const ENV_MAX = parseInt(process.env.AI_RETRY_MAX_MS || '', 10);
+
+const DEFAULT_ATTEMPTS = Number.isFinite(ENV_ATTEMPTS) && ENV_ATTEMPTS > 0 ? ENV_ATTEMPTS : 5;
+const BASE_DELAY_MS = Number.isFinite(ENV_BASE) && ENV_BASE > 0 ? ENV_BASE : 1000;
+const MAX_DELAY_MS = Number.isFinite(ENV_MAX) && ENV_MAX > 0 ? ENV_MAX : 30000;
 
 // Повторяем только то, что имеет смысл повторять: лимиты (429), таймауты и 5xx.
 // На 400/401/404 (неверный запрос, ключ, модель) повтор бесполезен — сразу наверх.
@@ -29,7 +33,7 @@ function retryAfterMs(err: any): number | null {
 }
 
 async function retryOnTransient(fn: () => Promise<unknown>, maxAttempts = DEFAULT_ATTEMPTS) {
-  const attempts = Math.max(1, maxAttempts);
+  const attempts = Number.isFinite(maxAttempts) && maxAttempts > 0 ? Math.floor(maxAttempts) : DEFAULT_ATTEMPTS;
   for (let attempt = 0; ; attempt++) {
     try {
       return await fn();

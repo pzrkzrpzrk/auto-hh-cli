@@ -168,7 +168,9 @@ async function buildCoverLettersBatch(resume, items, batchSize = 20, onBatch = n
         return;
       }
       const parsed = parseJSON(content);
-      for (const l of parsed.letters || []) {
+      // GLM может вернуть голый массив вместо {"letters": [...]} — принимаем обе формы.
+      const list = Array.isArray(parsed) ? parsed : parsed?.letters || [];
+      for (const l of list) {
         if (l.vacancyId && l.coverLetter) result.set(String(l.vacancyId), l.coverLetter);
       }
       log.debug(`cover batch ${idx}: ${batch.length} letters, in=${r.usage?.prompt_tokens || 0} out=${r.usage?.completion_tokens || 0}`);

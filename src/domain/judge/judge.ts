@@ -35,6 +35,14 @@ function normalizeVerdict(v: any): Verdict {
   };
 }
 
+// Модели (в частности GLM) иногда отвечают голым массивом вместо {"verdicts": [...]}.
+// Принимаем обе формы, иначе вердикты молча теряются.
+function verdictList(parsed: any): any[] {
+  if (Array.isArray(parsed)) return parsed;
+  if (Array.isArray(parsed?.verdicts)) return parsed.verdicts;
+  return [];
+}
+
 function formatVacancyText(vacancy: Vacancy) {
   const description = stripHtml(vacancy.description);
   const skills = (vacancy.key_skills || []).map(s => s.name).join(', ');
@@ -90,7 +98,7 @@ async function judgeVacancy(resume: Resume, vacancy: Vacancy, opts: JudgeOpts = 
     const text = (resp as any).choices?.[0]?.message?.content;
     if (!text) return null;
     const parsed = parseJSON(text);
-    const verdict = normalizeVerdict(parsed);
+    const verdict = normalizeVerdict(verdictList(parsed)[0] ?? {});
     log.debug(`judge ${vacancy.id}: score=${verdict.score} fit=${verdict.fit} in=${(resp as any).usage?.prompt_tokens} out=${(resp as any).usage?.completion_tokens}`);
     return verdict;
   } catch (err) {
@@ -111,7 +119,7 @@ async function judgeVacanciesBatch(resume: Resume, vacancies: Vacancy[], opts: J
   const adapt = opts.adaptResume;
 
   const systemText = buildSystemText(minScore) +
-    `\n\nВ этом запросе подаётся СРАЗУ НЕСКОЛЬКО вакансий. Для каждой верни отдельную запись в массиве verdicts с полем vacancyId, в том же порядке, что во входе.${adapt ? '\n\nДля каждой вакансии передано адаптированное под неё резюме — учитывай только его при оценке.' : ''}`;
+    `\n\nВ этом запросе подаётся СРАЗУ НЕСКОЛЬКО вакансий. Верни ОБЪЕКТ вида {"verdicts": [ ... ]} (не голый массив): по одной записи на вакансию, в том же порядке, что во входе.${adapt ? '\n\nДля каждой вакансии передано адаптированное под неё резюме — учитывай только его при оценке.' : ''}`;
 
   const vacanciesText = vacancies.map((v, i) => {
     let block = '';
@@ -152,7 +160,7 @@ async function judgeVacanciesBatch(resume: Resume, vacancies: Vacancy[], opts: J
     log.debug(`judge batch ${vacancies.length}: in=${(resp as any).usage?.prompt_tokens || 0} out=${(resp as any).usage?.completion_tokens || 0}`);
 
     const map = new Map();
-    for (const v of parsed.verdicts || []) {
+    for (const v of verdictList(parsed)) {
       const verdict = normalizeVerdict(v);
       map.set(verdict.vacancyId, verdict);
     }
