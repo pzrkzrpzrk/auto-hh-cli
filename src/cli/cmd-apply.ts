@@ -263,7 +263,9 @@ async function apply(opts: Record<string, any> = {}) {
   if (/\/account\/login/.test(page.url())) {
     log.error('Not logged in. Run `auto-hh apply --login` first.');
     await ctx.close();
-    process.exit(1);
+    // process.exit() здесь оборвал бы finally в run() и незаписанные данные в Mongo.
+    process.exitCode = 1;
+    return;
   }
 
   let ok = 0, fail = 0, skipped = 0;
