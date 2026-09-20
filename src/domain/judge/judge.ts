@@ -94,7 +94,7 @@ async function judgeVacancy(resume: Resume, vacancy: Vacancy, opts: JudgeOpts = 
       max_tokens: getMaxTokens(),
       messages,
       response_format: { type: 'json_object' },
-    }));
+    }), { label: `судья ${vacancy.id}` });
     const text = (resp as any).choices?.[0]?.message?.content;
     if (!text) return null;
     const parsed = parseJSON(text);
@@ -152,7 +152,7 @@ async function judgeVacanciesBatch(resume: Resume, vacancies: Vacancy[], opts: J
       max_tokens: getMaxTokens(),
       messages,
       response_format: { type: 'json_object' },
-    }));
+    }), { label: `судья батч ${vacancies.length}` });
     const text = (resp as any).choices?.[0]?.message?.content;
     if (!text) return null;
     const parsed = parseJSON(text);

@@ -120,13 +120,15 @@ async function gradeResume(resume?: any, resumeName?: string): Promise<Record<st
   ];
 
   try {
-    const resp = await retryOnTransient(() =>
-      client.chat.completions.create({
-        model,
-        max_tokens: getMaxTokens(),
-        messages,
-        response_format: { type: "json_object" },
-      })
+    const resp = await retryOnTransient(
+      () =>
+        client.chat.completions.create({
+          model,
+          max_tokens: getMaxTokens(),
+          messages,
+          response_format: { type: "json_object" },
+        }),
+      { label: 'оценка резюме' }
     );
 
     const text = (resp as any).choices?.[0]?.message?.content;

@@ -69,7 +69,7 @@ ${coverSignature()}
         },
         { role: 'user', content: userMsg },
       ],
-    })) as any;
+    }), { label: 'письмо' }) as any;
     const text = resp.choices?.[0]?.message?.content?.trim();
     if (text) {
       log.debug(`Claude usage: in=${resp.usage?.prompt_tokens} out=${resp.usage?.completion_tokens}`);
@@ -159,7 +159,7 @@ async function buildCoverLettersBatch(resume, items, batchSize = 20, onBatch = n
         max_tokens: getMaxTokens(),
         messages,
         response_format: { type: 'json_object' },
-      }));
+      }), { label: `письма батч ${batch.length}` });
 
       const r = resp as any;
       const content = r.choices?.[0]?.message?.content;
