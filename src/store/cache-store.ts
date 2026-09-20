@@ -144,7 +144,3 @@ export async function clear(): Promise<string[]> {
   }
   return removed;
 }
-
-export function fileFor(date?: Date): string {
-  return `cache:${dateKey(date)}`;
-}
