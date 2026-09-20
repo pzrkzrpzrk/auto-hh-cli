@@ -1,9 +1,9 @@
-// Команда search: только поиск вакансий (страницы hh.ru → кэш cachePages).
+// Команда search: поиск вакансий (страницы hh.ru → cachePages) + описания вакансий (cacheFull).
 // Отбор + ИИ-судья — отдельный шаг `digest`, сопроводительные — отдельный шаг `cover`.
 import HHClient from "../clients/hh-client";
 import { loadConfig } from "../config";
 import * as collectCache from "../store/cache-store.js";
-import { collectVacancies, fmtSalary } from "../domain/collect.js";
+import { collectVacancies, collectFullVacancies, fmtSalary } from "../domain/collect.js";
 import resetData from "../store/reset.js";
 import log from "../logger.js";
 
@@ -37,6 +37,27 @@ async function search(opts: Record<string, any> = {}) {
       console.log('\nНичего не найдено — проверьте config.search.');
       return;
     }
+
+    // Описания (cacheFull) нужны шагам digest и cover — забираем их сразу, пока открыт браузер.
+    try {
+      const full = await collectFullVacancies(client, items, cache);
+      const parts = [`+${full.saved}`];
+      if (full.cached) parts.push(`уже в кэше ${full.cached}`);
+      if (full.skippedSeen) parts.push(`просмотренных пропущено ${full.skippedSeen}`);
+      if (full.failed) parts.push(`ошибок ${full.failed}`);
+      console.log(`\nПолные карточки (cacheFull): ${parts.join(', ')} из ${full.candidates} найденных`);
+      if (!full.saved && !full.failed) {
+        console.log('Все карточки уже в кэше — за описаниями на hh.ru не ходили.');
+      } else if (full.failed) {
+        console.log('Недостающие описания digest и cover догрузят сами.');
+      }
+    } catch (err: any) {
+      // Страницы выдачи уже в кэше: падение на карточках не должно выглядеть как провал поиска.
+      log.error(`Full vacancies failed: ${err.message}`);
+      console.error(`⚠️  Полные карточки не собрались: ${err.message}`);
+      console.error('Страницы выдачи в кэше — digest и cover догрузят описания сами.');
+    }
+
     console.log('\nДальше: auto-hh digest — локальный фильтр + ИИ-судья → дайджест');
   } finally {
     await client.close?.();
