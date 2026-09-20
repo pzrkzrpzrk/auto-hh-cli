@@ -3,6 +3,7 @@
 import fs from "fs";
 import path from "path";
 import HHClient from "../clients/hh-client";
+import { getConcurrency } from "../clients/ai-client";
 import { loadConfig } from "../config.js";
 import history from "../store/history-store";
 import * as collectCache from "../store/cache-store.js";
@@ -72,7 +73,7 @@ async function judgeWithClaude(resume, candidates, cache, minScore, adaptResume 
   }
 
   let nextBatchIdx = 0;
-  const CONCURRENCY = 10;
+  const CONCURRENCY = getConcurrency();
 
   async function runBatch(idx, batch) {
     log.info(`Judging batch ${idx}: ${batch.length} vacancies`);

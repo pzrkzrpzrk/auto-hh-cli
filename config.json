@@ -16,8 +16,9 @@
     "excludeArchived": true
   },
   "api": {
-    "baseUrl": "https://api.deepseek.com",
-    "apiKey": ""
+    "baseUrl": "https://api.z.ai/api/paas/v4/",
+    "apiKey": "",
+    "model": "glm-4.7-flash"
   },
   "schedule": {
     "cron": "0 12 * * *",
