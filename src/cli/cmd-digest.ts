@@ -137,6 +137,7 @@ function selectAccepted(candidates, judgements, useClaude, maxRun) {
             area: full.area?.name || '—',
             salary: fmtSalary(full.salary),
             url: full.alternate_url,
+            publishedAt: full.publishedAt || null,
             score,
             reason,
           });
@@ -164,6 +165,7 @@ async function buildResults(accepted, track = true) {
       area: full.area?.name || '—',
       salary: fmtSalary(full.salary),
       url: full.alternate_url,
+      publishedAt: full.publishedAt || null,
       score,
       reason,
       comment,
@@ -187,7 +189,8 @@ function printTop(matched) {
   if (!matched.length) return;
   console.log('\n=== TOP MATCHES ===');
   for (const e of matched.slice(0, 10)) {
-    console.log(`- [${e.score ?? '?'}/10] ${e.title} @ ${e.employer} | ${e.salary}\n  ${e.url}`);
+    const when = e.publishedAt ? ` | опубликована ${String(e.publishedAt).slice(0, 10)}` : '';
+    console.log(`- [${e.score ?? '?'}/10] ${e.title} @ ${e.employer} | ${e.salary}${when}\n  ${e.url}`);
   }
 }
 
@@ -274,6 +277,7 @@ async function show(opts: Record<string, any> = {}) {
       for (const e of entries) {
         console.log(`[${e.score ?? '?'}/10] ${e.title} @ ${e.employer}`);
         console.log(`      ${e.salary || '—'} | ${e.area || '—'}`);
+        if (e.publishedAt) console.log(`      Опубликована: ${String(e.publishedAt).slice(0, 10)}`);
         console.log(`      ${e.url}`);
         if (e.coverLetter) console.log(`      -> письмо: ${e.coverLetter.slice(0, 80)}...`);
         console.log();

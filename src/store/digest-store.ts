@@ -20,6 +20,7 @@ function toMarkdown(entries: any[], title: string, date = dateKey()): string {
     lines.push(`**${e.title || '—'}** @ ${e.employer || '—'}`);
     lines.push(`- Регион: ${e.area || '—'}`);
     lines.push(`- Зарплата: ${e.salary || '—'}`);
+    if (e.publishedAt) lines.push(`- Опубликована: ${String(e.publishedAt).slice(0, 10)}`);
     if (e.score != null) lines.push(`- Оценка: ${e.score}/10`);
     if (e.reason) lines.push(`- Причина: ${e.reason}`);
     if (e.comment) lines.push(`- Совпадение: ${e.comment}`);

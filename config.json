@@ -6,6 +6,8 @@
     "per_page": 100,
     "start_page": 0,
     "max_pages": 10,
+    "search_period": 30,
+    "order_by": "publication_time",
     "schedule": null,
     "employment": null
   },
