@@ -1,257 +1,13 @@
-// Команда search: поиск, фильтр, Claude → дайджест.
-import path from "path";
+// Команда search: только поиск вакансий (страницы hh.ru → кэш cachePages).
+// Отбор + ИИ-судья — отдельный шаг `digest`, сопроводительные — отдельный шаг `cover`.
 import HHClient from "../clients/hh-client";
-import {  loadConfig  } from "../config";
-import history from "../store/history-store";
+import { loadConfig } from "../config";
 import * as collectCache from "../store/cache-store.js";
-import {  vacancyMatchesFilter  } from "../domain/filter.js";
-import {  buildCoverLetter, buildCoverLettersBatch  } from "../domain/cover-letter";
-import {  loadResume  } from "../resume.js";
-import {  judgeVacancy, judgeVacanciesBatch  } from "../domain/judge";
-import {  writeDigest, writeRejected  } from "../store/digest-store";
+import { collectVacancies, fmtSalary } from "../domain/collect.js";
 import resetData from "../store/reset.js";
-import { registerResume } from "../store/resume-store.js";
 import log from "../logger.js";
 
-async function collectVacancies(client, search, cache) {
-  const results = [];
-  const startPage = search.start_page || 0;
-  const maxPages = search.max_pages || 1;
-  for (let page = startPage; page < startPage + maxPages; page++) {
-    // Страницу 0 всегда забираем свежей — на ней новые вакансии.
-    const cached = !page ? null : cache.pages[String(page)];
-    if (cached) {
-      log.info(`Page ${page}: ${cached.length} vacancies (cached)`);
-      results.push(...cached);
-      continue;
-    }
-
-    const params: Record<string, any> = {
-      text: search.text,
-      area: search.area,
-      experience: search.experience,
-      salary: search.salary,
-      only_with_salary: search.only_with_salary,
-      currency: search.currency,
-      per_page: search.per_page || 50,
-      page,
-    };
-    if (search.schedule) params.schedule = search.schedule;
-    if (search.employment) params.employment = search.employment;
-
-    const data = await client.searchVacancies(params);
-    log.info(`Page ${page}: ${data.items.length} vacancies (total ${data.found})`);
-    cache.pages[String(page)] = data.items;
-    await collectCache.savePage(cache, page);
-    results.push(...data.items);
-    if (page + 1 >= (data.pages || 0)) break;
-  }
-  return results;
-}
-
-function fmtSalary(s) {
-  if (!s) return '—';
-  const parts = [];
-  if (s.from) parts.push(`от ${s.from}`);
-  if (s.to) parts.push(`до ${s.to}`);
-  return `${parts.join(' ') || '?'} ${s.currency || ''}`.trim();
-}
-
-async function filterLocally(client, items, cache, cfg) {
-  const candidates = [];
-  for (const item of items) {
-    let full = cache.fullById[String(item.id)];
-    if (!full) {
-      if (await history.isSeen(item.id)) continue;
-      try {
-        full = await client.getVacancy(item.id);
-      } catch (err) {
-        log.warn(`Failed to fetch vacancy ${item.id}: ${err.message}`);
-        await history.markSeen(item.id);
-        continue;
-      }
-      if (!full) {
-        log.warn(`Empty vacancy ${item.id}, skipping`);
-        await history.markSeen(item.id);
-        continue;
-      }
-      cache.fullById[String(item.id)] = full;
-      await collectCache.saveFull(cache, item.id);
-    }
-
-    const verdict = vacancyMatchesFilter(full, cfg.filter);
-    await history.markSeen(item.id);
-    if (!verdict.ok) {
-      log.info(`Skip ${item.id} (${full.name}): ${verdict.reason}`);
-      continue;
-    }
-    candidates.push({ full, verdict });
-  }
-  return candidates;
-}
-
-async function judgeWithClaude(resume, candidates, cache, minScore, adaptResume = false, resumeId?: string) {
-  const judgements = new Map();
-  for (const [id, j] of Object.entries(cache.judgements)) judgements.set(id, j);
-  let judgedCount = 0;
-
-  const pending = candidates.filter(c => !judgements.has(String(c.full.id)));
-  if (pending.length < candidates.length) {
-    log.info(`Judgements from cache: ${candidates.length - pending.length}/${candidates.length}`);
-  }
-
-  const batchSize = parseInt(process.env.JUDGE_BATCH_SIZE || '10', 10);
-  const batches = [];
-  for (let i = 0; i < pending.length; i += batchSize) {
-    batches.push(pending.slice(i, i + batchSize).map(c => c.full));
-  }
-
-  let nextBatchIdx = 0;
-  const CONCURRENCY = 10;
-
-  async function runBatch(idx, batch) {
-    log.info(`Judging batch ${idx}: ${batch.length} vacancies`);
-    const result = await judgeVacanciesBatch(resume, batch, { minScore, adaptResume });
-    if (!result) {
-      log.warn(`Batch ${idx} failed, falling back to per-item judge`);
-      for (const v of batch) {
-        const j = await judgeVacancy(resume, v, { minScore, adaptResume });
-        if (j) {
-          judgements.set(String(v.id), j);
-          cache.judgements[String(v.id)] = j;
-          await collectCache.saveJudgements(cache, resumeId);
-        }
-        judgedCount++;
-      }
-    } else {
-      for (const [id, j] of result.entries()) {
-        judgements.set(id, j);
-        cache.judgements[id] = j;
-      }
-      await collectCache.saveJudgements(cache, resumeId);
-      judgedCount += batch.length;
-    }
-  }
-
-  async function worker() {
-    while (nextBatchIdx < batches.length) {
-      const batch = batches[nextBatchIdx];
-      const num = nextBatchIdx + 1;
-      nextBatchIdx++;
-      await runBatch(num, batch);
-    }
-  }
-
-  await Promise.all(Array.from({ length: Math.min(CONCURRENCY, batches.length) }, () => worker()));
-  return { judgements, judgedCount };
-}
-
-function selectAccepted(candidates, judgements, useClaude, maxRun) {
-  const accepted = [];
-  const rejected = [];
-  for (const { full, verdict } of candidates) {
-    if (accepted.length >= maxRun) break;
-
-    let score = null, reason = '', comment = null;
-
-    if (useClaude) {
-      const judgement = judgements.get(String(full.id));
-      if (!judgement) {
-        log.warn(`No judgement for ${full.id}, falling back to template`);
-      } else {
-        score = judgement.score;
-        reason = judgement.reason;
-        comment = judgement.comment;
-        if (!judgement.fit) {
-          log.info(`Claude rejected ${full.id} (score=${score}): ${reason}`);
-          rejected.push({
-            id: full.id,
-            title: full.name,
-            employer: full.employer?.name || '—',
-            area: full.area?.name || '—',
-            salary: fmtSalary(full.salary),
-            url: full.alternate_url,
-            score,
-            reason,
-          });
-          continue;
-        }
-        log.info(`Claude approved ${full.id} (score=${score}): ${comment || reason}`);
-      }
-    }
-
-    accepted.push({ full, verdict, score, reason, comment });
-  }
-  return { accepted, rejected };
-}
-
-async function generateCoverLetters(resume, accepted, cache, dryRun, resumeId?: string) {
-  const coverBatchSize = parseInt(process.env.COVER_BATCH_SIZE || '20', 10);
-  const coverMap = new Map();
-  for (const [id, letter] of Object.entries(cache.coverLetters)) coverMap.set(id, letter);
-
-  if (!dryRun && accepted.length) {
-    const pending = accepted.filter(a => !coverMap.has(String(a.full.id)));
-    if (pending.length < accepted.length) {
-      log.info(`Cover letters from cache: ${accepted.length - pending.length}/${accepted.length}`);
-    }
-    if (pending.length) {
-      log.info(`Generating cover letters in batches of ${coverBatchSize} for ${pending.length} vacancies`);
-      const generated = await buildCoverLettersBatch(
-        resume,
-        pending.map(a => ({ vacancy: a.full })),
-        coverBatchSize,
-        async (partial) => {
-          for (const [id, letter] of partial.entries()) {
-            coverMap.set(id, letter);
-            cache.coverLetters[id] = letter;
-            await collectCache.saveCoverLetter(cache, id, resumeId);
-          }
-        },
-      );
-      for (const [id, letter] of generated.entries()) coverMap.set(id, letter);
-    }
-  }
-
-  return coverMap;
-}
-
-async function buildResults(accepted, coverMap, cache, cfg, resume = null) {
-  const matched = [];
-  for (const a of accepted) {
-    const { full, verdict, score, reason, comment } = a;
-    let coverLetter = coverMap.get(String(full.id));
-    if (!coverLetter) {
-      coverLetter = await buildCoverLetter(cfg.apply.coverLetterTemplate, full, resume);
-      if (coverLetter) {
-        cache.coverLetters[String(full.id)] = coverLetter;
-        await collectCache.saveCoverLetter(cache, full.id);
-      }
-    }
-
-    matched.push({
-      id: full.id,
-      title: full.name,
-      employer: full.employer?.name || '—',
-      area: full.area?.name || '—',
-      salary: fmtSalary(full.salary),
-      url: full.alternate_url,
-      score,
-      reason,
-      comment,
-      coverLetter,
-    });
-    await history.markApplied(full.id, {
-      title: full.name,
-      employer: full.employer?.name,
-      url: full.alternate_url,
-      score,
-      digestOnly: true,
-    });
-    log.info(`Match: ${full.name} @ ${full.employer?.name} -> ${full.alternate_url}`);
-  }
-  return matched;
-}
+const PREVIEW_LIMIT = 20;
 
 async function search(opts: Record<string, any> = {}) {
   if (opts.config) process.env.CONFIG_PATH = opts.config;
@@ -261,56 +17,27 @@ async function search(opts: Record<string, any> = {}) {
 
   const cfg = loadConfig();
   const client = new HHClient();
-  const resume = loadResume(opts.resume);
-  const resumeId = resume?.id;
-  const minScore = cfg.apply.minClaudeScore ?? 7;
-  const dryRun = opts.dryRun ?? cfg.apply.dryRun ?? false;
-  const hasApiKey = cfg.api?.apiKey || process.env.OPENAI_API_KEY || process.env.ANTHROPIC_API_KEY;
-  const useClaude = resume && hasApiKey && opts.claude !== false;
-  const maxRun = cfg.apply.maxPerRun || 50;
 
   try {
-    if (resume) {
-      log.info(`Resume loaded: ${resumeId} (${resume.filename}, ${resume.type})`);
-      await registerResume(resume).catch(() => {});
-    } else {
-      log.warn('RESUME_PATH not set — Claude judge disabled, fall back to local filter only');
-    }
-
     log.info('Searching vacancies', cfg.search);
-    const cache = await collectCache.load(undefined, resumeId);
+    const cache = await collectCache.load();
     const items = await collectVacancies(client, cfg.search, cache);
 
-    const candidates = await filterLocally(client, items, cache, cfg);
-    log.info(`Local filter passed: ${candidates.length}/${items.length}`);
+    console.log(`\n=== НАЙДЕНО: ${items.length} ===`);
+    for (const item of items.slice(0, PREVIEW_LIMIT)) {
+      console.log(`- ${item.name} @ ${item.employer?.name || '—'} | ${fmtSalary(item.salary)}`);
+      console.log(`  ${item.alternate_url}`);
+    }
+    if (items.length > PREVIEW_LIMIT) {
+      console.log(`... и ещё ${items.length - PREVIEW_LIMIT}`);
+    }
 
-    const adaptResume = cfg.adaptResume !== false;
-    const { judgements, judgedCount } = useClaude
-      ? await judgeWithClaude(resume, candidates, cache, minScore, adaptResume, resumeId)
-      : { judgements: new Map(), judgedCount: 0 };
-
-    const { accepted, rejected } = selectAccepted(candidates, judgements, useClaude, maxRun);
-
-    const coverMap = await generateCoverLetters(resume, accepted, cache, dryRun, resumeId);
-
-    const matched = await buildResults(accepted, coverMap, cache, cfg, resume);
-
-    log.info(`Judged by Claude: ${judgedCount}, accepted: ${matched.length}, rejected: ${rejected.length}`);
-
-    const rejectedFile = writeRejected(rejected);
-    if (rejectedFile) log.info(`Rejected saved: ${rejectedFile} (${rejected.length} vacancies)`);
-
-    if (matched.length === 0) {
-      log.info('No matching vacancies.');
+    log.info(`Search done: ${items.length} vacancies collected (cached)`);
+    if (!items.length) {
+      console.log('\nНичего не найдено — проверьте config.search.');
       return;
     }
-
-    const file = writeDigest(matched);
-    log.info(`Digest saved: ${file} (${matched.length} vacancies)`);
-    console.log('\n=== TOP MATCHES ===');
-    for (const e of matched.slice(0, 10)) {
-      console.log(`- [${e.score ?? '?'}/10] ${e.title} @ ${e.employer} | ${e.salary}\n  ${e.url}`);
-    }
+    console.log('\nДальше: auto-hh digest — локальный фильтр + ИИ-судья → дайджест');
   } finally {
     await client.close?.();
   }

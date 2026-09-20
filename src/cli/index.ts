@@ -1,4 +1,4 @@
-1// CLI entry point: регистрирует команды и запускает Commander.
+// CLI entry point: регистрирует команды и запускает Commander.
 import {  Command  } from "commander";
 import cmdSearch from "./cmd-search.js";
 import cmdApply from "./cmd-apply.js";
@@ -11,6 +11,7 @@ import cmdSchedule from "./cmd-schedule.js";
 import cmdGradeResume from "./cmd-grade-resume.js";
 import cmdResume from "./cmd-resume.js";
 import cmdUi from "./cmd-ui.js";
+import { close as closeDb } from "../clients/db";
 
 const program = new Command();
 
@@ -21,12 +22,9 @@ program
 
 program
   .command('search')
-  .description('Поиск вакансий, фильтр + Claude → дайджест')
+  .description('Поиск вакансий на hh.ru → кэш (без фильтра, ИИ и писем)')
   .option('-c, --config <path>', 'Путь к config.json')
-  .option('-d, --dry-run', 'Только поиск, без генерации писем')
-  .option('--no-claude', 'Без Claude, только локальный фильтр')
-  .option('--reset', 'Сбросить историю и кэш перед запуском')
-  .option('-r, --resume <name>', 'Имя резюме из RESUMES_DIR')
+  .option('--reset', 'Сбросить историю и кэш перед поиском')
   .action(cmdSearch);
 
 program
@@ -39,9 +37,15 @@ program
 
 program
   .command('digest')
-  .description('Показать последний дайджест')
-  .option('-j, --json', 'Вывод в JSON')
-  .action(cmdDigest);
+  .description('Собрать дайджест из кэша поиска (фильтр + ИИ-судья) или показать последний: digest show')
+  .argument('[action]', 'build (по умолчанию) или show', 'build')
+  .option('-c, --config <path>', 'Путь к config.json')
+  .option('-r, --resume <name>', 'Имя резюме из RESUMES_DIR')
+  .option('-l, --limit <n>', 'Максимум вакансий в дайджесте', parseInt)
+  .option('-d, --dry-run', 'Только отбор, без записи файлов и MongoDB')
+  .option('--no-claude', 'Без ИИ — только локальный фильтр')
+  .option('-j, --json', 'Для show: вывод в JSON')
+  .action((action, opts) => cmdDigest(action, opts));
 
 program
   .command('history')
@@ -60,14 +64,17 @@ program
   .action(cmdReset);
 
 program
-  .command('cover <vacancyId>')
-  .description('Сгенерировать сопроводительное для вакансии по id')
+  .command('cover')
+  .description('Сопроводительные письма: без id — для всего последнего дайджеста, с id — для одной вакансии')
+  .argument('[vacancyId]', 'ID вакансии (без него — весь последний дайджест)')
   .option('-r, --resume <name>', 'Имя резюме из RESUMES_DIR')
+  .option('-l, --limit <n>', 'Сколько вакансий обработать', parseInt)
+  .option('-f, --force', 'Перегенерировать письма, даже если они уже есть')
   .action((vacancyId, opts) => cmdCover(vacancyId, opts));
 
 program
   .command('schedule')
-  .description('Запустить планировщик — выполняет search по расписанию из config.json')
+  .description('Запустить планировщик — шаги из config.schedule.steps по cron')
   .action(cmdSchedule);
 
 program
@@ -88,5 +95,18 @@ program
   .aliases(['menu', 'interactive'])
   .description('Интерактивное меню для работы со всеми командами')
   .action(cmdUi);
+
+// Точка входа CLI: parseAsync + гарантированное закрытие MongoDB.
+// Без этого монитор соединения держит event loop и процесс не завершается после команды.
+export async function run(argv: string[] = process.argv): Promise<void> {
+  try {
+    await program.parseAsync(argv);
+  } catch (err: any) {
+    console.error(`Ошибка: ${err?.message || err}`);
+    process.exitCode = 1;
+  } finally {
+    await closeDb().catch(() => {});
+  }
+}
 
 export default program;
