@@ -96,6 +96,8 @@ docker compose up -d
 npm run migrate:up
 ```
 
+> ℹ️ Настройки migrate-mongo лежат в `migrate-mongo-config.js` в корне проекта — указывать `-f` не нужно. Файл берёт `MONGODB_URI` и `MONGODB_TIMEOUT_MS` из `.env`, поэтому миграции применяются к той же базе, что и остальные команды. Статус миграций: `npx migrate-mongo status`.
+
 ### Шаг 4 — зарегистрируйте резюме в базе
 
 Регистрация добавляет резюме в коллекцию `resumes` MongoDB — это привязка вердиктов ИИ, сопроводительных и кэша к конкретному резюме через `resumeId`.
@@ -296,6 +298,10 @@ npm run ui          # или: npx auto-hh ui (алиасы: menu, interactive)
 | `per_page` | Вакансий на странице (≤ 100) |
 | `start_page` | С какой страницы начинать (0 = первая) |
 | `max_pages` | Сколько страниц обойти, считая от `start_page` |
+| `search_period` | Только вакансии, опубликованные за последние N дней (`null` — без ограничения) |
+| `order_by` | Порядок выдачи: `relevance` (по соответствию), `publication_time` (по дате), `salary_desc`, `salary_asc` |
+
+> ⚠️ При смене `order_by` или `search_period` запускайте `search` с флагом `--reset`: кэш страниц ключуется только по номеру страницы, поэтому страницы 1..N иначе подтянутся из прошлого прогона со старой сортировкой (страница 0 перезапрашивается всегда).
 
 ### `filter` — локальный пре-фильтр
 
@@ -451,6 +457,7 @@ npm run ui          # или: npx auto-hh ui (алиасы: menu, interactive)
 │  ├─ logger.ts / retry.ts / text-utils.ts / types.ts
 ├─ scripts/                    # вспомогательные скрипты (judge-only, fill-cover-letters, …)
 ├─ migrations/                 # миграции MongoDB
+├─ migrate-mongo-config.js     # настройки migrate-mongo (берёт MONGODB_URI из .env)
 └─ docker-compose.yml          # MongoDB + mongo-express
 ```
 

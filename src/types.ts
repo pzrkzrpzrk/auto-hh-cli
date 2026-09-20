@@ -48,6 +48,7 @@ export interface DigestEntry {
   area: string;
   salary: string;
   url: string;
+  publishedAt?: string | null;
   score: number;
   reason: string | null;
   comment: string | null;

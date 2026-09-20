@@ -26,6 +26,9 @@ async function collectVacancies(client, search, cache) {
       only_with_salary: search.only_with_salary,
       currency: search.currency,
       per_page: search.per_page || 50,
+      // Фильтр по дате публикации и порядок выдачи — из config.search.
+      search_period: search.search_period,
+      order_by: search.order_by,
       page,
     };
     if (search.schedule) params.schedule = search.schedule;
