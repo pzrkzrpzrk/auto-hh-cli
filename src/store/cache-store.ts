@@ -50,6 +50,23 @@ export async function load(date?: Date, resumeId?: string): Promise<CacheDoc> {
   return { date: key, pages, fullById, judgements, coverLetters };
 }
 
+// Дата последнего собранного поиска — по ней же ключуются pages/full/judgements.
+export async function latestDateWithPages(): Promise<string | null> {
+  await connect();
+  const docs = await dbInstance().collection('cachePages')
+    .find({}, { projection: { date: 1 }, sort: { date: -1 }, limit: 1 })
+    .toArray();
+  return docs.length ? String(docs[0].date) : null;
+}
+
+// Кэш последнего поиска (не строго сегодняшнего) — вход шага digest.
+// Позволяет запускать `search` вечером, а `digest` — хоть на следующий день.
+export async function loadLatest(resumeId?: string): Promise<CacheDoc | null> {
+  const date = await latestDateWithPages();
+  if (!date) return null;
+  return load(new Date(`${date}T00:00:00.000Z`), resumeId);
+}
+
 export async function savePage(state: CacheDoc, pageNum: number, date?: Date): Promise<void> {
   await connect();
   await dbInstance().collection('cachePages').updateOne(
@@ -59,13 +76,26 @@ export async function savePage(state: CacheDoc, pageNum: number, date?: Date): P
   );
 }
 
-export async function saveFull(state: CacheDoc, vacancyId: string, date?: Date): Promise<void> {
+// Полная вакансия (описание, навыки): нужна и шагу digest, и шагу cover.
+export async function saveFullVacancy(vacancy: any, date?: Date): Promise<void> {
   await connect();
+  const vacancyId = String(vacancy.id);
   await dbInstance().collection('cacheFull').updateOne(
-    { vacancyId: String(vacancyId) },
-    { $set: { date: dateKey(date), vacancyId: String(vacancyId), full: state.fullById?.[String(vacancyId)] } },
+    { vacancyId },
+    { $set: { date: dateKey(date), vacancyId, full: vacancy } },
     { upsert: true },
   );
+}
+
+// Полные вакансии по id — чтобы шаг cover не ходил на hh.ru лишний раз.
+export async function getFullByVacancyIds(vacancyIds: (string | number)[]): Promise<Record<string, any>> {
+  const ids = [...new Set(vacancyIds.map(String))];
+  if (!ids.length) return {};
+  await connect();
+  const docs = await dbInstance().collection('cacheFull').find({ vacancyId: { $in: ids } }).toArray();
+  const out: Record<string, any> = {};
+  for (const d of docs) out[String(d.vacancyId)] = d.full;
+  return out;
 }
 
 export async function saveJudgements(state: CacheDoc, resumeId?: string, date?: Date): Promise<void> {
@@ -83,15 +113,24 @@ export async function saveJudgements(state: CacheDoc, resumeId?: string, date?: 
   if (docs.length) await coll.insertMany(docs);
 }
 
-export async function saveCoverLetter(state: CacheDoc, vacancyId: string, resumeId?: string, date?: Date): Promise<void> {
+// Одно письмо: пишется шагом cover, читается `digest show` и `apply`.
+export async function saveLetter(vacancyId: string, letter: string, date?: Date): Promise<void> {
   await connect();
-  const filter: any = { vacancyId: String(vacancyId) };
-  if (resumeId) filter.resumeId = resumeId;
   await dbInstance().collection('cacheCoverLetters').updateOne(
-    filter,
-    { $set: { date: dateKey(date), resumeId: resumeId || null, vacancyId: String(vacancyId), letter: state.coverLetters?.[String(vacancyId)] || '' } },
+    { vacancyId: String(vacancyId) },
+    { $set: { date: dateKey(date), vacancyId: String(vacancyId), letter } },
     { upsert: true },
   );
+}
+
+export async function getLettersByVacancyIds(vacancyIds: (string | number)[]): Promise<Record<string, string>> {
+  const ids = [...new Set(vacancyIds.map(String))];
+  if (!ids.length) return {};
+  await connect();
+  const docs = await dbInstance().collection('cacheCoverLetters').find({ vacancyId: { $in: ids } }).toArray();
+  const out: Record<string, string> = {};
+  for (const d of docs) if (d.letter) out[String(d.vacancyId)] = d.letter;
+  return out;
 }
 
 export async function clear(): Promise<string[]> {
@@ -104,8 +143,4 @@ export async function clear(): Promise<string[]> {
     if (r.deletedCount) removed.push(`${coll}: ${r.deletedCount}`);
   }
   return removed;
-}
-
-export function fileFor(date?: Date): string {
-  return `cache:${dateKey(date)}`;
 }

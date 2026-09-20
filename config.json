@@ -6,6 +6,8 @@
     "per_page": 100,
     "start_page": 0,
     "max_pages": 10,
+    "search_period": 30,
+    "order_by": "publication_time",
     "schedule": null,
     "employment": null
   },
@@ -16,11 +18,13 @@
     "excludeArchived": true
   },
   "api": {
-    "baseUrl": "https://api.deepseek.com",
-    "apiKey": ""
+    "baseUrl": "https://api.z.ai/api/paas/v4/",
+    "apiKey": "",
+    "model": "glm-4.7-flash"
   },
   "schedule": {
-    "cron": "0 12 * * *"
+    "cron": "0 12 * * *",
+    "steps": ["search", "digest", "cover"]
   },
   "adaptResume": true,
   "apply": {

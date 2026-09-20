@@ -1,8 +1,25 @@
-// Команда schedule: запуск search по cron-расписанию.
+// Команда schedule: запуск пайплайна (search → digest → cover) по cron-расписанию.
 import cron from "node-cron";
 import {  loadConfig  } from "../config";
 import log from "../logger";
 import search from "./cmd-search.js";
+import digest from "./cmd-digest.js";
+import cover from "./cmd-cover.js";
+
+// Шаги пайплайна: ключ — имя в config.schedule.steps.
+const STEPS: Record<string, (opts?: Record<string, any>) => Promise<any>> = {
+  search: (opts = {}) => search(opts),
+  digest: (opts = {}) => digest("build", opts),
+  cover: (opts = {}) => cover(undefined, opts),
+};
+
+const DEFAULT_STEPS = ["search", "digest", "cover"];
+
+function resolveSteps(cfg: any): string[] {
+  const steps = cfg.schedule?.steps;
+  if (!Array.isArray(steps) || !steps.length) return DEFAULT_STEPS;
+  return steps.map(s => String(s).toLowerCase());
+}
 
 function getNextDate(expression: string): Date | null {
   // minute hour day-of-month month day-of-week
@@ -42,8 +59,10 @@ function getNextDate(expression: string): Date | null {
   return null;
 }
 
-export default async function cmdSchedule() {
+export default async function cmdSchedule(opts: Record<string, any> = {}) {
   const cfg = loadConfig();
+  // Резюме из меню ui (если выбрано) — иначе шаги digest/cover возьмут дефолт из .env.
+  const stepOpts: Record<string, any> = opts.resume ? { resume: opts.resume } : {};
 
   if (!cfg.schedule?.cron) {
     console.error("schedule.cron не задан в config.json");
@@ -51,6 +70,7 @@ export default async function cmdSchedule() {
   }
 
   const expression = cfg.schedule.cron;
+  const steps = resolveSteps(cfg);
 
   if (!cron.validate(expression)) {
     console.error(`Невалидное cron-выражение: ${expression}`);
@@ -60,21 +80,31 @@ export default async function cmdSchedule() {
   const next = getNextDate(expression);
   const nextStr = next ? next.toLocaleString("ru-RU") : "неизвестно";
   console.log(`Планировщик запущен. Расписание: ${expression}`);
+  console.log(`Шаги: ${steps.join(" → ")}`);
+  console.log(`Резюме: ${opts.resume ? opts.resume : "не задано — берётся из .env"}`);
   console.log(`Следующий запуск: ${nextStr}`);
   console.log("Для остановки нажмите Ctrl+C\n");
 
   cron.schedule(expression, async () => {
     const now = new Date().toISOString();
-    console.log(`\n=== Запуск search по расписанию (${now}) ===`);
-    log.info("Scheduled search started");
+    console.log(`\n=== Запуск пайплайна по расписанию (${now}) ===`);
 
-    try {
-      await search({ claude: true });
-      log.info("Scheduled search completed successfully");
-      console.log(`✅ Search завершён (${new Date().toISOString()})`);
-    } catch (err: any) {
-      log.error(`Scheduled search failed: ${err.message}`);
-      console.error(`❌ Ошибка search:`, err.message);
+    for (const step of steps) {
+      const run = STEPS[step];
+      if (!run) {
+        log.warn(`Unknown schedule step "${step}" — пропускаю`);
+        continue;
+      }
+      log.info(`Scheduled step started: ${step}`);
+      try {
+        await run(stepOpts);
+        log.info(`Scheduled step completed: ${step}`);
+        console.log(`✅ ${step} завершён (${new Date().toISOString()})`);
+      } catch (err: any) {
+        log.error(`Scheduled step "${step}" failed: ${err.message}`);
+        console.error(`❌ Ошибка шага ${step}:`, err.message);
+        break;
+      }
     }
 
     const next2 = getNextDate(expression);

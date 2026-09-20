@@ -11,16 +11,25 @@ import cmdCover from "./cmd-cover.js";
 import cmdSchedule from "./cmd-schedule.js";
 import cmdGradeResume from "./cmd-grade-resume.js";
 import cmdResume from "./cmd-resume.js";
-import { listResumes } from "../resume.js";
+import { listResumes, loadResume } from "../resume.js";
 
 // Значение «резюме не указано»: команда сама возьмёт RESUME_PATH или первый файл из RESUMES_DIR.
 const DEFAULT_RESUME = "__default__";
+// Значение «ввести имя вручную» — нужно, когда RESUMES_DIR пуст.
+const MANUAL_RESUME = "__manual__";
+
+// Активное резюме сессии меню: живёт только в памяти, на диск ничего не пишем.
+let activeResume: { name: string; filename: string } | null = null;
+// Кэш подписи резюме из .env (undefined = ещё не вычисляли).
+let envResumeLabel: string | null | undefined;
 
 type MenuItem =
   | "search"
+  | "digest"
+  | "digestShow"
+  | "letters"
   | "apply"
   | "login"
-  | "digest"
   | "history"
   | "resume"
   | "grade"
@@ -43,19 +52,32 @@ export function isInteractive(): boolean {
   return Boolean(process.stdout.isTTY && process.stdin.isTTY);
 }
 
-/** Собирает opts для `search` из ответов меню (совпадают с флагами CLI). */
-export function buildSearchOptions(answers: {
+/** Собирает opts для `search` (шаг только поиска): резюме и ИИ ему больше не нужны. */
+export function buildSearchOptions(answers: { reset: boolean }): Record<string, any> {
+  return { reset: answers.reset };
+}
+
+/** Собирает opts для `digest` (шаг отбора): limit=0 → лимит из config.json. */
+export function buildDigestOptions(answers: {
   resume?: string;
   useAi: boolean;
-  dryRun: boolean;
-  reset: boolean;
+  limit: number;
+  dryRun?: boolean;
 }): Record<string, any> {
-  return {
+  const opts: Record<string, any> = {
     resume: answers.resume,
     claude: answers.useAi,
-    dryRun: answers.dryRun,
-    reset: answers.reset,
+    dryRun: answers.dryRun ?? false,
   };
+  if (Number.isFinite(answers.limit) && answers.limit > 0) opts.limit = answers.limit;
+  return opts;
+}
+
+/** Собирает opts для `cover` (шаг писем): limit=0 → все вакансии дайджеста. */
+export function buildCoverOptions(answers: { resume?: string; force: boolean; limit: number }): Record<string, any> {
+  const opts: Record<string, any> = { resume: answers.resume, force: answers.force };
+  if (Number.isFinite(answers.limit) && answers.limit > 0) opts.limit = answers.limit;
+  return opts;
 }
 
 /** Собирает opts для `apply` из ответов меню: limit=0 означает «без лимита». */
@@ -65,23 +87,94 @@ export function buildApplyOptions(answers: { type: string; limit: number }): Rec
   return opts;
 }
 
-/** Выбор резюме списком; undefined = «как настроено в .env». */
+/** Подпись резюме, которое подставит .env (RESUME_PATH, затем первый из RESUMES_DIR). */
+function describeEnvResume(): string {
+  if (envResumeLabel === undefined) {
+    try {
+      const r = loadResume();
+      envResumeLabel = r ? `${r.name} (${r.filename})` : null;
+    } catch {
+      envResumeLabel = null;
+    }
+  }
+  return envResumeLabel ?? "не найдено";
+}
+
+/** Что сейчас используется: активное резюме сессии или дефолт из .env. */
+export function describeActiveResume(): string {
+  if (activeResume) return `${activeResume.name} (${activeResume.filename})`;
+  return `как в .env — ${describeEnvResume()}`;
+}
+
+/**
+ * Выбор резюме списком; undefined = «как настроено в .env».
+ * Активное резюме сессии предлагается по умолчанию и помечается пометкой.
+ */
 async function pickResume(message: string, allowDefault = true): Promise<string | undefined> {
   const files = listResumes();
   const choices: { name: string; value: string }[] = [];
 
   if (allowDefault) {
-    choices.push({ name: "по умолчанию (RESUME_PATH / первый из RESUMES_DIR)", value: DEFAULT_RESUME });
+    choices.push({ name: `как в .env — ${describeEnvResume()}`, value: DEFAULT_RESUME });
   }
   for (const f of files) {
-    choices.push({ name: `${f.name}  (${f.filename})`, value: f.name });
+    const mark = activeResume && activeResume.name === f.name ? "   ← активное" : "";
+    choices.push({ name: `${f.name}  (${f.filename})${mark}`, value: f.name });
+  }
+  // RESUMES_DIR пуст — даём хотя бы ручной ввод, иначе выбор исчезает совсем.
+  if (!files.length) {
+    choices.push({ name: "ввести имя резюме вручную", value: MANUAL_RESUME });
   }
 
-  // RESUMES_DIR пуст — выбор невозможен, отдаём решение самой команде.
-  if (!choices.length) return undefined;
+  const isActiveListed = files.some(f => f.name === activeResume?.name);
+  const value = await select({
+    message,
+    choices,
+    default: isActiveListed && activeResume ? activeResume.name : choices[0].value,
+  });
 
-  const value = await select({ message, choices, default: choices[0].value });
-  return value === DEFAULT_RESUME ? undefined : value;
+  if (value === DEFAULT_RESUME) return undefined;
+  if (value === MANUAL_RESUME) return askResumeName(message);
+  return value;
+}
+
+/** Пункт меню «Резюме → выбрать активное»: задаёт резюме для digest/cover/grade/schedule. */
+async function runPickActiveResume() {
+  const files = listResumes();
+  const choices: { name: string; value: string }[] = [
+    { name: `как в .env — ${describeEnvResume()}`, value: DEFAULT_RESUME },
+  ];
+  for (const f of files) {
+    const mark = activeResume && activeResume.name === f.name ? "   ← сейчас" : "";
+    choices.push({ name: `${f.name}  (${f.filename})${mark}`, value: f.name });
+  }
+  choices.push({ name: "ввести имя резюме вручную", value: MANUAL_RESUME });
+
+  const isActiveListed = files.some(f => f.name === activeResume?.name);
+  const value = await select({
+    message: "Какое резюме сделать активным для меню?",
+    choices,
+    default: isActiveListed && activeResume ? activeResume.name : DEFAULT_RESUME,
+  });
+
+  if (value === DEFAULT_RESUME) {
+    activeResume = null;
+    console.log(`Активное резюме: как в .env — ${describeEnvResume()}`);
+    return;
+  }
+
+  const name = value === MANUAL_RESUME ? await askResumeName("Имя резюме") : value;
+  try {
+    const resume = loadResume(name);
+    if (!resume) {
+      console.error(`Резюме "${name}" не найдено — проверьте RESUMES_DIR.`);
+      return;
+    }
+    activeResume = { name: resume.name, filename: resume.filename };
+    console.log(`Активное резюме: ${activeResume.name} (${activeResume.filename})`);
+  } catch (err: any) {
+    console.error(err?.message || err);
+  }
 }
 
 /** Имя резюме: списком, если RESUMES_DIR заполнен, иначе — ручным вводом. */
@@ -100,17 +193,42 @@ async function askResumeName(message: string): Promise<string> {
   return name.trim();
 }
 
+/** Спрашивает неотрицательное число (0 = «как настроено» / без лимита). */
+async function askCount(message: string, def = "0"): Promise<number> {
+  const raw = await input({
+    message,
+    default: def,
+    validate: (v: string) => (/^\d+$/.test(v.trim()) ? true : "Введите целое число ≥ 0"),
+  });
+  return parseInt(raw.trim(), 10);
+}
+
 async function runSearch() {
-  const resume = await pickResume("Какое резюме использовать?");
-  const useAi = await confirm({ message: "Использовать ИИ-судью и генерацию сопроводительных?", default: true });
-  const dryRun = await confirm({ message: "Dry-run: только поиск и отбор, без генерации писем?", default: false });
   const reset = await confirm({
-    message: "Сбросить историю, кэш и дайджесты перед запуском? (необратимо)",
+    message: "Сбросить историю, кэш и дайджесты перед поиском? (необратимо)",
     default: false,
   });
 
   console.log();
-  await cmdSearch(buildSearchOptions({ resume, useAi, dryRun, reset }));
+  await cmdSearch(buildSearchOptions({ reset }));
+}
+
+async function runDigest() {
+  const resume = await pickResume("Какое резюме использовать для оценки?");
+  const useAi = await confirm({ message: "Использовать ИИ-судью?", default: true });
+  const limit = await askCount("Максимум вакансий в дайджесте (0 — как в config.json):");
+
+  console.log();
+  await cmdDigest("build", buildDigestOptions({ resume, useAi, limit }));
+}
+
+async function runLetters() {
+  const resume = await pickResume("Какое резюме использовать для писем?");
+  const force = await confirm({ message: "Перегенерировать письма, даже если они уже есть?", default: false });
+  const limit = await askCount("Сколько вакансий обработать (0 — все из дайджеста):");
+
+  console.log();
+  await cmdCover(undefined, buildCoverOptions({ resume, force, limit }));
 }
 
 async function runApply() {
@@ -123,20 +241,18 @@ async function runApply() {
     default: "latest",
   });
 
-  const limitRaw = await input({
-    message: "Сколько вакансий обработать (0 — без лимита):",
-    default: "0",
-    validate: (v: string) => (/^\d+$/.test(v.trim()) ? true : "Введите целое число ≥ 0"),
-  });
+  const limit = await askCount("Сколько вакансий обработать (0 — без лимита):");
 
   console.log();
-  await cmdApply(buildApplyOptions({ type, limit: parseInt(limitRaw.trim(), 10) }));
+  await cmdApply(buildApplyOptions({ type, limit }));
 }
 
 async function runResumeMenu() {
   const action = await select({
-    message: "Резюме:",
+    message: `Резюме (активное: ${describeActiveResume()}):`,
     choices: [
+      { name: "🎯 выбрать активное для меню", value: "pick" },
+      new Separator(),
       { name: "list — показать доступные резюме", value: "list" },
       { name: "show — показать резюме", value: "show" },
       { name: "register — зарегистрировать в MongoDB", value: "register" },
@@ -146,6 +262,11 @@ async function runResumeMenu() {
   });
 
   if (action === "back") return;
+  if (action === "pick") {
+    console.log();
+    await runPickActiveResume();
+    return;
+  }
   if (action === "list") {
     console.log();
     await cmdResume({ _: ["list"] });
@@ -175,12 +296,12 @@ async function runCover() {
 
 async function runSchedule() {
   const run = await confirm({
-    message: "Запустить планировщик? Он блокирующий: выход — Ctrl+C.",
+    message: `Запустить планировщик? Он блокирующий: выход — Ctrl+C. Резюме: ${describeActiveResume()}`,
     default: true,
   });
   if (!run) return;
   console.log();
-  await cmdSchedule();
+  await cmdSchedule({ resume: activeResume?.name });
 }
 
 async function runReset() {
@@ -202,14 +323,16 @@ async function mainMenu(): Promise<MenuItem> {
     pageSize: 15,
     choices: [
       { name: "🔍 Поиск вакансий (search)", value: "search" },
+      { name: "🧠 Собрать дайджест (digest)", value: "digest" },
+      { name: "✉️  Письма для дайджеста (cover)", value: "letters" },
       { name: "🚀 Отклики из дайджеста (apply)", value: "apply" },
       { name: "🔑 Войти на hh.ru (apply --login)", value: "login" },
       new Separator(),
-      { name: "📄 Последний дайджест (digest)", value: "digest" },
+      { name: "📄 Последний дайджест (digest show)", value: "digestShow" },
       { name: "🕓 История откликов (history)", value: "history" },
-      { name: "🧾 Резюме (resume list/show/register)", value: "resume" },
+      { name: "🧾 Резюме (выбрать активное / list / show / register)", value: "resume" },
       { name: "🎯 Оценить резюме ИИ (grade)", value: "grade" },
-      { name: "✉️  Сопроводительное по id (cover)", value: "cover" },
+      { name: "✉️  Письмо по id (cover <id>)", value: "cover" },
       new Separator(),
       { name: "⏰ Планировщик (schedule)", value: "schedule" },
       { name: "⚙️  Конфигурация (config)", value: "config" },
@@ -223,12 +346,14 @@ async function mainMenu(): Promise<MenuItem> {
 async function dispatch(item: MenuItem) {
   switch (item) {
     case "search": return runSearch();
+    case "digest": return runDigest();
+    case "letters": return runLetters();
     case "apply": return runApply();
     case "login": return cmdApply({ login: true });
-    case "digest": {
+    case "digestShow": {
       const json = await confirm({ message: "Вывести в JSON?", default: false });
       console.log();
-      return cmdDigest({ json });
+      return cmdDigest("show", { json });
     }
     case "history": {
       const json = await confirm({ message: "Вывести в JSON?", default: false });
@@ -257,6 +382,7 @@ export default async function cmdUi() {
 
   try {
     for (;;) {
+      console.log(`Резюме: ${describeActiveResume()}`);
       const item = await mainMenu();
       if (item === "exit") break;
 

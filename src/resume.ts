@@ -4,6 +4,7 @@ import fs from "fs";
 import path from "path";
 import crypto from "crypto";
 import type { Resume } from "./types.js";
+import log from "./logger.js";
 
 const DIR = process.env.RESUMES_DIR ? path.resolve(process.env.RESUMES_DIR) : null;
 const FILE = process.env.RESUME_PATH ? path.resolve(process.env.RESUME_PATH) : null;
@@ -59,8 +60,12 @@ export function loadResume(name?: string): Resume | null {
   }
 
   if (FILE) {
-    if (!fs.existsSync(FILE)) return null;
-    return parseFile(FILE, path.basename(FILE, path.extname(FILE)));
+    if (fs.existsSync(FILE)) {
+      return parseFile(FILE, path.basename(FILE, path.extname(FILE)));
+    }
+    // RESUME_PATH задан, но файла нет: молча отдавать null нельзя — из-за этого
+    // ИИ-судья и письма отключались, хотя рядом лежит рабочий RESUMES_DIR.
+    log.warn(`RESUME_PATH не найден: ${FILE} — пробую RESUMES_DIR`);
   }
 
   if (DIR && fs.existsSync(DIR)) {

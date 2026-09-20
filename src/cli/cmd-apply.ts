@@ -5,6 +5,7 @@ import {  chromium  } from "playwright";
 import log from "../logger";
 import history from "../store/history-store";
 import  {getDigestsByDate, getAllDigests} from "../store/digest-store";
+import { getLettersByVacancyIds } from "../store/cache-store.js";
 
 const PROFILE = path.resolve(process.env.PW_USER_DATA_DIR || './data/browser-profile');
 const HEADLESS = String(process.env.PW_HEADLESS || 'false') === 'true';
@@ -240,6 +241,17 @@ async function apply(opts: Record<string, any> = {}) {
   }
   log.info(`${entries.length} vacancies in digest`);
 
+  // Письма генерируются отдельным шагом (`auto-hh cover`) и лежат в cacheCoverLetters.
+  const letters = await getLettersByVacancyIds(entries.map(e => e.id)).catch(() => ({} as Record<string, string>));
+  const planned = entries.map(entry => ({
+    ...entry,
+    coverLetter: letters[String(entry.id)] || entry.coverLetter || '',
+  }));
+  const withoutLetter = planned.filter(e => !e.coverLetter).length;
+  if (withoutLetter) {
+    log.warn(`${withoutLetter} вакансий без сопроводительного — пропускаю (сгенерируйте: auto-hh cover)`);
+  }
+
   const ctx = await chromium.launchPersistentContext(PROFILE, {
     headless: HEADLESS,
     viewport: { width: 1280, height: 800 },
@@ -251,11 +263,18 @@ async function apply(opts: Record<string, any> = {}) {
   if (/\/account\/login/.test(page.url())) {
     log.error('Not logged in. Run `auto-hh apply --login` first.');
     await ctx.close();
-    process.exit(1);
+    // process.exit() здесь оборвал бы finally в run() и незаписанные данные в Mongo.
+    process.exitCode = 1;
+    return;
   }
 
-  let ok = 0, fail = 0;
-  for (const entry of entries) {
+  let ok = 0, fail = 0, skipped = 0;
+  for (const entry of planned) {
+    if (!entry.coverLetter) {
+      log.warn(`Skip ${entry.id}: no cover letter`);
+      skipped++;
+      continue;
+    }
     const state = await history.load();
     const rec = state.applied[entry.id];
     if (rec && !rec.digestOnly) {
@@ -277,7 +296,7 @@ async function apply(opts: Record<string, any> = {}) {
     await sleep(rand(MIN_DELAY, MAX_DELAY));
   }
 
-  log.info(`Done. ok=${ok}, fail=${fail}`);
+  log.info(`Done. ok=${ok}, fail=${fail}, skipped=${skipped}`);
   await ctx.close();
 }
 

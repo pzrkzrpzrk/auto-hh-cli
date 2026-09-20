@@ -38,6 +38,10 @@ export async function markApplied(vacancyId: string, meta: Record<string, any>):
 
 export async function markSeen(vacancyId: string): Promise<void> {
   const c = await col();
+  // Важно: 'seen' не должен затирать реальный отклик ('applied'),
+  // иначе apply снова попробует откликнуться на эту вакансию.
+  const existing = await c.findOne({ vacancyId: String(vacancyId) });
+  if (existing?.status === 'applied') return;
   await c.updateOne(
     { vacancyId: String(vacancyId) },
     { $set: { vacancyId: String(vacancyId), status: 'seen', at: new Date() } },
