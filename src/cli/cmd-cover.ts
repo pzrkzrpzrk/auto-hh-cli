@@ -64,7 +64,7 @@ async function coverOne(vacancyId: string, opts: Record<string, any>, resume) {
 async function coverDigest(opts: Record<string, any>, resume) {
   const digest = await getLatestDigest().catch(() => null);
   if (!digest || !digest.entries.length) {
-    log.warn('Дайджест пуст — сначала соберите его: auto-hh digest (нужна MongoDB)');
+    log.warn('Дайджест пуст — сначала соберите его: пункт меню «🧠 Собрать дайджест» (нужна MongoDB)');
     return;
   }
 

@@ -2,6 +2,24 @@
 import fs from "fs";
 import path from "path";
 
+// Личный список компаний из .env (через запятую). Пустая переменная = null,
+// тогда работает список из config.json → filter.excludedCompanies.
+function excludedCompaniesFromEnv(): string[] | null {
+  const raw = process.env.EXCLUDED_COMPANIES;
+  if (!raw || !raw.trim()) return null;
+
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const part of raw.split(',')) {
+    const name = part.trim();
+    const key = name.toLowerCase();
+    if (!name || seen.has(key)) continue;
+    seen.add(key);
+    out.push(name);
+  }
+  return out.length ? out : null;
+}
+
 function loadConfig() {
   const configPath = process.env.CONFIG_PATH || './config.json';
   const absPath = path.resolve(configPath);
@@ -9,7 +27,15 @@ function loadConfig() {
     throw new Error(`Config not found: ${absPath}`);
   }
   const raw = fs.readFileSync(absPath, 'utf-8');
-  return JSON.parse(raw);
+  const cfg = JSON.parse(raw);
+
+  // Личный блэклист компаний держим в .env, чтобы он не попадал в git.
+  const excludedCompanies = excludedCompaniesFromEnv();
+  if (excludedCompanies) {
+    cfg.filter = { ...(cfg.filter || {}), excludedCompanies };
+  }
+
+  return cfg;
 }
 
 function env() {
