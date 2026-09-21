@@ -1,4 +1,5 @@
-// Команда ui: интерактивное меню поверх остальных команд.
+// Точка входа CLI: интерактивное меню. Подкоманд у CLI нет — остальные шаги
+// (search, digest, cover, apply, schedule, …) меню вызывает напрямую из cmd-*.
 // Меню ничего не делает само — оно только собирает ответы и вызывает существующие cmd-*.
 import { confirm, input, select, Separator } from "@inquirer/prompts";
 import cmdSearch from "./cmd-search.js";
@@ -373,7 +374,7 @@ async function dispatch(item: MenuItem) {
 export default async function cmdUi() {
   if (!isInteractive()) {
     console.log("Интерактивное меню требует терминал (TTY) — stdin или stdout перенаправлены.");
-    console.log("Запустите его в обычной консоли либо используйте команды напрямую: auto-hh --help");
+    console.log("Запустите его в обычной консоли — например: npm start");
     return;
   }
 

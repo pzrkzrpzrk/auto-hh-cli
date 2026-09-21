@@ -12,6 +12,6 @@
     "outDir": "dist",
     "sourceMap": true
   },
-  "include": ["src/**/*.ts", "app.ts", "scripts/**/*.ts"],
+  "include": ["src/**/*.ts", "scripts/**/*.ts"],
   "exclude": ["node_modules", "dist", "data"]
 }
