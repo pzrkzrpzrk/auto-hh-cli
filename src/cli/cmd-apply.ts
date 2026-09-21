@@ -241,7 +241,7 @@ async function apply(opts: Record<string, any> = {}) {
   }
   log.info(`${entries.length} vacancies in digest`);
 
-  // Письма генерируются отдельным шагом (`auto-hh cover`) и лежат в cacheCoverLetters.
+  // Письма генерируются отдельным шагом (пункт меню «✉️ Письма для дайджеста») и лежат в cacheCoverLetters.
   const letters = await getLettersByVacancyIds(entries.map(e => e.id)).catch(() => ({} as Record<string, string>));
   const planned = entries.map(entry => ({
     ...entry,
@@ -249,7 +249,7 @@ async function apply(opts: Record<string, any> = {}) {
   }));
   const withoutLetter = planned.filter(e => !e.coverLetter).length;
   if (withoutLetter) {
-    log.warn(`${withoutLetter} вакансий без сопроводительного — пропускаю (сгенерируйте: auto-hh cover)`);
+    log.warn(`${withoutLetter} вакансий без сопроводительного — пропускаю (сгенерируйте: пункт меню «✉️ Письма для дайджеста»)`);
   }
 
   const ctx = await chromium.launchPersistentContext(PROFILE, {
@@ -261,7 +261,7 @@ async function apply(opts: Record<string, any> = {}) {
   // Проверка авторизации.
   await page.goto('https://hh.ru/applicant/resumes', { waitUntil: 'domcontentloaded' });
   if (/\/account\/login/.test(page.url())) {
-    log.error('Not logged in. Run `auto-hh apply --login` first.');
+    log.error('Not logged in. Run the menu item «🔑 Войти на hh.ru» first.');
     await ctx.close();
     // process.exit() здесь оборвал бы finally в run() и незаписанные данные в Mongo.
     process.exitCode = 1;

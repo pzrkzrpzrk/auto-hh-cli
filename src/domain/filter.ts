@@ -3,7 +3,12 @@ import {Vacancy} from "../types";
 
 function lower(s) { return (s || '').toString().toLowerCase(); }
 
-const CAPITALS = new Set(['1', '2']); // hh: 1 = Москва, 2 = Санкт-Петербург
+// ID регионов «любые вакансии» по умолчанию (hh: 1 = Москва, 2 = Санкт-Петербург).
+// Перебивается через opts.anyRegions — шаг digest передаёт config.search.area.
+const DEFAULT_ANY_REGIONS = ['1', '2'];
+
+// id региона (число/строка вида "area=1") → цифровой вид "1".
+function toAreaId(value) { return String(value ?? '').replace(/\D/g, ''); }
 
 function detectWorkFormat(vacancy) {
   const fromField = (vacancy.work_format || []).map(s => String(s).toUpperCase());
@@ -24,8 +29,18 @@ function detectWorkFormat(vacancy) {
   };
 }
 
-function vacancyMatchesFilter(vacancy: Vacancy, filter) : {ok: boolean, reason?: string} {
+function vacancyMatchesFilter(
+  vacancy: Vacancy,
+  filter,
+  opts: { anyRegions?: (string | number)[] } = {},
+) : {ok: boolean, reason?: string} {
   if (!vacancy) return { ok: false, reason: 'no vacancy' };
+
+  // Регионы «любые вакансии»: по умолчанию Москва/СПб, иначе — config.search.area.
+  const anyRegions = new Set(
+    (Array.isArray(opts.anyRegions) && opts.anyRegions.length ? opts.anyRegions : DEFAULT_ANY_REGIONS)
+      .map(toAreaId),
+  );
 
   if (filter.excludeArchived && vacancy.archived) {
     return { ok: false, reason: 'archived' };
@@ -56,14 +71,14 @@ function vacancyMatchesFilter(vacancy: Vacancy, filter) : {ok: boolean, reason?:
   }
 
   // Локация + формат работы:
-  // - Москва/СПб → remote или on-site/гибрид
-  // - другие регионы → только remote
+  // - регионы из anyRegions (по умолчанию Москва/СПб) → любая вакансия (remote/on-site/гибрид)
+  // - остальные регионы → только remote
   if (filter.locationRule !== false) {
-    const areaId = String(vacancy.area?.id || '').replace(/\D/g, '');
-    const isCapital = CAPITALS.has(areaId);
+    const areaId = toAreaId(vacancy.area?.id);
+    const isAnyRegion = anyRegions.has(areaId);
     const wf = detectWorkFormat(vacancy);
     const known = wf.remote || wf.hybrid || wf.onSite;
-    if (known && !isCapital && !wf.remote) {
+    if (known && !isAnyRegion && !wf.remote) {
       return { ok: false, reason: 'region: not remote' };
     }
   }

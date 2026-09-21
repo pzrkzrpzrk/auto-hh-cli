@@ -2,6 +2,7 @@
   "search": {
     "text": "React OR angular OR node.js OR nest.js",
     "area": [1, 2],
+    "remote_area": [113],
     "only_with_salary": false,
     "per_page": 100,
     "start_page": 0,
@@ -14,7 +15,7 @@
   "filter": {
     "requiredSkills": [],
     "excludedKeywords": [],
-    "excludedCompanies": ["Яндекс", "Сбер"],
+    "excludedCompanies": [],
     "excludeArchived": true
   },
   "api": {

@@ -27,7 +27,7 @@ async function cmdResumeList() {
 
 async function cmdResumeRegister(name: string) {
   if (!name) {
-    console.error('Usage: auto-hh resume register <name>');
+    console.error('Укажите имя резюме: пункт меню «🧾 Резюме» → register <name>');
     process.exit(1);
   }
   const resume = loadResume(name);
@@ -48,7 +48,7 @@ async function cmdResumeShow(name?: string) {
     process.exit(1);
   }
   if (!resume) {
-    console.error('Резюме не найдено. Задайте RESUME_PATH или RESUMES_DIR в .env, либо укажите имя: auto-hh resume show <name>');
+    console.error('Резюме не найдено. Задайте RESUME_PATH или RESUMES_DIR в .env, либо укажите имя: пункт меню «🧾 Резюме» → show <name>');
     process.exit(1);
   }
 

@@ -4,42 +4,64 @@ import * as collectCache from "../store/cache-store.js";
 import history from "../store/history-store.js";
 import log from "../logger.js";
 
+// Проходы поиска: (регион(ы) + принудительный график). Ключи страниц в кэше разведены
+// префиксом, иначе проходы перезаписывали бы страницы друг друга.
+//   config.search.area        — регионы, где берём ЛЮБЫЕ вакансии;
+//   config.search.remote_area — регионы, где берём ТОЛЬКО удалёнку (schedule=remote).
+function searchBuckets(search) {
+  const buckets: { prefix: string; label: string; area: any; schedule?: any }[] = [
+    { prefix: '', label: '', area: search.area, schedule: search.schedule },
+  ];
+  const rawRemoteArea = search.remote_area;
+  const remoteArea = (Array.isArray(rawRemoteArea) ? rawRemoteArea : rawRemoteArea != null ? [rawRemoteArea] : [])
+    .filter(id => id != null);
+  if (remoteArea.length) {
+    buckets.push({ prefix: 'remote:', label: ' (только удалёнка)', area: remoteArea, schedule: 'remote' });
+  }
+  return buckets;
+}
+
 // Забирает страницы выдачи (start_page..start_page+max_pages) и складывает их в кэш.
-// Страница 0 всегда запрашивается заново — на ней новые вакансии.
+// Страница 0 каждого прохода всегда запрашивается заново — на ней новые вакансии.
 async function collectVacancies(client, search, cache) {
   const results = [];
   const startPage = search.start_page || 0;
   const maxPages = search.max_pages || 1;
-  for (let page = startPage; page < startPage + maxPages; page++) {
-    const cached = !page ? null : cache.pages[String(page)];
-    if (cached) {
-      log.info(`Page ${page}: ${cached.length} vacancies (cached)`);
-      results.push(...cached);
-      continue;
+
+  for (const bucket of searchBuckets(search)) {
+    for (let page = startPage; page < startPage + maxPages; page++) {
+      // Кэш текущего прохода: у «удалённого» свои ключи (remote:N).
+      const key = `${bucket.prefix}${page}`;
+      const cached = page === 0 ? null : cache.pages[key];
+      if (cached) {
+        log.info(`Page ${page}${bucket.label}: ${cached.length} vacancies (cached)`);
+        results.push(...cached);
+        continue;
+      }
+
+      const params: Record<string, any> = {
+        text: search.text,
+        area: bucket.area,
+        experience: search.experience,
+        salary: search.salary,
+        only_with_salary: search.only_with_salary,
+        currency: search.currency,
+        per_page: search.per_page || 50,
+        // Фильтр по дате публикации и порядок выдачи — из config.search.
+        search_period: search.search_period,
+        order_by: search.order_by,
+        page,
+      };
+      if (bucket.schedule) params.schedule = bucket.schedule;
+      if (search.employment) params.employment = search.employment;
+
+      const data = await client.searchVacancies(params);
+      log.info(`Page ${page}${bucket.label}: ${data.items.length} vacancies (total ${data.found})`);
+      cache.pages[key] = data.items;
+      await collectCache.savePage(cache, key);
+      results.push(...data.items);
+      if (page + 1 >= (data.pages || 0)) break;
     }
-
-    const params: Record<string, any> = {
-      text: search.text,
-      area: search.area,
-      experience: search.experience,
-      salary: search.salary,
-      only_with_salary: search.only_with_salary,
-      currency: search.currency,
-      per_page: search.per_page || 50,
-      // Фильтр по дате публикации и порядок выдачи — из config.search.
-      search_period: search.search_period,
-      order_by: search.order_by,
-      page,
-    };
-    if (search.schedule) params.schedule = search.schedule;
-    if (search.employment) params.employment = search.employment;
-
-    const data = await client.searchVacancies(params);
-    log.info(`Page ${page}: ${data.items.length} vacancies (total ${data.found})`);
-    cache.pages[String(page)] = data.items;
-    await collectCache.savePage(cache, page);
-    results.push(...data.items);
-    if (page + 1 >= (data.pages || 0)) break;
   }
   return results;
 }
@@ -119,4 +141,4 @@ function fmtSalary(s) {
   return `${parts.join(' ') || '?'} ${s.currency || ''}`.trim();
 }
 
-export { collectVacancies, collectFullVacancies, flattenCollected, fmtSalary };
+export { collectVacancies, collectFullVacancies, flattenCollected, fmtSalary, searchBuckets };

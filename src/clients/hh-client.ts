@@ -95,7 +95,7 @@ class HHClient {
     if (this.ctx && this.headless === headless) return;
     if (this.ctx) await this.close();
     if (!fs.existsSync(PROFILE)) {
-      throw new Error(`Browser profile not found: ${PROFILE}. Run \`npm run login\` first.`);
+      throw new Error(`Browser profile not found: ${PROFILE}. Run the menu item «🔑 Войти на hh.ru» first.`);
     }
     log.info(`Launching Playwright context for hh.ru scraping (headless=${headless})`);
     this.ctx = await chromium.launchPersistentContext(PROFILE, {

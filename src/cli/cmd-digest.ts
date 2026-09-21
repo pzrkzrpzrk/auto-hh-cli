@@ -1,5 +1,5 @@
 // Команда digest: отдельный шаг сборки дайджеста (локальный фильтр + ИИ-судья) и показ последнего.
-// Вход — кэш поиска (`auto-hh search`), сопроводительные — отдельный шаг (`auto-hh cover`).
+// Вход — кэш поиска (пункт меню «🔍 Поиск вакансий»), сопроводительные — отдельный шаг («✉️ Письма для дайджеста»).
 import fs from "fs";
 import path from "path";
 import HHClient from "../clients/hh-client";
@@ -43,7 +43,8 @@ async function filterLocally(client, items, cache, cfg, markSeen = true) {
       await collectCache.saveFullVacancy(full, date);
     }
 
-    const verdict = vacancyMatchesFilter(full, cfg.filter);
+    // anyRegions — регионы «любые вакансии» из config.search.area (остальные — только удалёнка).
+    const verdict = vacancyMatchesFilter(full, cfg.filter, { anyRegions: cfg.search?.area });
     // В dry-run историю не трогаем: прогон не должен оставлять следов.
     if (markSeen) await history.markSeen(item.id);
     if (!verdict.ok) {
@@ -209,7 +210,7 @@ async function build(opts: Record<string, any> = {}) {
 
   const cache = await collectCache.loadLatest(resumeId);
   if (!cache) {
-    log.warn('Кэш поиска пуст — сначала выполните: auto-hh search');
+    log.warn('Кэш поиска пуст — сначала выполните пункт меню «🔍 Поиск вакансий»');
     return;
   }
 
@@ -258,7 +259,7 @@ async function build(opts: Record<string, any> = {}) {
 
     const file = await writeDigest(matched);
     log.info(`Digest saved: ${file} (${matched.length} vacancies)`);
-    console.log('\nДальше: auto-hh cover — сгенерировать сопроводительные');
+    console.log('\nДальше: пункт меню «✉️ Письма для дайджеста» — сгенерировать сопроводительные');
   } finally {
     await client.close?.();
   }
@@ -291,7 +292,7 @@ async function show(opts: Record<string, any> = {}) {
     ? fs.readdirSync(dir).filter(f => /^digest-.*\.md$/.test(f)).sort().reverse()
     : [];
   if (!files.length) {
-    log.info('No digest found. Сначала соберите дайджест: auto-hh digest');
+    log.info('No digest found. Сначала соберите дайджест: пункт меню «🧠 Собрать дайджест»');
     return;
   }
   console.log(fs.readFileSync(path.join(dir, files[0]), 'utf-8'));
