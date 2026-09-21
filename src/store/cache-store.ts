@@ -67,7 +67,8 @@ export async function loadLatest(resumeId?: string): Promise<CacheDoc | null> {
   return load(new Date(`${date}T00:00:00.000Z`), resumeId);
 }
 
-export async function savePage(state: CacheDoc, pageNum: number, date?: Date): Promise<void> {
+// pageNum: номер страницы прохода; у «удалённого» прохода ключ с префиксом (remote:N).
+export async function savePage(state: CacheDoc, pageNum: number | string, date?: Date): Promise<void> {
   await connect();
   await dbInstance().collection('cachePages').updateOne(
     { date: dateKey(date), page: pageNum },
