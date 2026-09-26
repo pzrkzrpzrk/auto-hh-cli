@@ -21,6 +21,8 @@ function sessionDate(cache) {
 
 async function filterLocally(client, items, cache, cfg, markSeen = true) {
   const candidates = [];
+  // «Просмотрено» отмечаем одним bulkWrite в конце шага (было: запрос на каждую вакансию).
+  const seen = [];
   const date = sessionDate(cache);
   for (const item of items) {
     let full = cache.fullById[String(item.id)];
@@ -30,12 +32,12 @@ async function filterLocally(client, items, cache, cfg, markSeen = true) {
         full = await client.getVacancy(item.id);
       } catch (err) {
         log.warn(`Failed to fetch vacancy ${item.id}: ${err.message}`);
-        if (markSeen) await history.markSeen(item.id);
+        if (markSeen) seen.push(String(item.id));
         continue;
       }
       if (!full) {
         log.warn(`Empty vacancy ${item.id}, skipping`);
-        if (markSeen) await history.markSeen(item.id);
+        if (markSeen) seen.push(String(item.id));
         continue;
       }
       cache.fullById[String(item.id)] = full;
@@ -44,13 +46,14 @@ async function filterLocally(client, items, cache, cfg, markSeen = true) {
 
     const verdict = vacancyMatchesFilter(full, cfg.filter);
     // В dry-run историю не трогаем: прогон не должен оставлять следов.
-    if (markSeen) await history.markSeen(item.id);
+    if (markSeen) seen.push(String(item.id));
     if (!verdict.ok) {
       log.info(`Skip ${item.id} (${full.name}): ${verdict.reason}`);
       continue;
     }
     candidates.push({ full, verdict });
   }
+  if (seen.length) await history.markSeenMany(seen);
   return candidates;
 }
 
@@ -264,8 +267,7 @@ async function build(opts: Record<string, any> = {}) {
 async function show(opts: Record<string, any> = {}) {
   const digest = await getLatestDigest().catch(() => null);
   if (digest) {
-    const letters = await collectCache.getLettersByVacancyIds(digest.entries.map(e => e.id)).catch(() => ({}));
-    const entries = digest.entries.map(e => ({ ...e, coverLetter: letters[String(e.id)] || e.coverLetter || '' }));
+    const entries = await collectCache.withCoverLetters(digest.entries).catch(() => digest.entries);
     if (opts.json) {
       console.log(JSON.stringify(entries, null, 2));
     } else {

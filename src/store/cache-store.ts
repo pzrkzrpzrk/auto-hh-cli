@@ -87,15 +87,20 @@ export async function saveFullVacancy(vacancy: any, date?: Date): Promise<void> 
   );
 }
 
-// Полные вакансии по id — чтобы шаг cover не ходил на hh.ru лишний раз.
-export async function getFullByVacancyIds(vacancyIds: (string | number)[]): Promise<Record<string, any>> {
+// Единый поиск по id: dedupe → $in → карта «vacancyId → значение поля».
+async function findByIds(collection: string, vacancyIds: (string | number)[], valueField: string): Promise<Record<string, any>> {
   const ids = [...new Set(vacancyIds.map(String))];
-  if (!ids.length) return {};
-  await connect();
-  const docs = await dbInstance().collection('cacheFull').find({ vacancyId: { $in: ids } }).toArray();
   const out: Record<string, any> = {};
-  for (const d of docs) out[String(d.vacancyId)] = d.full;
+  if (!ids.length) return out;
+  await connect();
+  const docs = await dbInstance().collection(collection).find({ vacancyId: { $in: ids } }).toArray();
+  for (const d of docs) if (d[valueField]) out[String(d.vacancyId)] = d[valueField];
   return out;
+}
+
+// Полные вакансии по id — чтобы шаг cover не ходил на hh.ru лишний раз.
+export function getFullByVacancyIds(vacancyIds: (string | number)[]): Promise<Record<string, any>> {
+  return findByIds('cacheFull', vacancyIds, 'full');
 }
 
 export async function saveJudgements(state: CacheDoc, resumeId?: string, date?: Date): Promise<void> {
@@ -123,14 +128,21 @@ export async function saveLetter(vacancyId: string, letter: string, date?: Date)
   );
 }
 
-export async function getLettersByVacancyIds(vacancyIds: (string | number)[]): Promise<Record<string, string>> {
-  const ids = [...new Set(vacancyIds.map(String))];
-  if (!ids.length) return {};
-  await connect();
-  const docs = await dbInstance().collection('cacheCoverLetters').find({ vacancyId: { $in: ids } }).toArray();
-  const out: Record<string, string> = {};
-  for (const d of docs) if (d.letter) out[String(d.vacancyId)] = d.letter;
-  return out;
+export function getLettersByVacancyIds(vacancyIds: (string | number)[]): Promise<Record<string, string>> {
+  return findByIds('cacheCoverLetters', vacancyIds, 'letter') as Promise<Record<string, string>>;
+}
+
+// Единственное место логики «подклеить письма из кэша к записям дайджеста».
+// force=true — считать, что писем нет ни в кэше, ни в записи (перегенерировать всё).
+export async function withCoverLetters<T extends { id: string | number; coverLetter?: string }>(
+  entries: T[],
+  opts: { force?: boolean } = {},
+): Promise<T[]> {
+  const letters = await getLettersByVacancyIds(entries.map(e => e.id)).catch(() => ({} as Record<string, string>));
+  return entries.map(e => ({
+    ...e,
+    coverLetter: opts.force ? '' : (letters[String(e.id)] || e.coverLetter || ''),
+  }));
 }
 
 export async function clear(): Promise<string[]> {

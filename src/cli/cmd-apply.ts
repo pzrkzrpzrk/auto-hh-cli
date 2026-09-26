@@ -5,7 +5,7 @@ import { chromium } from "playwright";
 import log from "../logger.js";
 import history from "../store/history-store.js";
 import { getDigestsByDate, getAllDigests } from "../store/digest-store.js";
-import { getLettersByVacancyIds } from "../store/cache-store.js";
+import { withCoverLetters } from "../store/cache-store.js";
 
 const PROFILE = path.resolve(process.env.PW_USER_DATA_DIR || './data/browser-profile');
 const HEADLESS = String(process.env.PW_HEADLESS || 'false') === 'true';
@@ -242,11 +242,10 @@ async function apply(opts: Record<string, any> = {}) {
   log.info(`${entries.length} vacancies in digest`);
 
   // Письма генерируются отдельным шагом (`auto-hh cover`) и лежат в cacheCoverLetters.
-  const letters = await getLettersByVacancyIds(entries.map(e => e.id)).catch(() => ({} as Record<string, string>));
-  const planned = entries.map(entry => ({
-    ...entry,
-    coverLetter: letters[String(entry.id)] || entry.coverLetter || '',
-  }));
+  const planned = await withCoverLetters(entries).catch(err => {
+    log.warn(`Письма из кэша недоступны: ${err.message}`);
+    return entries;
+  });
   const withoutLetter = planned.filter(e => !e.coverLetter).length;
   if (withoutLetter) {
     log.warn(`${withoutLetter} вакансий без сопроводительного — пропускаю (сгенерируйте: auto-hh cover)`);
@@ -269,13 +268,14 @@ async function apply(opts: Record<string, any> = {}) {
   }
 
   let ok = 0, fail = 0, skipped = 0;
+  // Отклики читаются один раз: раньше history.load() выгружал всю коллекцию на каждой итерации.
+  const state = await history.load();
   for (const entry of planned) {
     if (!entry.coverLetter) {
       log.warn(`Skip ${entry.id}: no cover letter`);
       skipped++;
       continue;
     }
-    const state = await history.load();
     const rec = state.applied[entry.id];
     if (rec && !rec.digestOnly) {
       log.info(`Skip ${entry.id}: already applied`);
@@ -285,6 +285,7 @@ async function apply(opts: Record<string, any> = {}) {
       const res = await applyToVacancy(page, entry);
       if (res.ok) {
         await history.markApplied(entry.id, { via: 'playwright', url: entry.url });
+        state.applied[String(entry.id)] = { via: 'playwright', url: entry.url, at: new Date().toISOString() };
         ok++;
       } else {
         fail++;

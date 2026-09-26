@@ -72,13 +72,10 @@ async function coverDigest(opts: Record<string, any>, resume) {
   const entries = digest.entries.slice(0, limit);
 
   const letters = new Map<string, string>();
-  const cached = await collectCache.getLettersByVacancyIds(entries.map(e => e.id)).catch(() => ({}));
-  for (const e of entries) {
-    const letter = opts.force ? null : (cached[String(e.id)] || e.coverLetter);
-    if (letter) letters.set(String(e.id), letter);
-  }
+  const withLetters = await collectCache.withCoverLetters(entries, { force: Boolean(opts.force) }).catch(() => entries);
+  for (const e of withLetters) if (e.coverLetter) letters.set(String(e.id), e.coverLetter);
 
-  const pending = entries.filter(e => !letters.has(String(e.id)));
+  const pending = withLetters.filter(e => !e.coverLetter);
   log.info(`Вакансий: ${entries.length}, письма уже есть: ${entries.length - pending.length}, генерируем: ${pending.length}`);
   if (!pending.length) {
     printLetters(entries, letters);
