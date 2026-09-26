@@ -2,31 +2,8 @@ import { getApiConfig } from "../config.js";
 import { getClient } from "../clients/ai-client.js";
 import { loadResume } from "../resume.js";
 import { retryOnTransient } from "../retry.js";
+import { parseJSON } from "../text-utils.js";
 import log from "../logger.js";
-
-function safeJsonParse(text: string): any {
-  let cleaned = text.trim();
-  cleaned = cleaned.replace(/^```json\s*\n?/i, "").replace(/\n?```\s*$/i, "");
-  cleaned = cleaned.replace(/^\*\*+/, "").replace(/\*\*+$/, "");
-  // Попытка распарсить как есть
-  try {
-    return JSON.parse(cleaned);
-  } catch {
-    // Если не вышло — экранируем неэкранированные кавычки внутри строк
-    // (грубая эвристика: заменяем " внутри значений на «»)
-    cleaned = cleaned.replace(
-      /: "([^"]*?)"([^,\]\}])/g,
-      (_m, p1, p2) => `: "${p1.replace(/"/g, "«")}"${p2}`
-    );
-    try {
-      return JSON.parse(cleaned);
-    } catch {
-      // Последняя попытка: удалить управляющие символы
-      cleaned = cleaned.replace(/[\x00-\x1f]/g, " ");
-      return JSON.parse(cleaned);
-    }
-  }
-}
 
 function buildSystemText(): string {
   return `Ты профессиональный HR-эксперт и карьерный консультант. Проведи подробную оценку резюме соискателя.
@@ -133,7 +110,7 @@ async function gradeResume(resume?: any, resumeName?: string): Promise<Record<st
       return null;
     }
 
-    const parsed = safeJsonParse(text);
+    const parsed = parseJSON(text);
     log.debug(
       `gradeResume: score=${parsed.overallScore} in=${(resp as any).usage?.prompt_tokens} out=${(resp as any).usage?.completion_tokens}`
     );

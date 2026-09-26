@@ -2,7 +2,7 @@ import log from "../../logger.js";
 import { retryOnTransient } from "../../retry.js";
 import { getApiConfig } from "../../config.js";
 import { getClient, buildResumeBlock } from "../../clients/ai-client.js";
-import { stripHtml, parseJSON } from "../../text-utils.js";
+import { stripHtml, parseJSON, asList } from "../../text-utils.js";
 import { adaptResumeForVacancy } from "../adapt-resume.js";
 import type { Vacancy, Resume, Verdict, JudgeOpts } from "../../types.js";
 import { buildSystemText } from "./system-text.js";
@@ -147,7 +147,7 @@ async function judgeVacanciesBatch(resume: Resume, vacancies: Vacancy[], opts: J
     log.debug(`judge batch ${vacancies.length}: in=${(resp as any).usage?.prompt_tokens || 0} out=${(resp as any).usage?.completion_tokens || 0}`);
 
     const map = new Map();
-    for (const v of parsed.verdicts || []) {
+    for (const v of asList(parsed, 'verdicts')) {
       const verdict = normalizeVerdict(v);
       map.set(verdict.vacancyId, verdict);
     }

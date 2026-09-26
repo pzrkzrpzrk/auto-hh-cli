@@ -2,7 +2,7 @@ import log from "../../logger.js";
 import { retryOnTransient } from "../../retry.js";
 import { getApiConfig, loadConfig } from "../../config.js";
 import { getClient, buildResumeBlock } from "../../clients/ai-client.js";
-import { stripHtml, parseJSON } from "../../text-utils.js";
+import { stripHtml, parseJSON, asList } from "../../text-utils.js";
 import { adaptResumeForVacancy } from "../adapt-resume.js";
 import { buildBatchSystemText, coverSignature } from "./system-text.js";
 
@@ -169,7 +169,7 @@ async function buildCoverLettersBatch(resume, items, batchSize = 20, onBatch = n
       // Инкрементальный onBatch: отдаём только письма текущей пачки, чтобы вызывающий
       // не перезаписывал в Mongo письма всех предыдущих пачек.
       const fresh = new Map();
-      for (const l of parsed.letters || []) {
+      for (const l of asList(parsed, 'letters')) {
         if (l.vacancyId && l.coverLetter) {
           result.set(String(l.vacancyId), l.coverLetter);
           fresh.set(String(l.vacancyId), l.coverLetter);
