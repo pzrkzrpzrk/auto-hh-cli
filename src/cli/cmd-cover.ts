@@ -6,6 +6,7 @@ import { loadResume } from "../resume.js";
 import { loadConfig } from "../config.js";
 import { intFromEnv } from "../env.js";
 import * as collectCache from "../store/cache-store.js";
+import { ensureFullVacancies, fmtSalary } from "../domain/collect.js";
 import { getLatestDigest, writeDigest } from "../store/digest-store.js";
 import log from "../logger.js";
 
@@ -13,12 +14,8 @@ function printVacancy(full, vacancyId: string) {
   console.log(`\n=== ${full.name} @ ${full.employer?.name || '?'} ===`);
   console.log(`URL: ${full.alternate_url || `https://hh.ru/vacancy/${vacancyId}`}`);
   console.log(`Регион: ${full.area?.name || '—'}`);
-  if (full.salary) {
-    const parts = [];
-    if (full.salary.from) parts.push(`от ${full.salary.from}`);
-    if (full.salary.to) parts.push(`до ${full.salary.to}`);
-    console.log(`Зарплата: ${parts.join(' ') || '?'} ${full.salary.currency || ''}`);
-  }
+  // Тот же формат ЗП, что и в дайджесте (раньше здесь была локальная копия fmtSalary).
+  if (full.salary) console.log(`Зарплата: ${fmtSalary(full.salary)}`);
   console.log();
 }
 
@@ -84,25 +81,14 @@ async function coverDigest(opts: Record<string, any>, resume) {
   }
 
   // Описания вакансий: сначала из кэша cacheFull, недостающие — со страницы hh.ru.
-  const fullById = await collectCache.getFullByVacancyIds(pending.map(e => e.id)).catch(() => ({}));
+  const fullById = await collectCache.getFullByVacancyIds(pending.map(e => e.id)).catch(() => ({} as Record<string, any>));
   const missing = pending.filter(e => !fullById[String(e.id)]).map(e => String(e.id));
   if (missing.length) {
     log.info(`Подгружаю описания вакансий: ${missing.length}`);
     const client = new HHClient();
     try {
-      for (const id of missing) {
-        try {
-          const full = await client.getVacancy(id);
-          if (!full) {
-            log.warn(`Пустая вакансия ${id}`);
-            continue;
-          }
-          fullById[id] = full;
-          await collectCache.saveFullVacancy(full).catch(() => {});
-        } catch (err) {
-          log.warn(`Не удалось получить вакансию ${id}: ${err.message}`);
-        }
-      }
+      // Общая догрузка карточек (та же, что в search/digest): skipSeen не нужен — письма пишем всем.
+      await ensureFullVacancies(client, missing, { fullById });
     } finally {
       await client.close?.();
     }

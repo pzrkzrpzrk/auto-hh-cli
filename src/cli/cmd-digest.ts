@@ -14,7 +14,7 @@ import { loadResume } from "../resume.js";
 import { judgeVacancy, judgeVacanciesBatch } from "../domain/judge/index.js";
 import { writeDigest, writeRejected, getLatestDigest } from "../store/digest-store.js";
 import { registerResume } from "../store/resume-store.js";
-import { flattenCollected, fmtSalary } from "../domain/collect.js";
+import { flattenCollected, fmtSalary, ensureFullVacancies } from "../domain/collect.js";
 import type { DigestEntry } from "../types.js";
 import log from "../logger.js";
 
@@ -44,26 +44,20 @@ async function filterLocally(client, items, cache, cfg, markSeen = true) {
   const candidates = [];
   // «Просмотрено» отмечаем одним bulkWrite в конце шага (было: запрос на каждую вакансию).
   const seen = [];
-  const date = sessionDate(cache);
+
+  // Догрузка описаний — общей функцией шага поиска (кэш → hh.ru → кэш).
+  // skipSeen: просмотренные вакансии digest всё равно пропускает, их карточки не нужны.
+  const unknown = items.filter(item => !cache.fullById[String(item.id)]);
+  if (unknown.length) {
+    const stats = await ensureFullVacancies(client, unknown, cache, { skipSeen: true });
+    // Неудачные карточки отмечаем просмотренными, как и раньше: повторно за ними не идём.
+    if (markSeen) seen.push(...stats.failedIds);
+  }
+
   for (const item of items) {
-    let full = cache.fullById[String(item.id)];
-    if (!full) {
-      if (await history.isSeen(item.id)) continue;
-      try {
-        full = await client.getVacancy(item.id);
-      } catch (err) {
-        log.warn(`Failed to fetch vacancy ${item.id}: ${err.message}`);
-        if (markSeen) seen.push(String(item.id));
-        continue;
-      }
-      if (!full) {
-        log.warn(`Empty vacancy ${item.id}, skipping`);
-        if (markSeen) seen.push(String(item.id));
-        continue;
-      }
-      cache.fullById[String(item.id)] = full;
-      await collectCache.saveFullVacancy(full, date);
-    }
+    const full = cache.fullById[String(item.id)];
+    // Нет карточки — вакансия уже была просмотрена раньше или карточка не скачалась.
+    if (!full) continue;
 
     const verdict = vacancyMatchesFilter(full, cfg.filter);
     // В dry-run историю не трогаем: прогон не должен оставлять следов.

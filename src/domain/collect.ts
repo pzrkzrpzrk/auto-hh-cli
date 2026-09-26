@@ -42,18 +42,22 @@ async function collectVacancies(client, search, cache) {
 }
 
 // Полные карточки вакансий (описание, навыки) — их читают шаги digest и cover.
-// Качаем только то, чего ещё нет в кэше и что не попало в историю: просмотренные
-// digest всё равно пропускает, а их карточки никому не нужны.
-// Каждая карточка сохраняется сразу после загрузки — прерывание не теряет прогресс,
+// Общая догрузка для всех шагов: берём из кэша, недостающие — с hh.ru, сохраняем сразу.
+// Каждая карточка сохраняется после загрузки — прерывание не теряет прогресс,
 // повторный запуск продолжит с того же места.
-async function collectFullVacancies(client, items, cache) {
-  const stats = { candidates: 0, cached: 0, skippedSeen: 0, saved: 0, failed: 0 };
-  const ids: string[] = [...new Set<string>(items.map(item => String(item.id)))];
+async function ensureFullVacancies(client, items, cache, opts: { skipSeen?: boolean } = {}) {
+  const { skipSeen = false } = opts;
+  const stats = { candidates: 0, cached: 0, skippedSeen: 0, saved: 0, failed: 0, failedIds: [] as string[] };
+  // На входе — элементы выдачи (id + name для прогресса) либо просто id (шаг cover).
+  const entries = (items || []).map(item => (item && typeof item === 'object' ? item : { id: item }));
+  const ids: string[] = [...new Set<string>(entries.map(item => String(item.id)))];
   stats.candidates = ids.length;
   if (!ids.length) return stats;
 
   // cache.fullById — карточки текущей сессии поиска (ключ даты тот же, что читает digest).
-  const seen = (await history.load().catch(() => ({ seen: {} }))).seen;
+  // Просмотренные не качаем: digest всё равно их пропускает; cover просит skipSeen = false,
+  // чтобы не срезать вакансии, для которых письма ещё не сгенерированы.
+  const seen = skipSeen ? (await history.load().catch(() => ({ seen: {} }))).seen : {};
   const todo: string[] = [];
   for (const id of ids) {
     if (cache.fullById[id]) { stats.cached++; continue; }
@@ -68,7 +72,7 @@ async function collectFullVacancies(client, items, cache) {
     console.log(`⚠️  Это примерно ${Math.round(todo.length * 3 / 60)} мин. Ctrl+C безопасен: скачанное уже сохранено, повторный поиск продолжит.`);
   }
 
-  const byId = new Map<string, any>(items.map(item => [String(item.id), item]));
+  const byId = new Map<string, any>(entries.map(item => [String(item.id), item]));
   const date = cache.date ? new Date(`${cache.date}T00:00:00.000Z`) : undefined;
   for (const id of todo) {
     try {
@@ -76,6 +80,7 @@ async function collectFullVacancies(client, items, cache) {
       if (!full) {
         log.warn(`Empty vacancy ${id}, skipping`);
         stats.failed++;
+        stats.failedIds.push(id);
       } else {
         cache.fullById[id] = full;
         await collectCache.saveFullVacancy(full, date);
@@ -84,6 +89,7 @@ async function collectFullVacancies(client, items, cache) {
     } catch (err) {
       log.warn(`Failed to fetch vacancy ${id}: ${err.message}`);
       stats.failed++;
+      stats.failedIds.push(id);
     }
 
     const done = stats.saved + stats.failed;
@@ -94,6 +100,11 @@ async function collectFullVacancies(client, items, cache) {
     }
   }
   return stats;
+}
+
+// Шаг поиска: карточки просмотренных вакансий не нужны — их всё равно пропускает digest.
+async function collectFullVacancies(client, items, cache) {
+  return ensureFullVacancies(client, items, cache, { skipSeen: true });
 }
 
 // Плоский список собранных вакансий без дублей — вход для шага digest.
@@ -116,4 +127,4 @@ function fmtSalary(s) {
   return `${parts.join(' ') || '?'} ${s.currency || ''}`.trim();
 }
 
-export { collectVacancies, collectFullVacancies, flattenCollected, fmtSalary };
+export { collectVacancies, collectFullVacancies, ensureFullVacancies, flattenCollected, fmtSalary };

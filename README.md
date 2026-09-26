@@ -435,7 +435,7 @@ npm run ui          # или: npx auto-hh ui (алиасы: menu, interactive)
 │  ├─ domain/                  # доменная логика
 │  │  ├─ judge/                # ИИ-судья (одиночный + батч)
 │  │  ├─ cover-letter/         # генерация сопроводительных
-│  │  ├─ collect.ts            # сбор страниц поиска + хелперы (fmtSalary, flatten)
+│  │  ├─ collect.ts            # страницы поиска + догрузка карточек (ensure/fmtSalary)
 │  │  ├─ filter.ts             # локальный пре-фильтр
 │  │  ├─ adapt-resume.ts       # адаптация резюме под вакансию
 │  │  └─ grade-resume.ts       # оценка резюме через ИИ
