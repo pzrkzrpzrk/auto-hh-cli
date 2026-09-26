@@ -28,12 +28,14 @@ async function cmdResumeList() {
 async function cmdResumeRegister(name: string) {
   if (!name) {
     console.error('Usage: auto-hh resume register <name>');
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
   const resume = loadResume(name);
   if (!resume) {
     console.error(`Resume "${name}" not found`);
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
   await registerResume(resume);
   log.info(`Resume "${name}" registered (id: ${resume.id})`);
@@ -45,11 +47,13 @@ async function cmdResumeShow(name?: string) {
     resume = name ? loadResume(name) : loadResume();
   } catch (err: any) {
     console.error(err.message);
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
   if (!resume) {
     console.error('Резюме не найдено. Задайте RESUME_PATH или RESUMES_DIR в .env, либо укажите имя: auto-hh resume show <name>');
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
 
   console.log(`\n=== Резюме: ${resume.name} ===`);

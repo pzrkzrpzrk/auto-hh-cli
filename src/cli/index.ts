@@ -1,4 +1,5 @@
 // CLI entry point: регистрирует команды и запускает Commander.
+// Контракт: команды не вызывают process.exit — код выхода задаётся здесь через process.exitCode.
 import { Command } from "commander";
 import cmdSearch from "./cmd-search.js";
 import cmdApply from "./cmd-apply.js";

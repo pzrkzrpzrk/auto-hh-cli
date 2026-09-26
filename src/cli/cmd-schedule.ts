@@ -66,7 +66,8 @@ export default async function cmdSchedule(opts: Record<string, any> = {}) {
 
   if (!cfg.schedule?.cron) {
     console.error("schedule.cron не задан в config.json");
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
 
   const expression = cfg.schedule.cron;
@@ -74,7 +75,8 @@ export default async function cmdSchedule(opts: Record<string, any> = {}) {
 
   if (!cron.validate(expression)) {
     console.error(`Невалидное cron-выражение: ${expression}`);
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
 
   const next = getNextDate(expression);
