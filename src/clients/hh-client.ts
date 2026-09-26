@@ -9,10 +9,9 @@ import fs from "fs";
 import { chromium } from "playwright";
 import { env } from "../config.js";
 import log from "../logger.js";
+import { sleep } from "../time.js";
 
 const PROFILE = path.resolve(process.env.PW_USER_DATA_DIR || './data/browser-profile');
-
-function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 function decodeEntities(s) {
   if (!s) return '';

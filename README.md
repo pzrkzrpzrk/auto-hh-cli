@@ -448,7 +448,7 @@ npm run ui          # или: npx auto-hh ui (алиасы: menu, interactive)
 │  ├─ apply-playwright.ts      # Playwright-логика отклика (легаси-точка входа)
 │  ├─ resume.ts                # загрузка резюме (файл или директория)
 │  ├─ config.ts                # загрузка config.json + .env
-│  ├─ logger.ts / retry.ts / text-utils.ts / types.ts
+│  ├─ env.ts / logger.ts / paths.ts / retry.ts / text-utils.ts / time.ts / types.ts
 ├─ migrations/                 # миграции MongoDB
 └─ docker-compose.yml          # MongoDB + mongo-express
 ```

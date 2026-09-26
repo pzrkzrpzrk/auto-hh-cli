@@ -1,13 +1,11 @@
 import log from "../../logger.js";
 import { retryOnTransient } from "../../retry.js";
-import { loadConfig } from "../../config.js";
+import { getApiConfig } from "../../config.js";
 import { getClient, buildResumeBlock } from "../../clients/ai-client.js";
 import { stripHtml, parseJSON } from "../../text-utils.js";
 import { adaptResumeForVacancy } from "../adapt-resume.js";
 import type { Vacancy, Resume, Verdict, JudgeOpts } from "../../types.js";
 import { buildSystemText } from "./system-text.js";
-
-const apiConfig = loadConfig().api || {};
 
 // Гарантирует инвариант вердикта: fit=true ⇒ comment непустой, reason=null;
 // fit=false ⇒ reason непустой, comment=null.
@@ -55,7 +53,7 @@ ${description}`;
 }
 
 async function judgeVacancy(resume: Resume, vacancy: Vacancy, opts: JudgeOpts = {}): Promise<Verdict | null> {
-  const c = getClient(apiConfig);
+  const c = getClient(getApiConfig());
   if (!c) return null;
 
   const model = process.env.CLAUDE_MODEL || 'gpt-4o';
@@ -100,7 +98,7 @@ async function judgeVacancy(resume: Resume, vacancy: Vacancy, opts: JudgeOpts = 
 // Батчевая версия: судит пачку вакансий за один запрос.
 // Возвращает Map<vacancyId, verdict> (verdict в том же формате, что judgeVacancy).
 async function judgeVacanciesBatch(resume: Resume, vacancies: Vacancy[], opts: JudgeOpts = {}): Promise<Map<string, Verdict> | null> {
-  const c = getClient(apiConfig);
+  const c = getClient(getApiConfig());
   if (!c) return null;
   if (!vacancies.length) return new Map();
 

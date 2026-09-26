@@ -1,12 +1,10 @@
 import log from "../../logger.js";
 import { retryOnTransient } from "../../retry.js";
-import { loadConfig } from "../../config.js";
+import { getApiConfig, loadConfig } from "../../config.js";
 import { getClient, buildResumeBlock } from "../../clients/ai-client.js";
 import { stripHtml, parseJSON } from "../../text-utils.js";
 import { adaptResumeForVacancy } from "../adapt-resume.js";
 import { buildBatchSystemText, coverSignature } from "./system-text.js";
-
-const apiConfig = loadConfig().api || {};
 
 function buildFromTemplate(template, vacancy) {
   const ctx = {
@@ -19,7 +17,7 @@ function buildFromTemplate(template, vacancy) {
 }
 
 async function buildWithClaude(vacancy, resume = null, adaptResume = false) {
-  const client = getClient(apiConfig);
+  const client = getClient(getApiConfig());
   if (!client) return null;
 
   const profile = process.env.APPLICANT_PROFILE || 'опытный разработчик';
@@ -106,7 +104,7 @@ ${description}`;
 // onBatch(partialResult) — вызывается после каждой пачки только с письмами этой пачки
 // (инкрементально, не накопительно); полный результат — в возвращаемом Map.
 async function buildCoverLettersBatch(resume, items, batchSize = 20, onBatch = null) {
-  const client = getClient(apiConfig);
+  const client = getClient(getApiConfig());
   const result = new Map();
   if (!client || !items.length) return result;
 

@@ -3,6 +3,8 @@
 import fs from "fs";
 import path from "path";
 import HHClient from "../clients/hh-client.js";
+import { DATA_DIR } from "../paths.js";
+import { intFromEnv } from "../env.js";
 import { loadConfig } from "../config.js";
 import history from "../store/history-store.js";
 import * as collectCache from "../store/cache-store.js";
@@ -85,7 +87,7 @@ async function judgeWithClaude(resume, candidates, cache, minScore, adaptResume 
     log.info(`Judgements from cache: ${candidates.length - pending.length}/${candidates.length}`);
   }
 
-  const batchSize = parseInt(process.env.JUDGE_BATCH_SIZE || '10', 10);
+  const batchSize = intFromEnv('JUDGE_BATCH_SIZE', 10, { min: 1 });
   const date = sessionDate(cache);
   const batches = [];
   for (let i = 0; i < pending.length; i += batchSize) {
@@ -282,7 +284,7 @@ async function show(opts: Record<string, any> = {}) {
     return;
   }
 
-  const dir = path.join(__dirname, '..', '..', 'data');
+  const dir = DATA_DIR;
   const files = fs.existsSync(dir)
     ? fs.readdirSync(dir).filter(f => /^digest-.*\.md$/.test(f)).sort().reverse()
     : [];

@@ -1,10 +1,8 @@
-import { loadConfig } from "../config.js";
+import { getApiConfig } from "../config.js";
 import { getClient } from "../clients/ai-client.js";
 import { loadResume } from "../resume.js";
 import { retryOnTransient } from "../retry.js";
 import log from "../logger.js";
-
-const apiConfig = loadConfig().api || {};
 
 function safeJsonParse(text: string): any {
   let cleaned = text.trim();
@@ -95,7 +93,7 @@ function buildSystemText(): string {
 }
 
 async function gradeResume(resume?: any, resumeName?: string): Promise<Record<string, any> | null> {
-  const client = getClient(apiConfig);
+  const client = getClient(getApiConfig());
   if (!client) {
     log.warn("gradeResume: no API client (check API key)");
     return null;

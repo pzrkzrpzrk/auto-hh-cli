@@ -4,6 +4,7 @@ import HHClient from "../clients/hh-client.js";
 import { buildCoverLetter, buildCoverLettersBatch } from "../domain/cover-letter/index.js";
 import { loadResume } from "../resume.js";
 import { loadConfig } from "../config.js";
+import { intFromEnv } from "../env.js";
 import * as collectCache from "../store/cache-store.js";
 import { getLatestDigest, writeDigest } from "../store/digest-store.js";
 import log from "../logger.js";
@@ -113,7 +114,7 @@ async function coverDigest(opts: Record<string, any>, resume) {
     return;
   }
 
-  const batchSize = parseInt(process.env.COVER_BATCH_SIZE || '20', 10);
+  const batchSize = intFromEnv('COVER_BATCH_SIZE', 20, { min: 1 });
   log.info(`Генерация писем пачками по ${batchSize} для ${items.length} вакансий`);
   const generated = await buildCoverLettersBatch(resume, items, batchSize, async (partial) => {
     for (const [id, letter] of partial.entries()) {

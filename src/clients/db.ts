@@ -1,10 +1,11 @@
 // MongoDB connection manager.
 import { MongoClient, Db } from "mongodb";
+import { intFromEnv } from "../env.js";
 
 const URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/autohh';
 // Не ждём дефолтные 30 с, если MongoDB недоступна: команды (digest show, cover, apply)
 // должны деградировать быстро и понятно.
-const TIMEOUT_MS = parseInt(process.env.MONGODB_TIMEOUT_MS || '10000', 10);
+const TIMEOUT_MS = intFromEnv('MONGODB_TIMEOUT_MS', 10000, { min: 0 });
 
 let client: MongoClient | null = null;
 let db: Db | null = null;

@@ -6,16 +6,16 @@ import log from "../logger.js";
 import history from "../store/history-store.js";
 import { getDigestsByDate, getAllDigests } from "../store/digest-store.js";
 import { withCoverLetters } from "../store/cache-store.js";
+import { DATA_DIR } from "../paths.js";
+import { intFromEnv, boolFromEnv } from "../env.js";
+import { sleep, rand, dateKey } from "../time.js";
 
 const PROFILE = path.resolve(process.env.PW_USER_DATA_DIR || './data/browser-profile');
-const HEADLESS = String(process.env.PW_HEADLESS || 'false') === 'true';
-const MIN_DELAY = parseInt(process.env.PW_MIN_DELAY_MS || '500', 10);
-const MAX_DELAY = parseInt(process.env.PW_MAX_DELAY_MS || '2000', 10);
+const HEADLESS = boolFromEnv('PW_HEADLESS', false);
+const MIN_DELAY = intFromEnv('PW_MIN_DELAY_MS', 500, { min: 0 });
+const MAX_DELAY = intFromEnv('PW_MAX_DELAY_MS', 2000, { min: 0 });
 const TEST_MODE = (process.env.PW_TEST_MODE || 'manual').toLowerCase();
-const TEST_TIMEOUT = parseInt(process.env.PW_TEST_TIMEOUT_MS || '0', 10);
-
-function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
-function rand(min, max) { return Math.floor(Math.random() * (max - min + 1)) + min; }
+const TEST_TIMEOUT = intFromEnv('PW_TEST_TIMEOUT_MS', 0, { min: 0 });
 
 function ensureProfile() {
   if (!fs.existsSync(PROFILE)) fs.mkdirSync(PROFILE, { recursive: true });
@@ -26,14 +26,14 @@ async function loadDigest(type: string) {
     log.info('Loading all digests');
     return getAllDigests('digest');
   }
-  const date = new Date().toISOString().slice(0, 10);
+  const date = dateKey();
   return getDigestsByDate('digest', date);
 }
 
 async function applyToVacancy(page, entry) {
   log.info(`Applying to ${entry.id} (${entry.employer || '?'}: ${entry.title})`);
-  const minDelay = parseInt(process.env.PW_MIN_DELAY_MS || '500', 10);
-  const maxDelay = parseInt(process.env.PW_MAX_DELAY_MS || '2000', 10);
+  const minDelay = intFromEnv('PW_MIN_DELAY_MS', 500, { min: 0 });
+  const maxDelay = intFromEnv('PW_MAX_DELAY_MS', 2000, { min: 0 });
   await page.goto(entry.url, { waitUntil: 'domcontentloaded' });
   await sleep(rand(minDelay, maxDelay));
 
@@ -100,7 +100,7 @@ async function applyToVacancy(page, entry) {
     await textarea.fill(entry.coverLetter);
     log.info('Cover letter filled');
   } else if (entry.coverLetter) {
-    const dumpPath = path.join(__dirname, '..', '..', 'data', `apply-dom-${entry.id}.html`);
+    const dumpPath = path.join(DATA_DIR, `apply-dom-${entry.id}.html`);
     try {
       const html = await page.content();
       fs.writeFileSync(dumpPath, html);
@@ -114,7 +114,7 @@ async function applyToVacancy(page, entry) {
   log.info(`>>> Сопроводительное заполнено. Проверьте и нажмите «Откликнуться» в браузере.`);
   log.info(`>>> Ожидание...`);
 
-  const manualTimeout = parseInt(process.env.PW_MANUAL_TIMEOUT_MS || '300000', 10);
+  const manualTimeout = intFromEnv('PW_MANUAL_TIMEOUT_MS', 300000, { min: 0 });
   const hadTextarea = !!textarea;
   let submitted = false;
 
