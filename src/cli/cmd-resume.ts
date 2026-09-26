@@ -1,6 +1,6 @@
 // Команда resume: управление резюме.
 import { listResumes, loadResume } from "../resume.js";
-import { registerResume, listResumes as listMongo } from "../store/resume-store";
+import { registerResume, listResumes as listMongo } from "../store/resume-store.js";
 import type { Resume } from "../types.js";
 import log from "../logger.js";
 

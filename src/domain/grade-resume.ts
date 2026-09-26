@@ -1,5 +1,5 @@
 import { loadConfig } from "../config.js";
-import { getClient } from "../clients/ai-client";
+import { getClient } from "../clients/ai-client.js";
 import { loadResume } from "../resume.js";
 import { retryOnTransient } from "../retry.js";
 import log from "../logger.js";

@@ -1,10 +1,10 @@
 // Команда apply: отклик через Playwright.
 import fs from "fs";
 import path from "path";
-import {  chromium  } from "playwright";
-import log from "../logger";
-import history from "../store/history-store";
-import  {getDigestsByDate, getAllDigests} from "../store/digest-store";
+import { chromium } from "playwright";
+import log from "../logger.js";
+import history from "../store/history-store.js";
+import { getDigestsByDate, getAllDigests } from "../store/digest-store.js";
 import { getLettersByVacancyIds } from "../store/cache-store.js";
 
 const PROFILE = path.resolve(process.env.PW_USER_DATA_DIR || './data/browser-profile');

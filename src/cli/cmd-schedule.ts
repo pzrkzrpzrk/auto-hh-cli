@@ -1,7 +1,7 @@
 // Команда schedule: запуск пайплайна (search → digest → cover) по cron-расписанию.
 import cron from "node-cron";
-import {  loadConfig  } from "../config";
-import log from "../logger";
+import { loadConfig } from "../config.js";
+import log from "../logger.js";
 import search from "./cmd-search.js";
 import digest from "./cmd-digest.js";
 import cover from "./cmd-cover.js";

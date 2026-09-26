@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
-import { connect, dbInstance } from "../clients/db";
-import { DigestEntry, DigestDoc } from "../types";
+import { connect, dbInstance } from "../clients/db.js";
+import { DigestEntry, DigestDoc } from "../types.js";
 
 const DATA_DIR = path.join(__dirname, '..', '..', 'data');
 

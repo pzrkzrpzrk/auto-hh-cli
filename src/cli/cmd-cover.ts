@@ -1,6 +1,6 @@
 // Команда cover: сопроводительные письма — отдельный шаг пайплайна.
 // Без id: письма для всех вакансий последнего дайджеста. С id: одно письмо для вакансии.
-import HHClient from "../clients/hh-client";
+import HHClient from "../clients/hh-client.js";
 import { buildCoverLetter, buildCoverLettersBatch } from "../domain/cover-letter/index.js";
 import { loadResume } from "../resume.js";
 import { loadConfig } from "../config.js";

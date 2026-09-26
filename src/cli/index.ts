@@ -1,5 +1,5 @@
 // CLI entry point: регистрирует команды и запускает Commander.
-import {  Command  } from "commander";
+import { Command } from "commander";
 import cmdSearch from "./cmd-search.js";
 import cmdApply from "./cmd-apply.js";
 import cmdDigest from "./cmd-digest.js";
@@ -11,7 +11,7 @@ import cmdSchedule from "./cmd-schedule.js";
 import cmdGradeResume from "./cmd-grade-resume.js";
 import cmdResume from "./cmd-resume.js";
 import cmdUi from "./cmd-ui.js";
-import { close as closeDb } from "../clients/db";
+import { close as closeDb } from "../clients/db.js";
 
 const program = new Command();
 

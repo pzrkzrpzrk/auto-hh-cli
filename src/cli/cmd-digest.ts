@@ -2,14 +2,14 @@
 // Вход — кэш поиска (`auto-hh search`), сопроводительные — отдельный шаг (`auto-hh cover`).
 import fs from "fs";
 import path from "path";
-import HHClient from "../clients/hh-client";
+import HHClient from "../clients/hh-client.js";
 import { loadConfig } from "../config.js";
-import history from "../store/history-store";
+import history from "../store/history-store.js";
 import * as collectCache from "../store/cache-store.js";
 import { vacancyMatchesFilter } from "../domain/filter.js";
 import { loadResume } from "../resume.js";
-import { judgeVacancy, judgeVacanciesBatch } from "../domain/judge";
-import { writeDigest, writeRejected, getLatestDigest } from "../store/digest-store";
+import { judgeVacancy, judgeVacanciesBatch } from "../domain/judge/index.js";
+import { writeDigest, writeRejected, getLatestDigest } from "../store/digest-store.js";
 import { registerResume } from "../store/resume-store.js";
 import { flattenCollected, fmtSalary } from "../domain/collect.js";
 import log from "../logger.js";

@@ -1,7 +1,7 @@
 import log from "../../logger.js";
 import { retryOnTransient } from "../../retry.js";
 import { loadConfig } from "../../config.js";
-import { getClient, buildResumeBlock } from "../../clients/ai-client";
+import { getClient, buildResumeBlock } from "../../clients/ai-client.js";
 import { stripHtml, parseJSON } from "../../text-utils.js";
 import { adaptResumeForVacancy } from "../adapt-resume.js";
 import { buildBatchSystemText, coverSignature } from "./system-text.js";

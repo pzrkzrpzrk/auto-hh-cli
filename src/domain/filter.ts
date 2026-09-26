@@ -1,5 +1,5 @@
 // Логика отбора вакансий по критериям из config.filter.
-import {Vacancy} from "../types";
+import { Vacancy } from "../types.js";
 
 function lower(s) { return (s || '').toString().toLowerCase(); }
 

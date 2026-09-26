@@ -1,5 +1,5 @@
 // Хранилище истории откликов в MongoDB.
-import { connect, dbInstance } from "../clients/db";
+import { connect, dbInstance } from "../clients/db.js";
 import { Collection } from "mongodb";
 
 const COLLECTION = 'history';

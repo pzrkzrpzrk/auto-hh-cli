@@ -1,5 +1,5 @@
 // Кэш в отдельных MongoDB коллекциях: cachePages, cacheFull, cacheJudgements, cacheCoverLetters.
-import { connect, dbInstance } from "../clients/db";
+import { connect, dbInstance } from "../clients/db.js";
 
 function dateKey(d?: Date): string {
   return (d || new Date()).toISOString().slice(0, 10);

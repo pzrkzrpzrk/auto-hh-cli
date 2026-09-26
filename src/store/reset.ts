@@ -1,7 +1,7 @@
 // Сброс истории, кэша и дайджестов (файлы + MongoDB).
 import fs from "fs";
 import path from "path";
-import { connect, dbInstance } from "../clients/db";
+import { connect, dbInstance } from "../clients/db.js";
 import * as collectCache from "./cache-store.js";
 import log from "../logger.js";
 
