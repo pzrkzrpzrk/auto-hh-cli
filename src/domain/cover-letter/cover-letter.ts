@@ -103,7 +103,8 @@ ${description}`;
 
 // Генерирует сопроводительные пачками по batchSize вакансий за один запрос.
 // items: [{ vacancy }]. Возвращает Map<vacancyId, text>.
-// onBatch(partialResult) — вызывается после каждой пачки с накопленным результатом.
+// onBatch(partialResult) — вызывается после каждой пачки только с письмами этой пачки
+// (инкрементально, не накопительно); полный результат — в возвращаемом Map.
 async function buildCoverLettersBatch(resume, items, batchSize = 20, onBatch = null) {
   const client = getClient(apiConfig);
   const result = new Map();
@@ -167,12 +168,18 @@ async function buildCoverLettersBatch(resume, items, batchSize = 20, onBatch = n
         return;
       }
       const parsed = parseJSON(content);
+      // Инкрементальный onBatch: отдаём только письма текущей пачки, чтобы вызывающий
+      // не перезаписывал в Mongo письма всех предыдущих пачек.
+      const fresh = new Map();
       for (const l of parsed.letters || []) {
-        if (l.vacancyId && l.coverLetter) result.set(String(l.vacancyId), l.coverLetter);
+        if (l.vacancyId && l.coverLetter) {
+          result.set(String(l.vacancyId), l.coverLetter);
+          fresh.set(String(l.vacancyId), l.coverLetter);
+        }
       }
       log.debug(`cover batch ${idx}: ${batch.length} letters, in=${r.usage?.prompt_tokens || 0} out=${r.usage?.completion_tokens || 0}`);
-      if (onBatch) {
-        try { await onBatch(result); } catch (e) { log.warn(`cover onBatch callback failed: ${e.message}`); }
+      if (onBatch && fresh.size) {
+        try { await onBatch(fresh); } catch (e) { log.warn(`cover onBatch callback failed: ${e.message}`); }
       }
     } catch (err) {
       log.warn(`cover batch ${idx} failed (${batch.length} items): ${err.message}`);

@@ -12,7 +12,25 @@ import { judgeVacancy, judgeVacanciesBatch } from "../domain/judge/index.js";
 import { writeDigest, writeRejected, getLatestDigest } from "../store/digest-store.js";
 import { registerResume } from "../store/resume-store.js";
 import { flattenCollected, fmtSalary } from "../domain/collect.js";
+import type { DigestEntry } from "../types.js";
 import log from "../logger.js";
+
+// Единый литерал записи дайджеста — единственный источник правды по полям (см. тип DigestEntry).
+// id приводим к строке: в Mongo записи лежат строковыми ключами, письма ищутся по String(id).
+function toDigestEntry(full, { score, reason, comment, coverLetter }: Record<string, any>): DigestEntry {
+  return {
+    id: String(full.id),
+    title: full.name,
+    employer: full.employer?.name || '—',
+    area: full.area?.name || '—',
+    salary: fmtSalary(full.salary),
+    url: full.alternate_url,
+    score,
+    reason,
+    comment,
+    coverLetter,
+  };
+}
 
 // Дата кэша поиска: тем же ключом пишутся полные вакансии и вердикты ИИ.
 function sessionDate(cache) {
@@ -132,16 +150,8 @@ function selectAccepted(candidates, judgements, useClaude, maxRun) {
         comment = judgement.comment;
         if (!judgement.fit) {
           log.info(`Claude rejected ${full.id} (score=${score}): ${reason}`);
-          rejected.push({
-            id: full.id,
-            title: full.name,
-            employer: full.employer?.name || '—',
-            area: full.area?.name || '—',
-            salary: fmtSalary(full.salary),
-            url: full.alternate_url,
-            score,
-            reason,
-          });
+          // comment: null — как и раньше, в rejected попадает только причина отказа.
+          rejected.push(toDigestEntry(full, { score, reason, comment: null, coverLetter: '' }));
           continue;
         }
         log.info(`Claude approved ${full.id} (score=${score}): ${comment || reason}`);
@@ -159,18 +169,7 @@ async function buildResults(accepted, track = true) {
   const matched = [];
   for (const a of accepted) {
     const { full, score, reason, comment } = a;
-    matched.push({
-      id: full.id,
-      title: full.name,
-      employer: full.employer?.name || '—',
-      area: full.area?.name || '—',
-      salary: fmtSalary(full.salary),
-      url: full.alternate_url,
-      score,
-      reason,
-      comment,
-      coverLetter: '',
-    });
+    matched.push(toDigestEntry(full, { score, reason, comment, coverLetter: '' }));
     if (track) {
       await history.markApplied(full.id, {
         title: full.name,
