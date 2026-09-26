@@ -1,0 +1,20 @@
+# Нормализуем переводы строк: в репозитории и рабочей копии всегда LF.
+* text=auto eol=lf
+
+# Явно помечаем бинарные файлы, чтобы git не трогал их как текст.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.pdf binary
+*.zip binary
+*.gz binary
+*.mp4 binary
+*.mov binary
+*.webm binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.eot binary
