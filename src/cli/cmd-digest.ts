@@ -5,6 +5,7 @@ import path from "path";
 import HHClient from "../clients/hh-client.js";
 import { DATA_DIR } from "../paths.js";
 import { intFromEnv } from "../env.js";
+import { chunk, runBatches, concurrencyFromEnv } from "../concurrency.js";
 import { loadConfig } from "../config.js";
 import history from "../store/history-store.js";
 import * as collectCache from "../store/cache-store.js";
@@ -89,19 +90,13 @@ async function judgeWithClaude(resume, candidates, cache, minScore, adaptResume 
 
   const batchSize = intFromEnv('JUDGE_BATCH_SIZE', 10, { min: 1 });
   const date = sessionDate(cache);
-  const batches = [];
-  for (let i = 0; i < pending.length; i += batchSize) {
-    batches.push(pending.slice(i, i + batchSize).map(c => c.full));
-  }
+  const batches = chunk<any>(pending.map(c => c.full), batchSize);
 
-  let nextBatchIdx = 0;
-  const CONCURRENCY = 10;
-
-  async function runBatch(idx, batch) {
-    log.info(`Judging batch ${idx}: ${batch.length} vacancies`);
+  // Механика пула — в concurrency.ts; здесь только тело обработки одной пачки.
+  await runBatches(batches, concurrencyFromEnv(), async (batch, i) => {
     const result = await judgeVacanciesBatch(resume, batch, { minScore, adaptResume });
     if (!result) {
-      log.warn(`Batch ${idx} failed, falling back to per-item judge`);
+      log.warn(`Batch ${i + 1} failed, falling back to per-item judge`);
       for (const v of batch) {
         const j = await judgeVacancy(resume, v, { minScore, adaptResume });
         if (j) {
@@ -119,18 +114,8 @@ async function judgeWithClaude(resume, candidates, cache, minScore, adaptResume 
       await collectCache.saveJudgements(cache, resumeId, date);
       judgedCount += batch.length;
     }
-  }
+  });
 
-  async function worker() {
-    while (nextBatchIdx < batches.length) {
-      const batch = batches[nextBatchIdx];
-      const num = nextBatchIdx + 1;
-      nextBatchIdx++;
-      await runBatch(num, batch);
-    }
-  }
-
-  await Promise.all(Array.from({ length: Math.min(CONCURRENCY, batches.length) }, () => worker()));
   return { judgements, judgedCount };
 }
 

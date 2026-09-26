@@ -1,5 +1,6 @@
 import log from "../../logger.js";
 import { retryOnTransient } from "../../retry.js";
+import { chunk, runBatches, concurrencyFromEnv } from "../../concurrency.js";
 import { getApiConfig, loadConfig } from "../../config.js";
 import { getClient, buildResumeBlock } from "../../clients/ai-client.js";
 import { stripHtml, parseJSON, asList } from "../../text-utils.js";
@@ -117,31 +118,21 @@ async function buildCoverLettersBatch(resume, items, batchSize = 20, onBatch = n
   const systemText = buildBatchSystemText(profile) +
     (adapt ? '\n\nДля каждой вакансии передано адаптированное под неё резюме — учитывай его при составлении письма, указывая релевантный опыт.' : '');
 
-  const batchTexts = [];
-  for (let i = 0; i < items.length; i += batchSize) {
-    const batch = items.slice(i, i + batchSize);
-    batchTexts.push({
-      idx: batchTexts.length + 1,
-      batch,
-      text: batch.map((it, idx) => {
-        let block = '';
-        if (adapt) {
-          const adapted = adaptResumeForVacancy(resume, it.vacancy);
-          if (adapted) {
-            block += `=== РЕЗЮМЕ (релевантное для вакансии #${idx + 1}) ===\n${adapted}\n\n`;
-          }
+  // Механика пула — в concurrency.ts; здесь строится текст пачки и тело её обработки.
+  const batches = chunk<any>(items, batchSize);
+  await runBatches(batches, concurrencyFromEnv(), async (batch, i) => {
+    const text = batch.map((it, idx) => {
+      let block = '';
+      if (adapt) {
+        const adapted = adaptResumeForVacancy(resume, it.vacancy);
+        if (adapted) {
+          block += `=== РЕЗЮМЕ (релевантное для вакансии #${idx + 1}) ===\n${adapted}\n\n`;
         }
-        block += `=== ВАКАНСИЯ #${idx + 1} ===\n${formatVacancyShort(it.vacancy)}`;
-        return block;
-      }).join('\n\n'),
-    });
-  }
+      }
+      block += `=== ВАКАНСИЯ #${idx + 1} ===\n${formatVacancyShort(it.vacancy)}`;
+      return block;
+    }).join('\n\n');
 
-  let nextBatchIdx = 0;
-  const CONCURRENCY = 10;
-
-  async function runBatch(ii) {
-    const { idx, batch, text } = batchTexts[ii];
     const messages = [
       { role: 'system', content: systemText },
       {
@@ -152,47 +143,35 @@ async function buildCoverLettersBatch(resume, items, batchSize = 20, onBatch = n
         ] as any,
       },
     ] as any;
-    try {
-      const resp = await retryOnTransient(() => client.chat.completions.create({
-        model,
-        max_completion_tokens: 1000000,
-        messages,
-      }));
 
-      const r = resp as any;
-      const content = r.choices?.[0]?.message?.content;
-      if (!content) {
-        log.warn(`cover batch ${idx}: empty response`);
-        return;
-      }
-      const parsed = parseJSON(content);
-      // Инкрементальный onBatch: отдаём только письма текущей пачки, чтобы вызывающий
-      // не перезаписывал в Mongo письма всех предыдущих пачек.
-      const fresh = new Map();
-      for (const l of asList(parsed, 'letters')) {
-        if (l.vacancyId && l.coverLetter) {
-          result.set(String(l.vacancyId), l.coverLetter);
-          fresh.set(String(l.vacancyId), l.coverLetter);
-        }
-      }
-      log.debug(`cover batch ${idx}: ${batch.length} letters, in=${r.usage?.prompt_tokens || 0} out=${r.usage?.completion_tokens || 0}`);
-      if (onBatch && fresh.size) {
-        try { await onBatch(fresh); } catch (e) { log.warn(`cover onBatch callback failed: ${e.message}`); }
-      }
-    } catch (err) {
-      log.warn(`cover batch ${idx} failed (${batch.length} items): ${err.message}`);
+    const resp = await retryOnTransient(() => client.chat.completions.create({
+      model,
+      max_completion_tokens: 1000000,
+      messages,
+    }));
+
+    const r = resp as any;
+    const content = r.choices?.[0]?.message?.content;
+    if (!content) {
+      log.warn(`cover batch ${i + 1}: empty response`);
+      return new Map();
     }
-  }
-
-  async function worker() {
-    while (nextBatchIdx < batchTexts.length) {
-      const ii = nextBatchIdx;
-      nextBatchIdx++;
-      await runBatch(ii);
+    const parsed = parseJSON(content);
+    // Письма текущей пачки — в `fresh`; накопительный `result` отдаётся вызывающему целиком,
+    // чтобы он не перезаписывал в Mongo письма всех предыдущих пачек.
+    const fresh = new Map();
+    for (const l of asList(parsed, 'letters')) {
+      if (l.vacancyId && l.coverLetter) {
+        result.set(String(l.vacancyId), l.coverLetter);
+        fresh.set(String(l.vacancyId), l.coverLetter);
+      }
     }
-  }
-
-  await Promise.all(Array.from({ length: Math.min(CONCURRENCY, batchTexts.length) }, () => worker()));
+    log.debug(`cover batch ${i + 1}: ${batch.length} letters, in=${r.usage?.prompt_tokens || 0} out=${r.usage?.completion_tokens || 0}`);
+    return fresh;
+  }, {
+    // Ошибки пачки логирует и проглатывает runBatches (продолжает остальные пачки).
+    onBatch: onBatch ? async (fresh) => { if (fresh.size) await onBatch(fresh); } : undefined,
+  });
 
   return result;
 }
