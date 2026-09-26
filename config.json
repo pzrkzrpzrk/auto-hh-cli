@@ -10,7 +10,6 @@
     "employment": null
   },
   "filter": {
-    "requiredSkills": [],
     "excludedKeywords": [],
     "excludedCompanies": ["Яндекс", "Сбер"],
     "excludeArchived": true

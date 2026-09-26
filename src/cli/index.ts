@@ -97,8 +97,6 @@ program
   .description('Интерактивное меню для работы со всеми командами')
   .action(cmdUi);
 
-// Точка входа CLI: parseAsync + гарантированное закрытие MongoDB.
-// Без этого монитор соединения держит event loop и процесс не завершается после команды.
 export async function run(argv: string[] = process.argv): Promise<void> {
   try {
     await program.parseAsync(argv);

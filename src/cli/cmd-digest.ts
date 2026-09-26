@@ -293,21 +293,11 @@ async function show(opts: Record<string, any> = {}) {
   console.log(fs.readFileSync(path.join(dir, files[0]), 'utf-8'));
 }
 
-const SHOW_ACTIONS = new Set(['show', 'last', 'latest', 'view']);
-
 export default async function cmdDigest(action: any = 'build', opts: Record<string, any> = {}) {
-  // Совместимость с прежним вызовом cmdDigest({ json: true }) — это показ дайджеста.
-  if (action && typeof action === 'object') {
-    opts = action;
-    action = 'show';
-  }
-
   const name = String(action).toLowerCase();
-  if (SHOW_ACTIONS.has(name)) return show(opts);
-  if (name === 'build' || name === 'make' || name === 'create') return build(opts);
+  if (name === 'show') return show(opts);
+  if (name === 'build') return build(opts);
 
   console.error(`Неизвестное действие "digest ${action}". Доступно: build (по умолчанию), show.`);
   process.exitCode = 1;
 }
-
-export { build as buildDigest, show as showDigest };

@@ -31,7 +31,6 @@ function normalizeVerdict(v: any): Verdict {
     score,
     reason,
     comment,
-    coverLetter: typeof v.coverLetter === 'string' ? v.coverLetter : '',
   };
 }
 

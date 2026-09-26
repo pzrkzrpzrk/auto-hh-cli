@@ -32,10 +32,6 @@ function collectKeyTerms(vacancy) {
     }
   }
 
-  // if (vacancy.snippet?.requirement) {
-  //   addWords(terms, stripHtml(vacancy.snippet.requirement));
-  // }
-
   if (vacancy.description) {
     addWords(terms, stripHtml(vacancy.description));
   }

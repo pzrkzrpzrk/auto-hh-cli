@@ -18,7 +18,6 @@ export interface Verdict {
   score: number;
   reason: string | null;
   comment: string | null;
-  coverLetter: string;
 }
 
 export interface JudgeOpts {

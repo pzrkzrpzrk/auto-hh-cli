@@ -29,27 +29,27 @@
 
 ## Что сделать
 
-- [ ] `config.ts`: убрать OAuth-поля из `env()` (`:17-23`), оставить `userAgent` (:22) и `requestDelayMs` (:24).
-- [ ] `types.ts` + `judge.ts`: убрать `coverLetter` из `Verdict` (:21) и из `normalizeVerdict` (`judge.ts:34`).
+- [x] `config.ts`: убрать OAuth-поля из `env()` (`:17-23`), оставить `userAgent` (:22) и `requestDelayMs` (:24).
+- [x] `types.ts` + `judge.ts`: убрать `coverLetter` из `Verdict` (:21) и из `normalizeVerdict` (`judge.ts:34`).
       Промпт в `domain/judge/system-text.ts` **не трогать** — требование `"coverLetter": ""` в ответе безопасно.
-- [ ] `cmd-digest.ts`: удалить `SHOW_ACTIONS` (:295), ветку `typeof action === 'object'` (:299-302) и алиасы
+- [x] `cmd-digest.ts`: удалить `SHOW_ACTIONS` (:295), ветку `typeof action === 'object'` (:299-302) и алиасы
       `make`/`create` (:306). **Сохранить** оба живых пути: `build` (`cmd-ui.ts:222`, `index.ts:41`) и
       `show` (`cmd-ui.ts:356`) — иначе сломается пункт меню «📄 Последний дайджест (digest show)».
-- [ ] `cmd-digest.ts:312`: удалить реэкспорт.
-- [ ] `adapt-resume.ts:35-37`: удалить закомментированный блок.
-- [ ] `config.json:13`: удалить `filter.requiredSkills` (и синхронизировать с `config.example.json`, если он есть).
-- [ ] `index.ts`: оставить один заголовочный комментарий (`:1` или `:99-100`).
+- [x] `cmd-digest.ts:312`: удалить реэкспорт.
+- [x] `adapt-resume.ts:35-37`: удалить закомментированный блок.
+- [x] `config.json:13`: удалить `filter.requiredSkills` (и синхронизировать с `config.example.json`, если он есть).
+- [x] `index.ts`: оставить один заголовочный комментарий (`:1` или `:99-100`).
 - [ ] Решение по `src/apply-playwright.ts`: удалить файл **или** заменить `process.exit` на `exitCode`
-      (проверить, что README поправлен в T-16).
+      (проверить, что README поправлен в T-16). — **отложено: решение владельца, отдельным коммитом.**
 
 ## Definition of Done
 
-- [ ] `npx tsc --noEmit` → exit 0.
-- [ ] Повторный grep не находит удалённые идентификаторы нигде, кроме README (его приводит в порядок T-16):
+- [x] `npx tsc --noEmit` → exit 0.
+- [x] Повторный grep не находит удалённые идентификаторы нигде, кроме README (его приводит в порядок T-16):
       `HH_CLIENT_ID`, `Verdict.coverLetter`, `SHOW_ACTIONS`, `requiredSkills`, `buildDigest`.
 - [ ] `npx tsx bin/auto-hh ui`: работают оба пункта дайджеста — «🧠 Собрать дайджест (digest)» (`build`)
-      и «📄 Последний дайджест (digest show)» (`show`).
-- [ ] `auto-hh digest show` из CLI тоже работает (команда зарегистрирована в `index.ts:38-48`).
+      и «📄 Последний дайджест (digest show)» (`show`). — **не проверялось: меню интерактивно.**
+- [x] `auto-hh digest show` из CLI тоже работает (команда зарегистрирована в `index.ts:38-48`).
 
 ## Проверка
 
@@ -67,3 +67,29 @@ Get-ChildItem src,config.json -Recurse -Include *.ts,*.json |
 Отдельно: удаление алиасов `last/latest/view/make/create` меняет поведение CLI для тех, кто вызывал
 `auto-hh digest view` вручную — это осознанное упрощение контракта, но его стоит упомянуть в коммите
 (и в README, если команда там описана).
+
+## Реализовано
+
+- `config.ts`: из `env()` удалены `clientId`/`clientSecret`/`redirectUri`/`accessToken`/`refreshToken`/`resumeId`;
+  остались `userAgent` и `requestDelayMs` — единственные потребители `env()` это `clients/hh-client.ts:81-83`.
+- `types.ts` / `judge.ts`: `coverLetter` убран из `Verdict` и из `normalizeVerdict`; промпт `domain/judge/system-text.ts`
+  не тронут. `coverLetter` у `DigestEntry` (`types.ts:53`) сохранён — это поле писем, оно живое (store/apply/cover).
+- `cmd-digest.ts`: удалены `SHOW_ACTIONS`, ветка «объект» и алиасы `make`/`create`; остались `build` (по умолчанию)
+  и `show`. Удалён реэкспорт `buildDigest`/`showDigest`.
+- `adapt-resume.ts`: удалён закомментированный блок; импорт `stripHtml` оставлен (используется на `:36`).
+- `config.json`: удалён `filter.requiredSkills`. `config.example.json` в репозитории отсутствует — синхронизация не нужна.
+- `index.ts`: оставлен один заголовочный комментарий (`:1`); дублирующий комментарий про `run()`/`finally` удалён.
+- README (T-16 уже влит, но ссылки оставались устаревшими): убрана строка `requiredSkills` из таблицы `filter`
+  и упоминание «навыки» в диаграмме шага `digest`; удалён список OAuth-переменных из раздела «Зарезервировано»
+  (сами переменные больше не читаются); убрано упоминание алиасов `last`/`latest`/`view` у `digest show`.
+- **Отложено:** `src/apply-playwright.ts` — решение владельца (удалить файл или перевести `process.exit` на `exitCode`),
+  отдельным коммитом; в этом коммите не тронуто.
+
+Проверки:
+
+- `npx tsc --noEmit` → exit 0.
+- Точечный grep (`\bHH_CLIENT_ID\b|\bHH_CLIENT_SECRET\b|\bHH_RESUME_ID\b|\bSHOW_ACTIONS\b|\brequiredSkills\b|\bbuildDigest\b|\bshowDigest\b`)
+  по `src` и `config.json` — пусто; `coverLetter` остался только в `types.ts:53` (`DigestEntry`).
+- `npx tsx bin/auto-hh digest view|make|last` → «Неизвестное действие … », код 1 (алиасы удалены, как и задумано).
+- `npx tsx bin/auto-hh digest show` → последний дайджест отображается, код 0.
+- Пункты про интерактивное меню (`ui`) не проверялись — меню недоступно в этом окружении.
