@@ -206,6 +206,7 @@ npm run ui          # или: npx auto-hh ui (алиасы: menu, interactive)
 | `npm run resume:register` | `auto-hh resume register <name>` | Зарегистрировать резюме: `npm run resume:register -- <имя>` |
 | `npm run ui` | `auto-hh ui` | Интерактивное меню поверх всех команд (TTY) |
 | `npm run build` | — | Компиляция TS в JS (не обязательна) |
+| `npm run watch` | — | То же в режиме наблюдения (`tsc --watch`) |
 | `npm run migrate:up` | — | Применить миграции MongoDB |
 | `npm run migrate:down` | — | Откатить последнюю миграцию |
 | `npm run migrate:create` | — | Создать новую миграцию |
@@ -380,7 +381,7 @@ npm run ui          # или: npx auto-hh ui (алиасы: menu, interactive)
 
 ### Зарезервировано (не используется в основном потоке)
 
-`HH_CLIENT_ID`, `HH_CLIENT_SECRET`, `HH_REDIRECT_URI`, `HH_ACCESS_TOKEN`, `HH_REFRESH_TOKEN`, `HH_RESUME_ID` — для OAuth-сценария (`src/oauth-server.js`). Не задействованы, т.к. соискательский API закрыт.
+`HH_CLIENT_ID`, `HH_CLIENT_SECRET`, `HH_REDIRECT_URI`, `HH_ACCESS_TOKEN`, `HH_REFRESH_TOKEN`, `HH_RESUME_ID` — читаются `src/config.ts` (`env()`), но ни одна команда их не использует: соискательский API hh.ru закрыт, авторизация выполняется вручную в браузере (`apply --login`).
 
 ---
 
@@ -396,6 +397,12 @@ npm run ui          # или: npx auto-hh ui (алиасы: menu, interactive)
 | `apply-dom-*.html` | Дамп DOM, если Playwright не нашёл поле для письма |
 | `app.log` | Лог |
 
+> ⚠️ **`data/` не коммитится** (см. `.gitignore`), но лежит в рабочей копии и попадает в бэкапы:
+>
+> - `data/browser-profile/` — cookies и localStorage **живой сессии hh.ru** (персональные данные аккаунта). Не копируйте каталог в архивы, бэкапы и чаты; при утечке отзовите активные сессии в настройках hh.ru.
+> - `data/app.log` может содержать заголовки вакансий и текст сопроводительных писем.
+> - `data/apply-dom-*.html` — дампы страниц hh.ru.
+
 ---
 
 ## Структура проекта
@@ -403,20 +410,21 @@ npm run ui          # или: npx auto-hh ui (алиасы: menu, interactive)
 ```
 .
 ├─ bin/auto-hh                 # CLI entry point (tsx; dotenv + tsx/cjs + run())
+├─ app.ts                      # легаси-обёртка: `node app.js` = `auto-hh search`
 ├─ config.json                 # поиск, фильтр, ИИ, расписание
 ├─ .env                        # секреты и настройки (из .env.example)
 ├─ resumes/                    # директория с резюме (если задан RESUMES_DIR)
+├─ data/                       # рантайм-данные (в .gitignore): лог, дайджесты, профиль браузера
 ├─ src/
 │  ├─ cli/                     # команды Commander
 │  │  ├─ index.ts              # регистрация команд + точка входа run()
 │  │  ├─ cmd-search.ts         # шаг 1: поиск вакансий → кэш
 │  │  ├─ cmd-digest.ts         # шаг 2: фильтр + ИИ-судья → дайджест; `show` — показ
-│  │  ├─ cmd-cover.ts          # шаг 3: сопроводительные (весь дайджест или один id)
+│  │  ├─ cmd-cover.ts          # шаг 3: сопроводительные — весь дайджест или один vacancyId
 │  │  ├─ cmd-apply.ts          # шаг 4: автоотклик через Playwright
 │  │  ├─ cmd-history.ts        # показать историю
 │  │  ├─ cmd-config.ts         # показать конфиг
 │  │  ├─ cmd-reset.ts          # сброс истории/кэша/дайджестов
-│  │  ├─ cmd-cover.ts          # одно письмо по vacancyId
 │  │  ├─ cmd-schedule.ts       # планировщик (node-cron)
 │  │  ├─ cmd-grade-resume.ts   # оценка резюме
 │  │  ├─ cmd-resume.ts         # управление резюме (list/register)
@@ -442,7 +450,6 @@ npm run ui          # или: npx auto-hh ui (алиасы: menu, interactive)
 │  ├─ resume.ts                # загрузка резюме (файл или директория)
 │  ├─ config.ts                # загрузка config.json + .env
 │  ├─ logger.ts / retry.ts / text-utils.ts / types.ts
-├─ scripts/                    # вспомогательные скрипты (judge-only, fill-cover-letters, …)
 ├─ migrations/                 # миграции MongoDB
 └─ docker-compose.yml          # MongoDB + mongo-express
 ```
@@ -451,7 +458,7 @@ npm run ui          # или: npx auto-hh ui (алиасы: menu, interactive)
 
 ## Замечания и отладка
 
-- **Селекторы hh.ru меняются** — если автоотклик перестал работать, смотрите `data/app.log` и обновите массивы `respondSelectors`, `submitSelectors` и т.п. в `src/apply-playwright.ts`.
+- **Селекторы hh.ru меняются** — если автоотклик перестал работать, смотрите `data/app.log` и обновляйте селекторы в `src/cli/cmd-apply.ts`: массив `selectors` (кнопка отклика), `textareaSel` (поле письма) и `data-qa`-атрибуты в инжектируемом скрипте подтверждения.
 - **Тесты в вакансии.** По умолчанию (`PW_TEST_MODE=manual`) скрипт ставит окно браузера на передний план и ждёт ENTER в консоли — проходите тест вручную, отправляете отклик, затем ENTER → следующая вакансия. Режим `skip` пропускает такие вакансии. Ручной режим работает только при `PW_HEADLESS=false`.
 - **Ручное подтверждение отклика.** `apply` заполняет письмо, но не жмёт кнопку сам — вы нажимаете «Откликнуться» в браузере (защита от случайного). Таймаут ожидания — `PW_MANUAL_TIMEOUT_MS`.
 - **Лимит hh.ru** — ~200 откликов в день, не превышайте (задаётся `maxPerRun`).
