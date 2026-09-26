@@ -427,7 +427,12 @@ npm run ui          # или: npx auto-hh ui (алиасы: menu, interactive)
 │  │  ├─ cmd-schedule.ts       # планировщик (node-cron)
 │  │  ├─ cmd-grade-resume.ts   # оценка резюме
 │  │  ├─ cmd-resume.ts         # управление резюме (list/register)
-│  │  └─ cmd-ui.ts             # интерактивное меню
+│  │  ├─ ui/                   # интерактивное меню (подкоманда `ui`)
+│  │  │  ├─ menu.ts            # список пунктов, dispatch, обработка Ctrl+C
+│  │  │  ├─ steps.ts           # шаги меню: промпты → вызов cmd-*
+│  │  │  ├─ resume.ts          # активное резюме сессии + единый список choices
+│  │  │  └─ options.ts         # сборка opts команд из ответов меню
+│  │  └─ cmd-ui.ts             # интерактивное меню (тонкая обёртка над ui/)
 │  ├─ clients/                 # внешние API-клиенты
 │  │  ├─ ai-client.ts          # единый OpenAI-совместимый клиент
 │  │  ├─ hh-client.ts          # поиск и карточки через API hh.ru
