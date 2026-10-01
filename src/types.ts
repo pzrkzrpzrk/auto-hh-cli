@@ -18,6 +18,9 @@ export interface Verdict {
   score: number;
   reason: string | null;
   comment: string | null;
+  // Модель по контракту (judge/system-text.ts) возвращает пустую строку; поле читает
+  // normalizeVerdict, поэтому объявлено в типе (иначе TS-ошибка TS2353).
+  coverLetter?: string;
 }
 
 export interface JudgeOpts {

@@ -3,6 +3,11 @@
 // API api.hh.ru заблокирован ddos-guard для нашего IP, поэтому ходим на основной
 // сайт hh.ru как обычный браузер и забираем JSON из <template id="HH-Lux-InitialState">,
 // в котором лежит полное состояние страницы (vacancySearchResult / vacancyView).
+// Карточка вакансии лежит в vacancyView.vacancyFull.vacancy: свои имена полей (vacancyId
+// вместо id, company вместо employer) и коды вместо текста (employmentForm «FULL»,
+// workExperience «moreThan6», workScheduleByDays «FIVE_ON_TWO_OFF»); расшифровка кодов —
+// в vacancyFieldsDictionary и vacancyView.translations. Прежние формы ответа
+// (vacancyView.vacancy / плоский vacancyView) поддержаны как фолбэки.
 // Возвращаемые объекты приведены к формату прежнего API hh.ru, чтобы остальной код не менять.
 import path from "path";
 import fs from "fs";
@@ -42,7 +47,7 @@ function mapSearchItem(v) {
     id: String(v.vacancyId),
     name: v.name,
     employer: v.company ? { name: v.company.visibleName || v.company.name, id: v.company.id } : null,
-    area: v.area ? { id: v.area['@id'], name: v.area.name } : null,
+    area: v.area ? { id: v.area['@id'] ?? v.area.id ?? null, name: v.area.name } : null,
     salary: mapCompensation(v.compensation),
     alternate_url: v.links?.desktop || `https://hh.ru/vacancy/${v.vacancyId}`,
     snippet: v.snippet || null,
@@ -51,27 +56,116 @@ function mapSearchItem(v) {
   };
 }
 
+// Справочники кодов («FULL», «FIVE_ON_TWO_OFF», «moreThan6») → человекочитаемый текст.
+// Лежат в initialState.vacancyFieldsDictionary как [{ id, text }].
+function buildFieldsDictionary(dict) {
+  const out = {};
+  if (!dict) return out;
+  for (const [key, list] of Object.entries(dict)) {
+    if (!Array.isArray(list)) continue;
+    const map = new Map();
+    for (const item of list) {
+      if (item && item.id != null) map.set(String(item.id), decodeEntities(item.text) || String(item.id));
+    }
+    if (map.size) out[key] = map;
+  }
+  return out;
+}
+
+// Код из справочника → текст («FULL» → «Полная занятость»); null, если код неизвестен.
+function translateCode(fields, key, code) {
+  if (code == null) return null;
+  const map = fields?.[key];
+  return (map && map.get(String(code))) || null;
+}
+
+// Первый код поля: строка | [{ id, text }] → строка.
+function firstCode(v) {
+  if (Array.isArray(v)) return v.length ? (v[0]?.id ?? v[0]) : null;
+  return v?.id ?? v ?? null;
+}
+
+// { id, text } | строка → текст.
+function objectName(v) {
+  if (v == null) return null;
+  if (typeof v === 'string') return v;
+  return v.text ?? v.name ?? v.title ?? v.id ?? null;
+}
+
+// keySkills новой карточки — массив строк (в старом API — [{ name }]).
+function toKeySkills(v) {
+  const list = v?.keySkill || v;
+  if (!Array.isArray(list)) return [];
+  return list
+    .map(k => (typeof k === 'string' ? k : (k.name || k.title || k.text || '')))
+    .filter(Boolean)
+    .map(name => ({ name }));
+}
+
+// Список кодов (формат работы). Переводить их в текст нельзя: коды («ON_SITE», «REMOTE»,
+// «HYBRID») разбирает filter.ts.
+function toCodeList(v) {
+  const list = Array.isArray(v) ? v : (v == null ? [] : [v]);
+  return list
+    .map(x => (typeof x === 'string' ? x : (x?.id ?? x?.code ?? x?.name ?? null)))
+    .filter(x => x != null)
+    .map(String);
+}
+
+// Архивность. В новой карточке status = { archived, disabled, ... } ({archived:false} у живых),
+// в старом API — status.active. Неизвестный статус считаем НЕ архивным: иначе смена формы
+// ответа помечает архивом всю выдачу (ровно этот дефект и был: archived = !status?.active,
+// а поля active в новом payload нет → true для живых вакансий).
+function isArchived(v) {
+  const st = v?.status;
+  if (st) {
+    if (typeof st.archived === 'boolean') return st.archived;
+    if (typeof st.active === 'boolean') return !st.active;
+  }
+  if (typeof v?.archived === 'boolean') return v.archived;
+  return false;
+}
+
 // Полная запись (как в getVacancy старого API).
-function mapVacancyView(v) {
+// opts.idHint — id из URL: в новой карточке нет поля id, есть vacancyId;
+// opts.links — vacancyView.vacancyFull.links (в нём ссылка desktop);
+// opts.translations — vacancyView.translations (в нём расшифровка workExperience);
+// opts.fields — справочник кодов из vacancyFieldsDictionary (buildFieldsDictionary).
+function mapVacancyView(v, opts = {}) {
   if (!v) return null;
+  const rawId = v.vacancyId ?? v.id ?? opts.idHint ?? null;
+  const fields = opts.fields || {};
+  const employer = v.company || v.employer || null;
+
+  // Опыт: «moreThan6» → «Более 6 лет». В vacancyFieldsDictionary опыта нет, поэтому сначала
+  // пробуем справочник, затем translations.workExperience (там текст строкой).
+  const experienceText = translateCode(fields, 'workExperience', firstCode(v.workExperience))
+    || (typeof opts.translations?.workExperience === 'string' ? opts.translations.workExperience : null)
+    || objectName(v.workExperience);
+
+  const employmentCode = firstCode(v.employmentForm);
+  const scheduleCodes = toCodeList(v.workScheduleByDays);
+  // Формат работы — кодами (см. toCodeList), старое поле workFormat тоже поддержано.
+  const workFormatCodes = toCodeList(v.workFormats ?? v.workFormat);
+
   return {
-    id: String(v.vacancyId),
-    name: v.name,
+    id: String(rawId),
+    name: decodeEntities(v.name ?? v.title) || null,
     description: decodeEntities(v.description),
-    employer: v.company ? { name: v.company.visibleName || v.company.name, id: v.company.id } : null,
-    area: v.area ? { id: v.area['@id'], name: v.area.name } : null,
-    salary: mapCompensation(v.compensation),
-    key_skills: (v.keySkills?.keySkill || v.keySkills || []).map(k =>
-      typeof k === 'string' ? { name: k } : { name: k.name || k.title || String(k) }
-    ),
-    experience: v.workExperience ? { name: v.workExperience.name || v.workExperience } : null,
-    schedule: v.workScheduleByDays ? { name: (v.workScheduleByDays.name || (Array.isArray(v.workScheduleByDays) ? v.workScheduleByDays.join(', ') : '')) } : null,
-    employment: v.employmentForm ? { name: v.employmentForm.name || v.employmentForm } : null,
-    work_format: Array.isArray(v.workFormat)
-      ? v.workFormat.map(w => (typeof w === 'string' ? w : (w.id || w.name || ''))).filter(Boolean)
-      : (v.workFormat ? [v.workFormat.id || v.workFormat.name].filter(Boolean) : []),
-    archived: !v.status?.active,
-    alternate_url: `https://hh.ru/vacancy/${v.vacancyId}`,
+    employer: employer ? { name: employer.visibleName || employer.name, id: employer.id } : null,
+    area: v.area ? { id: v.area['@id'] ?? v.area.id ?? v.area.regionId ?? null, name: v.area.name } : null,
+    salary: mapCompensation(v.compensation ?? v.salary),
+    key_skills: toKeySkills(v.keySkills ?? v.key_skills),
+    experience: experienceText ? { name: experienceText } : null,
+    schedule: scheduleCodes.length
+      ? { name: scheduleCodes.map(c => translateCode(fields, 'workScheduleByDays', c) || c).join(', ') }
+      : null,
+    employment: employmentCode
+      ? { name: translateCode(fields, 'employmentForm', employmentCode) || objectName(v.employmentForm) }
+      : null,
+    work_format: workFormatCodes,
+    archived: isArchived(v),
+    alternate_url: opts.links?.desktop || v.links?.desktop || `https://hh.ru/vacancy/${rawId}`,
     // Дата публикации на hh.ru (в прежнем API — created_at). Читает шаг digest.
     publishedAt: v.publicationDate
       || v.publicationTimeIso
@@ -200,10 +294,32 @@ class HHClient {
     return { items, found, pages };
   }
 
+  // Полная карточка. В актуальном ответе hh.ru она лежит в vacancyView.vacancyFull.vacancy
+  // (ниже — фолбэки для прежних форм). Без разворачивания обёртки карточка выходила пустой:
+  // id «undefined», name undefined и archived true (см. isArchived), из-за чего digest
+  // отбрасывал живые вакансии с причиной «archived».
   async getVacancy(id) {
     const url = `https://hh.ru/vacancy/${id}`;
     const data = await this.fetchInitialState(url);
-    return mapVacancyView(data.vacancyView);
+    const view = data?.vacancyView || null;
+    const node = view?.vacancyFull?.vacancy ?? view?.vacancy ?? view;
+    if (!node) {
+      log.warn(`No vacancy card on ${url}`);
+      return null;
+    }
+    const full = mapVacancyView(node, {
+      idHint: id,
+      links: view?.vacancyFull?.links || null,
+      translations: view?.translations || null,
+      fields: buildFieldsDictionary(data.vacancyFieldsDictionary),
+    });
+    // Пустую/неразобранную карточку не отдаём: лучше null (шаги залогируют и пропустят),
+    // чем мусорный документ с vacancyId «undefined» в cacheFull.
+    if (!full.id || full.id === 'undefined' || !full.name) {
+      log.warn(`Empty vacancy card ${id} (id=${full.id}, name=${full.name})`);
+      return null;
+    }
+    return full;
   }
 }
 
