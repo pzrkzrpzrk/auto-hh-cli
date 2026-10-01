@@ -3,11 +3,26 @@
 import HHClient from "../clients/hh-client.js";
 import { loadConfig } from "../config.js";
 import * as collectCache from "../store/cache-store.js";
-import { collectVacancies, collectFullVacancies, fmtSalary } from "../domain/collect.js";
+import { collectVacancies, collectFullVacancies, flattenCollected, fmtSalary } from "../domain/collect.js";
 import resetData, { formatResetSummary } from "../store/reset.js";
+import { writeSearchResults } from "../store/search-store.js";
+import type { SearchEntry } from "../types.js";
 import log from "../logger.js";
 
 const PREVIEW_LIMIT = 20;
+
+// Единый литерал строки выдачи для файла — те же поля, что у элемента cachePages
+// (id/name/employer/area/salary/alternate_url), см. mapSearchItem в clients/hh-client.ts.
+function toSearchEntry(item: any): SearchEntry {
+  return {
+    id: String(item.id),
+    title: item.name || '—',
+    employer: item.employer?.name || '—',
+    area: item.area?.name || '—',
+    salary: fmtSalary(item.salary),
+    url: item.alternate_url || `https://hh.ru/vacancy/${item.id}`,
+  };
+}
 
 async function search(opts: Record<string, any> = {}) {
   if (opts.config) process.env.CONFIG_PATH = opts.config;
@@ -41,6 +56,21 @@ async function search(opts: Record<string, any> = {}) {
     if (!items.length) {
       console.log('\nНичего не найдено — проверьте config.search.');
       return;
+    }
+
+    // Выдача в файл (data/search/): берём весь кэш страниц за день, а не только текущий прогон, —
+    // так файл совпадает с Mongo cachePages. Ошибка записи не должна выглядеть как провал поиска:
+    // данные уже в Mongo, поэтому только логируем.
+    try {
+      const rows = flattenCollected(cache).map(toSearchEntry);
+      const file = writeSearchResults(rows, { query: cfg.search.text });
+      if (file) {
+        log.info(`Search results saved: ${file} (${rows.length} vacancies)`);
+        console.log(`\nВыдача сохранена: ${file}`);
+      }
+    } catch (err: any) {
+      log.error(`Search file dump failed: ${err.message}`);
+      console.error(`⚠️  Выдачу не удалось сохранить в файл: ${err.message}`);
     }
 
     // Описания (cacheFull) нужны шагам digest и cover — забираем их сразу, пока открыт браузер.
