@@ -1,11 +1,13 @@
 import log from "../../logger.js";
 import { retryOnTransient } from "../../retry.js";
-import { getApiConfig } from "../../config.js";
-import { getClient, buildResumeBlock } from "../../clients/ai-client.js";
-import { stripHtml, parseJSON, asList } from "../../text-utils.js";
+import { loadConfig } from "../../config";
+import { getClient, buildResumeBlock, getModel, getMaxTokens } from "../../clients/ai-client";
+import { stripHtml, parseJSON } from "../../text-utils.js";
 import { adaptResumeForVacancy } from "../adapt-resume.js";
 import type { Vacancy, Resume, Verdict, JudgeOpts } from "../../types.js";
 import { buildSystemText } from "./system-text.js";
+
+const apiConfig = loadConfig().api || {};
 
 // Гарантирует инвариант вердикта: fit=true ⇒ comment непустой, reason=null;
 // fit=false ⇒ reason непустой, comment=null.
@@ -29,7 +31,16 @@ function normalizeVerdict(v: any): Verdict {
     score,
     reason,
     comment,
+    coverLetter: typeof v.coverLetter === 'string' ? v.coverLetter : '',
   };
+}
+
+// Модели (в частности GLM) иногда отвечают голым массивом вместо {"verdicts": [...]}.
+// Принимаем обе формы, иначе вердикты молча теряются.
+function verdictList(parsed: any): any[] {
+  if (Array.isArray(parsed)) return parsed;
+  if (Array.isArray(parsed?.verdicts)) return parsed.verdicts;
+  return [];
 }
 
 function formatVacancyText(vacancy: Vacancy) {
@@ -53,10 +64,10 @@ ${description}`;
 }
 
 async function judgeVacancy(resume: Resume, vacancy: Vacancy, opts: JudgeOpts = {}): Promise<Verdict | null> {
-  const c = getClient(getApiConfig());
+  const c = getClient(apiConfig);
   if (!c) return null;
 
-  const model = process.env.CLAUDE_MODEL || 'gpt-4o';
+  const model = getModel(apiConfig);
   const minScore = opts.minScore ?? 7;
 
   const vacancyBlock = {
@@ -80,13 +91,14 @@ async function judgeVacancy(resume: Resume, vacancy: Vacancy, opts: JudgeOpts = 
   try {
     const resp = await retryOnTransient(() => c.chat.completions.create({
       model,
+      max_tokens: getMaxTokens(),
       messages,
       response_format: { type: 'json_object' },
-    }));
+    }), { label: `судья ${vacancy.id}` });
     const text = (resp as any).choices?.[0]?.message?.content;
     if (!text) return null;
     const parsed = parseJSON(text);
-    const verdict = normalizeVerdict(parsed);
+    const verdict = normalizeVerdict(verdictList(parsed)[0] ?? {});
     log.debug(`judge ${vacancy.id}: score=${verdict.score} fit=${verdict.fit} in=${(resp as any).usage?.prompt_tokens} out=${(resp as any).usage?.completion_tokens}`);
     return verdict;
   } catch (err) {
@@ -98,16 +110,16 @@ async function judgeVacancy(resume: Resume, vacancy: Vacancy, opts: JudgeOpts = 
 // Батчевая версия: судит пачку вакансий за один запрос.
 // Возвращает Map<vacancyId, verdict> (verdict в том же формате, что judgeVacancy).
 async function judgeVacanciesBatch(resume: Resume, vacancies: Vacancy[], opts: JudgeOpts = {}): Promise<Map<string, Verdict> | null> {
-  const c = getClient(getApiConfig());
+  const c = getClient(apiConfig);
   if (!c) return null;
   if (!vacancies.length) return new Map();
 
-  const model = process.env.CLAUDE_MODEL;
+  const model = getModel(apiConfig);
   const minScore = opts.minScore ?? 7;
   const adapt = opts.adaptResume;
 
   const systemText = buildSystemText(minScore) +
-    `\n\nВ этом запросе подаётся СРАЗУ НЕСКОЛЬКО вакансий. Для каждой верни отдельную запись в массиве verdicts с полем vacancyId, в том же порядке, что во входе.${adapt ? '\n\nДля каждой вакансии передано адаптированное под неё резюме — учитывай только его при оценке.' : ''}`;
+    `\n\nВ этом запросе подаётся СРАЗУ НЕСКОЛЬКО вакансий. Верни ОБЪЕКТ вида {"verdicts": [ ... ]} (не голый массив): по одной записи на вакансию, в том же порядке, что во входе.${adapt ? '\n\nДля каждой вакансии передано адаптированное под неё резюме — учитывай только его при оценке.' : ''}`;
 
   const vacanciesText = vacancies.map((v, i) => {
     let block = '';
@@ -137,9 +149,10 @@ async function judgeVacanciesBatch(resume: Resume, vacancies: Vacancy[], opts: J
   try {
     const resp = await retryOnTransient(() => c.chat.completions.create({
       model,
+      max_tokens: getMaxTokens(),
       messages,
       response_format: { type: 'json_object' },
-    }));
+    }), { label: `судья батч ${vacancies.length}` });
     const text = (resp as any).choices?.[0]?.message?.content;
     if (!text) return null;
     const parsed = parseJSON(text);
@@ -147,7 +160,7 @@ async function judgeVacanciesBatch(resume: Resume, vacancies: Vacancy[], opts: J
     log.debug(`judge batch ${vacancies.length}: in=${(resp as any).usage?.prompt_tokens || 0} out=${(resp as any).usage?.completion_tokens || 0}`);
 
     const map = new Map();
-    for (const v of asList(parsed, 'verdicts')) {
+    for (const v of verdictList(parsed)) {
       const verdict = normalizeVerdict(v);
       map.set(verdict.vacancyId, verdict);
     }

@@ -72,6 +72,11 @@ function mapVacancyView(v) {
       : (v.workFormat ? [v.workFormat.id || v.workFormat.name].filter(Boolean) : []),
     archived: !v.status?.active,
     alternate_url: `https://hh.ru/vacancy/${v.vacancyId}`,
+    // Дата публикации на hh.ru (в прежнем API — created_at). Читает шаг digest.
+    publishedAt: v.publicationDate
+      || v.publicationTimeIso
+      || (v.publicationTime && v.publicationTime['$'])
+      || null,
   };
 }
 
@@ -89,7 +94,7 @@ class HHClient {
     if (this.ctx && this.headless === headless) return;
     if (this.ctx) await this.close();
     if (!fs.existsSync(PROFILE)) {
-      throw new Error(`Browser profile not found: ${PROFILE}. Run \`npm run login\` first.`);
+      throw new Error(`Browser profile not found: ${PROFILE}. Run the menu item «🔑 Войти на hh.ru» first.`);
     }
     log.info(`Launching Playwright context for hh.ru scraping (headless=${headless})`);
     this.ctx = await chromium.launchPersistentContext(PROFILE, {
@@ -174,6 +179,10 @@ class HHClient {
     if (params.page != null) sp.set('page', String(params.page));
     if (params.schedule) sp.set('schedule', params.schedule);
     if (params.employment) sp.set('employment', params.employment);
+    // Дата публикации: только вакансии за последние N дней (0/null — без ограничения).
+    if (params.search_period != null) sp.set('search_period', String(params.search_period));
+    // Порядок выдачи: relevance | publication_time | salary_desc | salary_asc.
+    if (params.order_by) sp.set('order_by', params.order_by);
 
     const url = `https://hh.ru/search/vacancy?${sp.toString()}`;
     const data = await this.fetchInitialState(url);

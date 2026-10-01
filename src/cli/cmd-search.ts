@@ -63,12 +63,12 @@ async function search(opts: Record<string, any> = {}) {
       console.error('Страницы выдачи в кэше — digest и cover догрузят описания сами.');
     }
 
-    console.log('\nДальше: auto-hh digest — локальный фильтр + ИИ-судья → дайджест');
+    console.log('\nДальше: пункт меню «🧠 Собрать дайджест» — локальный фильтр + ИИ-судья');
   } catch (err: any) {
     // Если сброс уже прошёл, молчать нельзя: иначе это выглядит как «ничего не произошло».
     if (didReset) {
       console.error('\nПоиск не выполнился, но история, кэш и дайджесты уже сброшены.');
-      console.error('Повторите: auto-hh search');
+      console.error('Повторите: пункт меню «🔍 Поиск вакансий»');
     }
     throw err;
   } finally {

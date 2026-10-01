@@ -1,43 +1,54 @@
 // Загрузка конфигурации из JSON и .env.
 import fs from "fs";
 import path from "path";
-import { intFromEnv } from "./env.js";
 
-// Мемоизация: файл читается один раз на процесс, повторные вызовы из 5 модулей его не перечитывают.
-// Ключ — абсолютный путь: если CONFIG_PATH меняется (`--config`), конфиг читается заново.
-// Для принудительного перечитывания — loadConfig({ reload: true }).
-let cached: any = null;
-let cachedPath: string | null = null;
+// Личный список компаний из .env (через запятую). Пустая переменная = null,
+// тогда работает список из config.json → filter.excludedCompanies.
+function excludedCompaniesFromEnv(): string[] | null {
+  const raw = process.env.EXCLUDED_COMPANIES;
+  if (!raw || !raw.trim()) return null;
 
-function loadConfig({ reload = false }: { reload?: boolean } = {}): any {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const part of raw.split(',')) {
+    const name = part.trim();
+    const key = name.toLowerCase();
+    if (!name || seen.has(key)) continue;
+    seen.add(key);
+    out.push(name);
+  }
+  return out.length ? out : null;
+}
+
+function loadConfig() {
   const configPath = process.env.CONFIG_PATH || './config.json';
   const absPath = path.resolve(configPath);
-  if (!reload && cached !== null && cachedPath === absPath) return cached;
   if (!fs.existsSync(absPath)) {
     throw new Error(`Config not found: ${absPath}`);
   }
   const raw = fs.readFileSync(absPath, 'utf-8');
-  cached = JSON.parse(raw);
-  cachedPath = absPath;
-  return cached;
-}
+  const cfg = JSON.parse(raw);
 
-// Секция api — вход ИИ-клиента. Объект мемоизируется по конфигу: getClient() кэширует клиент
-// по ссылке на конфиг, поэтому при повторных вызовах должна возвращаться та же ссылка.
-const apiCache = new WeakMap<object, any>();
+  // Личный блэклист компаний держим в .env, чтобы он не попадал в git.
+  const excludedCompanies = excludedCompaniesFromEnv();
+  if (excludedCompanies) {
+    cfg.filter = { ...(cfg.filter || {}), excludedCompanies };
+  }
 
-function getApiConfig(): any {
-  const cfg = loadConfig();
-  if (!cfg || typeof cfg !== 'object') return {};
-  if (!apiCache.has(cfg)) apiCache.set(cfg, cfg.api || {});
-  return apiCache.get(cfg);
+  return cfg;
 }
 
 function env() {
   return {
+    clientId: process.env.HH_CLIENT_ID,
+    clientSecret: process.env.HH_CLIENT_SECRET,
+    redirectUri: process.env.HH_REDIRECT_URI || 'http://localhost:3000/callback',
+    accessToken: process.env.HH_ACCESS_TOKEN,
+    refreshToken: process.env.HH_REFRESH_TOKEN,
     userAgent: process.env.HH_USER_AGENT || 'AutoHH/1.0',
-    requestDelayMs: intFromEnv('REQUEST_DELAY_MS', 1500, { min: 0 }),
+    resumeId: process.env.HH_RESUME_ID,
+    requestDelayMs: parseInt(process.env.REQUEST_DELAY_MS || '1500', 10),
   };
 }
 
-export { loadConfig, getApiConfig, env };
+export { loadConfig, env };

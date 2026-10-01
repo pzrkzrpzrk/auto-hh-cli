@@ -1,39 +1,19 @@
 // Команда digest: отдельный шаг сборки дайджеста (локальный фильтр + ИИ-судья) и показ последнего.
-// Вход — кэш поиска (`auto-hh search`), сопроводительные — отдельный шаг (`auto-hh cover`).
+// Вход — кэш поиска (пункт меню «🔍 Поиск вакансий»), сопроводительные — отдельный шаг («✉️ Письма для дайджеста»).
 import fs from "fs";
 import path from "path";
-import HHClient from "../clients/hh-client.js";
-import { DATA_DIR } from "../paths.js";
-import { intFromEnv } from "../env.js";
-import { chunk, runBatches, concurrencyFromEnv } from "../concurrency.js";
+import HHClient from "../clients/hh-client";
+import { getConcurrency } from "../clients/ai-client";
 import { loadConfig } from "../config.js";
-import history from "../store/history-store.js";
+import history from "../store/history-store";
 import * as collectCache from "../store/cache-store.js";
 import { vacancyMatchesFilter } from "../domain/filter.js";
 import { loadResume } from "../resume.js";
-import { judgeVacancy, judgeVacanciesBatch } from "../domain/judge/index.js";
-import { writeDigest, writeRejected, getLatestDigest } from "../store/digest-store.js";
+import { judgeVacancy, judgeVacanciesBatch } from "../domain/judge";
+import { writeDigest, writeRejected, getLatestDigest } from "../store/digest-store";
 import { registerResume } from "../store/resume-store.js";
-import { flattenCollected, fmtSalary, ensureFullVacancies } from "../domain/collect.js";
-import type { DigestEntry } from "../types.js";
+import { flattenCollected, fmtSalary } from "../domain/collect.js";
 import log from "../logger.js";
-
-// Единый литерал записи дайджеста — единственный источник правды по полям (см. тип DigestEntry).
-// id приводим к строке: в Mongo записи лежат строковыми ключами, письма ищутся по String(id).
-function toDigestEntry(full, { score, reason, comment, coverLetter }: Record<string, any>): DigestEntry {
-  return {
-    id: String(full.id),
-    title: full.name,
-    employer: full.employer?.name || '—',
-    area: full.area?.name || '—',
-    salary: fmtSalary(full.salary),
-    url: full.alternate_url,
-    score,
-    reason,
-    comment,
-    coverLetter,
-  };
-}
 
 // Дата кэша поиска: тем же ключом пишутся полные вакансии и вердикты ИИ.
 function sessionDate(cache) {
@@ -42,33 +22,37 @@ function sessionDate(cache) {
 
 async function filterLocally(client, items, cache, cfg, markSeen = true) {
   const candidates = [];
-  // «Просмотрено» отмечаем одним bulkWrite в конце шага (было: запрос на каждую вакансию).
-  const seen = [];
-
-  // Догрузка описаний — общей функцией шага поиска (кэш → hh.ru → кэш).
-  // skipSeen: просмотренные вакансии digest всё равно пропускает, их карточки не нужны.
-  const unknown = items.filter(item => !cache.fullById[String(item.id)]);
-  if (unknown.length) {
-    const stats = await ensureFullVacancies(client, unknown, cache, { skipSeen: true });
-    // Неудачные карточки отмечаем просмотренными, как и раньше: повторно за ними не идём.
-    if (markSeen) seen.push(...stats.failedIds);
-  }
-
+  const date = sessionDate(cache);
   for (const item of items) {
-    const full = cache.fullById[String(item.id)];
-    // Нет карточки — вакансия уже была просмотрена раньше или карточка не скачалась.
-    if (!full) continue;
+    let full = cache.fullById[String(item.id)];
+    if (!full) {
+      if (await history.isSeen(item.id)) continue;
+      try {
+        full = await client.getVacancy(item.id);
+      } catch (err) {
+        log.warn(`Failed to fetch vacancy ${item.id}: ${err.message}`);
+        if (markSeen) await history.markSeen(item.id);
+        continue;
+      }
+      if (!full) {
+        log.warn(`Empty vacancy ${item.id}, skipping`);
+        if (markSeen) await history.markSeen(item.id);
+        continue;
+      }
+      cache.fullById[String(item.id)] = full;
+      await collectCache.saveFullVacancy(full, date);
+    }
 
-    const verdict = vacancyMatchesFilter(full, cfg.filter);
+    // anyRegions — регионы «любые вакансии» из config.search.area (остальные — только удалёнка).
+    const verdict = vacancyMatchesFilter(full, cfg.filter, { anyRegions: cfg.search?.area });
     // В dry-run историю не трогаем: прогон не должен оставлять следов.
-    if (markSeen) seen.push(String(item.id));
+    if (markSeen) await history.markSeen(item.id);
     if (!verdict.ok) {
       log.info(`Skip ${item.id} (${full.name}): ${verdict.reason}`);
       continue;
     }
     candidates.push({ full, verdict });
   }
-  if (seen.length) await history.markSeenMany(seen);
   return candidates;
 }
 
@@ -82,15 +66,21 @@ async function judgeWithClaude(resume, candidates, cache, minScore, adaptResume 
     log.info(`Judgements from cache: ${candidates.length - pending.length}/${candidates.length}`);
   }
 
-  const batchSize = intFromEnv('JUDGE_BATCH_SIZE', 10, { min: 1 });
+  const batchSize = parseInt(process.env.JUDGE_BATCH_SIZE || '10', 10);
   const date = sessionDate(cache);
-  const batches = chunk<any>(pending.map(c => c.full), batchSize);
+  const batches = [];
+  for (let i = 0; i < pending.length; i += batchSize) {
+    batches.push(pending.slice(i, i + batchSize).map(c => c.full));
+  }
 
-  // Механика пула — в concurrency.ts; здесь только тело обработки одной пачки.
-  await runBatches(batches, concurrencyFromEnv(), async (batch, i) => {
+  let nextBatchIdx = 0;
+  const CONCURRENCY = getConcurrency();
+
+  async function runBatch(idx, batch) {
+    log.info(`Judging batch ${idx}: ${batch.length} vacancies`);
     const result = await judgeVacanciesBatch(resume, batch, { minScore, adaptResume });
     if (!result) {
-      log.warn(`Batch ${i + 1} failed, falling back to per-item judge`);
+      log.warn(`Batch ${idx} failed, falling back to per-item judge`);
       for (const v of batch) {
         const j = await judgeVacancy(resume, v, { minScore, adaptResume });
         if (j) {
@@ -108,8 +98,18 @@ async function judgeWithClaude(resume, candidates, cache, minScore, adaptResume 
       await collectCache.saveJudgements(cache, resumeId, date);
       judgedCount += batch.length;
     }
-  });
+  }
 
+  async function worker() {
+    while (nextBatchIdx < batches.length) {
+      const batch = batches[nextBatchIdx];
+      const num = nextBatchIdx + 1;
+      nextBatchIdx++;
+      await runBatch(num, batch);
+    }
+  }
+
+  await Promise.all(Array.from({ length: Math.min(CONCURRENCY, batches.length) }, () => worker()));
   return { judgements, judgedCount };
 }
 
@@ -131,8 +131,17 @@ function selectAccepted(candidates, judgements, useClaude, maxRun) {
         comment = judgement.comment;
         if (!judgement.fit) {
           log.info(`Claude rejected ${full.id} (score=${score}): ${reason}`);
-          // comment: null — как и раньше, в rejected попадает только причина отказа.
-          rejected.push(toDigestEntry(full, { score, reason, comment: null, coverLetter: '' }));
+          rejected.push({
+            id: full.id,
+            title: full.name,
+            employer: full.employer?.name || '—',
+            area: full.area?.name || '—',
+            salary: fmtSalary(full.salary),
+            url: full.alternate_url,
+            publishedAt: full.publishedAt || null,
+            score,
+            reason,
+          });
           continue;
         }
         log.info(`Claude approved ${full.id} (score=${score}): ${comment || reason}`);
@@ -150,7 +159,19 @@ async function buildResults(accepted, track = true) {
   const matched = [];
   for (const a of accepted) {
     const { full, score, reason, comment } = a;
-    matched.push(toDigestEntry(full, { score, reason, comment, coverLetter: '' }));
+    matched.push({
+      id: full.id,
+      title: full.name,
+      employer: full.employer?.name || '—',
+      area: full.area?.name || '—',
+      salary: fmtSalary(full.salary),
+      url: full.alternate_url,
+      publishedAt: full.publishedAt || null,
+      score,
+      reason,
+      comment,
+      coverLetter: '',
+    });
     if (track) {
       await history.markApplied(full.id, {
         title: full.name,
@@ -169,7 +190,8 @@ function printTop(matched) {
   if (!matched.length) return;
   console.log('\n=== TOP MATCHES ===');
   for (const e of matched.slice(0, 10)) {
-    console.log(`- [${e.score ?? '?'}/10] ${e.title} @ ${e.employer} | ${e.salary}\n  ${e.url}`);
+    const when = e.publishedAt ? ` | опубликована ${String(e.publishedAt).slice(0, 10)}` : '';
+    console.log(`- [${e.score ?? '?'}/10] ${e.title} @ ${e.employer} | ${e.salary}${when}\n  ${e.url}`);
   }
 }
 
@@ -188,7 +210,7 @@ async function build(opts: Record<string, any> = {}) {
 
   const cache = await collectCache.loadLatest(resumeId);
   if (!cache) {
-    log.warn('Кэш поиска пуст — сначала выполните: auto-hh search');
+    log.warn('Кэш поиска пуст — сначала выполните пункт меню «🔍 Поиск вакансий»');
     return;
   }
 
@@ -237,7 +259,7 @@ async function build(opts: Record<string, any> = {}) {
 
     const file = await writeDigest(matched);
     log.info(`Digest saved: ${file} (${matched.length} vacancies)`);
-    console.log('\nДальше: auto-hh cover — сгенерировать сопроводительные');
+    console.log('\nДальше: пункт меню «✉️ Письма для дайджеста» — сгенерировать сопроводительные');
   } finally {
     await client.close?.();
   }
@@ -247,7 +269,8 @@ async function build(opts: Record<string, any> = {}) {
 async function show(opts: Record<string, any> = {}) {
   const digest = await getLatestDigest().catch(() => null);
   if (digest) {
-    const entries = await collectCache.withCoverLetters(digest.entries).catch(() => digest.entries);
+    const letters = await collectCache.getLettersByVacancyIds(digest.entries.map(e => e.id)).catch(() => ({}));
+    const entries = digest.entries.map(e => ({ ...e, coverLetter: letters[String(e.id)] || e.coverLetter || '' }));
     if (opts.json) {
       console.log(JSON.stringify(entries, null, 2));
     } else {
@@ -255,6 +278,7 @@ async function show(opts: Record<string, any> = {}) {
       for (const e of entries) {
         console.log(`[${e.score ?? '?'}/10] ${e.title} @ ${e.employer}`);
         console.log(`      ${e.salary || '—'} | ${e.area || '—'}`);
+        if (e.publishedAt) console.log(`      Опубликована: ${String(e.publishedAt).slice(0, 10)}`);
         console.log(`      ${e.url}`);
         if (e.coverLetter) console.log(`      -> письмо: ${e.coverLetter.slice(0, 80)}...`);
         console.log();
@@ -263,22 +287,32 @@ async function show(opts: Record<string, any> = {}) {
     return;
   }
 
-  const dir = DATA_DIR;
+  const dir = path.join(__dirname, '..', '..', 'data');
   const files = fs.existsSync(dir)
     ? fs.readdirSync(dir).filter(f => /^digest-.*\.md$/.test(f)).sort().reverse()
     : [];
   if (!files.length) {
-    log.info('No digest found. Сначала соберите дайджест: auto-hh digest');
+    log.info('No digest found. Сначала соберите дайджест: пункт меню «🧠 Собрать дайджест»');
     return;
   }
   console.log(fs.readFileSync(path.join(dir, files[0]), 'utf-8'));
 }
 
+const SHOW_ACTIONS = new Set(['show', 'last', 'latest', 'view']);
+
 export default async function cmdDigest(action: any = 'build', opts: Record<string, any> = {}) {
+  // Совместимость с прежним вызовом cmdDigest({ json: true }) — это показ дайджеста.
+  if (action && typeof action === 'object') {
+    opts = action;
+    action = 'show';
+  }
+
   const name = String(action).toLowerCase();
-  if (name === 'show') return show(opts);
-  if (name === 'build') return build(opts);
+  if (SHOW_ACTIONS.has(name)) return show(opts);
+  if (name === 'build' || name === 'make' || name === 'create') return build(opts);
 
   console.error(`Неизвестное действие "digest ${action}". Доступно: build (по умолчанию), show.`);
   process.exitCode = 1;
 }
+
+export { build as buildDigest, show as showDigest };

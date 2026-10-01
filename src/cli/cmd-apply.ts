@@ -1,21 +1,21 @@
 // Команда apply: отклик через Playwright.
 import fs from "fs";
 import path from "path";
-import { chromium } from "playwright";
-import log from "../logger.js";
-import history from "../store/history-store.js";
-import { getDigestsByDate, getAllDigests } from "../store/digest-store.js";
-import { withCoverLetters } from "../store/cache-store.js";
-import { DATA_DIR } from "../paths.js";
-import { intFromEnv, boolFromEnv } from "../env.js";
-import { sleep, rand, dateKey } from "../time.js";
+import {  chromium  } from "playwright";
+import log from "../logger";
+import history from "../store/history-store";
+import  {getDigestsByDate, getAllDigests} from "../store/digest-store";
+import { getLettersByVacancyIds } from "../store/cache-store.js";
 
 const PROFILE = path.resolve(process.env.PW_USER_DATA_DIR || './data/browser-profile');
-const HEADLESS = boolFromEnv('PW_HEADLESS', false);
-const MIN_DELAY = intFromEnv('PW_MIN_DELAY_MS', 500, { min: 0 });
-const MAX_DELAY = intFromEnv('PW_MAX_DELAY_MS', 2000, { min: 0 });
+const HEADLESS = String(process.env.PW_HEADLESS || 'false') === 'true';
+const MIN_DELAY = parseInt(process.env.PW_MIN_DELAY_MS || '500', 10);
+const MAX_DELAY = parseInt(process.env.PW_MAX_DELAY_MS || '2000', 10);
 const TEST_MODE = (process.env.PW_TEST_MODE || 'manual').toLowerCase();
-const TEST_TIMEOUT = intFromEnv('PW_TEST_TIMEOUT_MS', 0, { min: 0 });
+const TEST_TIMEOUT = parseInt(process.env.PW_TEST_TIMEOUT_MS || '0', 10);
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+function rand(min, max) { return Math.floor(Math.random() * (max - min + 1)) + min; }
 
 function ensureProfile() {
   if (!fs.existsSync(PROFILE)) fs.mkdirSync(PROFILE, { recursive: true });
@@ -26,14 +26,14 @@ async function loadDigest(type: string) {
     log.info('Loading all digests');
     return getAllDigests('digest');
   }
-  const date = dateKey();
+  const date = new Date().toISOString().slice(0, 10);
   return getDigestsByDate('digest', date);
 }
 
 async function applyToVacancy(page, entry) {
   log.info(`Applying to ${entry.id} (${entry.employer || '?'}: ${entry.title})`);
-  const minDelay = intFromEnv('PW_MIN_DELAY_MS', 500, { min: 0 });
-  const maxDelay = intFromEnv('PW_MAX_DELAY_MS', 2000, { min: 0 });
+  const minDelay = parseInt(process.env.PW_MIN_DELAY_MS || '500', 10);
+  const maxDelay = parseInt(process.env.PW_MAX_DELAY_MS || '2000', 10);
   await page.goto(entry.url, { waitUntil: 'domcontentloaded' });
   await sleep(rand(minDelay, maxDelay));
 
@@ -100,7 +100,7 @@ async function applyToVacancy(page, entry) {
     await textarea.fill(entry.coverLetter);
     log.info('Cover letter filled');
   } else if (entry.coverLetter) {
-    const dumpPath = path.join(DATA_DIR, `apply-dom-${entry.id}.html`);
+    const dumpPath = path.join(__dirname, '..', '..', 'data', `apply-dom-${entry.id}.html`);
     try {
       const html = await page.content();
       fs.writeFileSync(dumpPath, html);
@@ -114,7 +114,7 @@ async function applyToVacancy(page, entry) {
   log.info(`>>> Сопроводительное заполнено. Проверьте и нажмите «Откликнуться» в браузере.`);
   log.info(`>>> Ожидание...`);
 
-  const manualTimeout = intFromEnv('PW_MANUAL_TIMEOUT_MS', 300000, { min: 0 });
+  const manualTimeout = parseInt(process.env.PW_MANUAL_TIMEOUT_MS || '300000', 10);
   const hadTextarea = !!textarea;
   let submitted = false;
 
@@ -241,14 +241,15 @@ async function apply(opts: Record<string, any> = {}) {
   }
   log.info(`${entries.length} vacancies in digest`);
 
-  // Письма генерируются отдельным шагом (`auto-hh cover`) и лежат в cacheCoverLetters.
-  const planned = await withCoverLetters(entries).catch(err => {
-    log.warn(`Письма из кэша недоступны: ${err.message}`);
-    return entries;
-  });
+  // Письма генерируются отдельным шагом (пункт меню «✉️ Письма для дайджеста») и лежат в cacheCoverLetters.
+  const letters = await getLettersByVacancyIds(entries.map(e => e.id)).catch(() => ({} as Record<string, string>));
+  const planned = entries.map(entry => ({
+    ...entry,
+    coverLetter: letters[String(entry.id)] || entry.coverLetter || '',
+  }));
   const withoutLetter = planned.filter(e => !e.coverLetter).length;
   if (withoutLetter) {
-    log.warn(`${withoutLetter} вакансий без сопроводительного — пропускаю (сгенерируйте: auto-hh cover)`);
+    log.warn(`${withoutLetter} вакансий без сопроводительного — пропускаю (сгенерируйте: пункт меню «✉️ Письма для дайджеста»)`);
   }
 
   const ctx = await chromium.launchPersistentContext(PROFILE, {
@@ -260,7 +261,7 @@ async function apply(opts: Record<string, any> = {}) {
   // Проверка авторизации.
   await page.goto('https://hh.ru/applicant/resumes', { waitUntil: 'domcontentloaded' });
   if (/\/account\/login/.test(page.url())) {
-    log.error('Not logged in. Run `auto-hh apply --login` first.');
+    log.error('Not logged in. Run the menu item «🔑 Войти на hh.ru» first.');
     await ctx.close();
     // process.exit() здесь оборвал бы finally в run() и незаписанные данные в Mongo.
     process.exitCode = 1;
@@ -268,14 +269,13 @@ async function apply(opts: Record<string, any> = {}) {
   }
 
   let ok = 0, fail = 0, skipped = 0;
-  // Отклики читаются один раз: раньше history.load() выгружал всю коллекцию на каждой итерации.
-  const state = await history.load();
   for (const entry of planned) {
     if (!entry.coverLetter) {
       log.warn(`Skip ${entry.id}: no cover letter`);
       skipped++;
       continue;
     }
+    const state = await history.load();
     const rec = state.applied[entry.id];
     if (rec && !rec.digestOnly) {
       log.info(`Skip ${entry.id}: already applied`);
@@ -285,7 +285,6 @@ async function apply(opts: Record<string, any> = {}) {
       const res = await applyToVacancy(page, entry);
       if (res.ok) {
         await history.markApplied(entry.id, { via: 'playwright', url: entry.url });
-        state.applied[String(entry.id)] = { via: 'playwright', url: entry.url, at: new Date().toISOString() };
         ok++;
       } else {
         fail++;

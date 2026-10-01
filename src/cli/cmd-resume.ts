@@ -1,9 +1,8 @@
 // Команда resume: управление резюме.
 import { listResumes, loadResume } from "../resume.js";
-import { registerResume, listResumes as listMongo } from "../store/resume-store.js";
+import { registerResume, listResumes as listMongo } from "../store/resume-store";
 import type { Resume } from "../types.js";
 import log from "../logger.js";
-import { dateKey } from "../time.js";
 
 async function cmdResumeList() {
   const files = listResumes();
@@ -21,22 +20,20 @@ async function cmdResumeList() {
     const registered = resume ? byId.get(resume.id) : null;
     console.log(`  ${f.name} (${resume?.id || '?'})${registered ? '' : ' (не зарегистрировано)'}`);
     console.log(`    Файл: ${f.filename}`);
-    if (registered) console.log(`    Добавлено: ${dateKey(registered.createdAt)}`);
+    if (registered) console.log(`    Добавлено: ${registered.createdAt.toISOString().slice(0, 10)}`);
     console.log();
   }
 }
 
 async function cmdResumeRegister(name: string) {
   if (!name) {
-    console.error('Usage: auto-hh resume register <name>');
-    process.exitCode = 1;
-    return;
+    console.error('Укажите имя резюме: пункт меню «🧾 Резюме» → register <name>');
+    process.exit(1);
   }
   const resume = loadResume(name);
   if (!resume) {
     console.error(`Resume "${name}" not found`);
-    process.exitCode = 1;
-    return;
+    process.exit(1);
   }
   await registerResume(resume);
   log.info(`Resume "${name}" registered (id: ${resume.id})`);
@@ -48,13 +45,11 @@ async function cmdResumeShow(name?: string) {
     resume = name ? loadResume(name) : loadResume();
   } catch (err: any) {
     console.error(err.message);
-    process.exitCode = 1;
-    return;
+    process.exit(1);
   }
   if (!resume) {
-    console.error('Резюме не найдено. Задайте RESUME_PATH или RESUMES_DIR в .env, либо укажите имя: auto-hh resume show <name>');
-    process.exitCode = 1;
-    return;
+    console.error('Резюме не найдено. Задайте RESUME_PATH или RESUMES_DIR в .env, либо укажите имя: пункт меню «🧾 Резюме» → show <name>');
+    process.exit(1);
   }
 
   console.log(`\n=== Резюме: ${resume.name} ===`);
