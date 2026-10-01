@@ -13,6 +13,7 @@ import { judgeVacancy, judgeVacanciesBatch } from "../domain/judge";
 import { writeDigest, writeRejected, getLatestDigest } from "../store/digest-store";
 import { registerResume } from "../store/resume-store.js";
 import { flattenCollected, fmtSalary } from "../domain/collect.js";
+import { DIGEST_DIR } from "../paths.js";
 import log from "../logger.js";
 
 // Дата кэша поиска: тем же ключом пишутся полные вакансии и вердикты ИИ.
@@ -287,7 +288,7 @@ async function show(opts: Record<string, any> = {}) {
     return;
   }
 
-  const dir = path.join(__dirname, '..', '..', 'data');
+  const dir = DIGEST_DIR;
   const files = fs.existsSync(dir)
     ? fs.readdirSync(dir).filter(f => /^digest-.*\.md$/.test(f)).sort().reverse()
     : [];
