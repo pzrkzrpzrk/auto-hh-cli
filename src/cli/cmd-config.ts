@@ -1,5 +1,5 @@
 // Команда config: показать текущую конфигурацию.
-import {  loadConfig  } from "../config.js";
+import { loadConfig } from "../config.js";
 
 async function configCmd() {
   const cfg = loadConfig();

@@ -1,5 +1,5 @@
 // MongoDB-хранилище для коллекции resumes.
-import { connect, dbInstance } from "../clients/db";
+import { connect, dbInstance } from "../clients/db.js";
 import type { Resume } from "../types.js";
 
 export interface ResumeDoc {

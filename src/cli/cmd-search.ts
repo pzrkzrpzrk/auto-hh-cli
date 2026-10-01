@@ -1,7 +1,7 @@
 // Команда search: поиск вакансий (страницы hh.ru → cachePages) + описания вакансий (cacheFull).
 // Отбор + ИИ-судья — отдельный шаг `digest`, сопроводительные — отдельный шаг `cover`.
-import HHClient from "../clients/hh-client";
-import { loadConfig } from "../config";
+import HHClient from "../clients/hh-client.js";
+import { loadConfig } from "../config.js";
 import * as collectCache from "../store/cache-store.js";
 import { collectVacancies, collectFullVacancies, fmtSalary } from "../domain/collect.js";
 import resetData, { formatResetSummary } from "../store/reset.js";

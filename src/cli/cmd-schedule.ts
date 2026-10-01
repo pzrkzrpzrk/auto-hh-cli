@@ -1,7 +1,7 @@
 // Команда schedule: запуск пайплайна (search → digest → cover) по cron-расписанию.
 import cron from "node-cron";
-import {  loadConfig  } from "../config";
-import log from "../logger";
+import { loadConfig } from "../config.js";
+import log from "../logger.js";
 import search from "./cmd-search.js";
 import digest from "./cmd-digest.js";
 import cover from "./cmd-cover.js";
@@ -66,7 +66,8 @@ export default async function cmdSchedule(opts: Record<string, any> = {}) {
 
   if (!cfg.schedule?.cron) {
     console.error("schedule.cron не задан в config.json");
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
 
   const expression = cfg.schedule.cron;
@@ -74,7 +75,8 @@ export default async function cmdSchedule(opts: Record<string, any> = {}) {
 
   if (!cron.validate(expression)) {
     console.error(`Невалидное cron-выражение: ${expression}`);
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
 
   const next = getNextDate(expression);

@@ -1,5 +1,5 @@
 import OpenAI from "openai";
-import type { Resume } from "../types";
+import type { Resume } from "../types.js";
 
 // Провайдер задаётся парой: config.json → api.baseUrl + api.model.
 // Дефолт — GLM-4.7-Flash (Z.ai): бесплатная, 200K контекста, 128K вывода.

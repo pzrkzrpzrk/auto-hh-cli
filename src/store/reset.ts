@@ -1,8 +1,9 @@
 // Сброс истории, кэша и дайджестов (файлы + MongoDB).
 import fs from "fs";
 import path from "path";
-import { connect, dbInstance } from "../clients/db";
+import { connect, dbInstance } from "../clients/db.js";
 import * as collectCache from "./cache-store.js";
+import { DATA_DIR } from "../paths.js";
 import log from "../logger.js";
 
 export interface ResetSummary {
@@ -35,7 +36,7 @@ export function formatResetSummary(s: ResetSummary): string {
 
 export default async function resetData(): Promise<ResetSummary> {
   // Файлы data/: history.*, а также digest-2026-09-20.md / rejected-*.md.
-  const dir = path.join(__dirname, '..', '..', 'data');
+  const dir = DATA_DIR;
   const files: string[] = [];
   if (fs.existsSync(dir)) {
     for (const name of fs.readdirSync(dir)) {

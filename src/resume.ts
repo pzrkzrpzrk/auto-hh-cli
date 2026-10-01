@@ -9,6 +9,15 @@ import log from "./logger.js";
 const DIR = process.env.RESUMES_DIR ? path.resolve(process.env.RESUMES_DIR) : null;
 const FILE = process.env.RESUME_PATH ? path.resolve(process.env.RESUME_PATH) : null;
 
+// Расширения резюме — единственный источник правды: из него собраны и фильтр директории,
+// и отрезание расширения, и перебор вариантов при загрузке по имени.
+const RESUME_EXTS = ['.md', '.txt', '.pdf'];
+
+/** true, если файл имеет расширение резюме (регистр не важен). */
+function isResumeFile(name: string): boolean {
+  return RESUME_EXTS.includes(path.extname(name).toLowerCase());
+}
+
 // UUID v5 (SHA-1 based) из имени файла — детерминированный, не меняется между запусками.
 function nameToUUID(filename: string): string {
   const NAMESPACE = '6ba7b810-9dad-11d1-80b4-00c04fd430c8'; // DNS namespace
@@ -33,21 +42,22 @@ export function listResumes(): { name: string; filename: string }[] {
   if (!DIR) return [];
   if (!fs.existsSync(DIR)) return [];
   return fs.readdirSync(DIR)
-    .filter(f => /\.(md|txt|pdf)$/i.test(f))
+    .filter(isResumeFile)
     .map(f => ({ name: path.basename(f, path.extname(f)), filename: f }));
 }
 
 /** Загружает резюме по имени (без расширения) или по RESUME_PATH/RESUMES_DIR. */
 // Отрезает расширение, если пользователь передал его в имени (`ivan.md` → `ivan`).
 function stripExt(name: string): string {
-  return name.replace(/\.(md|txt|pdf)$/i, '');
+  const ext = path.extname(name);
+  return isResumeFile(name) ? name.slice(0, -ext.length) : name;
 }
 
 export function loadResume(name?: string): Resume | null {
   if (name) {
     const baseName = stripExt(name);
     if (DIR) {
-      for (const ext of ['.md', '.txt', '.pdf']) {
+      for (const ext of RESUME_EXTS) {
         const abs = path.join(DIR, `${baseName}${ext}`);
         if (fs.existsSync(abs)) return parseFile(abs, baseName);
       }

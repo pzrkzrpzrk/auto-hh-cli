@@ -1,7 +1,7 @@
 // Адаптация резюме под конкретную вакансию.
 // Оставляет только секции, релевантные для данной вакансии — по совпадению ключевых
 // терминов (название, навыки, описание). Если ни одна секция не подошла — не адаптирует.
-import {  stripHtml  } from "../text-utils.js";
+import { stripHtml } from "../text-utils.js";
 
 export function adaptResumeForVacancy(resume, vacancy) {
   if (!resume || resume.type === "pdf" || !resume.text) return null;
@@ -31,10 +31,6 @@ function collectKeyTerms(vacancy) {
       if (s.name) terms.add(s.name.toLowerCase().trim());
     }
   }
-
-  // if (vacancy.snippet?.requirement) {
-  //   addWords(terms, stripHtml(vacancy.snippet.requirement));
-  // }
 
   if (vacancy.description) {
     addWords(terms, stripHtml(vacancy.description));

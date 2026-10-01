@@ -1,13 +1,6 @@
 // Простой логгер с уровнями и записью в файл.
 import fs from "fs";
-import path from "path";
-
-const LOG_FILE = path.join(__dirname, '..', 'data', 'app.log');
-
-function ensureDir() {
-  const dir = path.dirname(LOG_FILE);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-}
+import { LOG_FILE, ensureDir } from "./paths.js";
 
 function write(level: 'INFO' | 'WARN' | 'ERROR' | 'DEBUG', msg: string, meta?: any) {
   ensureDir();

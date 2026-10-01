@@ -1,17 +1,9 @@
 import fs from "fs";
 import path from "path";
-import { connect, dbInstance } from "../clients/db";
-import { DigestEntry, DigestDoc } from "../types";
-
-const DATA_DIR = path.join(__dirname, '..', '..', 'data');
-
-function dateKey(): string {
-  return new Date().toISOString().slice(0, 10);
-}
-
-function ensureDir() {
-  if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-}
+import { connect, dbInstance } from "../clients/db.js";
+import { DigestEntry, DigestDoc } from "../types.js";
+import { DATA_DIR, ensureDir } from "../paths.js";
+import { dateKey } from "../time.js";
 
 function toMarkdown(entries: any[], title: string, date = dateKey()): string {
   const lines: string[] = [`# ${title} — ${date} (${entries.length} вакансий)\n`];
