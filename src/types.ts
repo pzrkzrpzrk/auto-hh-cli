@@ -56,3 +56,13 @@ export interface DigestEntry {
   comment: string | null;
   coverLetter: string;
 }
+
+// Строка выдачи поиска для .md-файла (data/search/) — те же поля, что у элемента cachePages.
+export interface SearchEntry {
+  id: string;
+  title: string;
+  employer: string;
+  area: string;
+  salary: string;
+  url?: string;
+}

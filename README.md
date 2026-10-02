@@ -21,7 +21,7 @@ hh.ru ──Playwright──▶ search: страницы выдачи (cachePage
                                         ▼
              digest: локальный фильтр (навыки, исключения, ЗП) ── пропуск
                         └─▶ ИИ-судья: score 1–10, вердикт fit/no-fit
-                                └─▶ дайджест (digest-ГГГГ-ММ-ДД.md + MongoDB)
+                                └─▶ дайджест (data/digests/digest-ГГГГ-ММ-ДД.md + MongoDB)
                                         │
                                         ▼
              cover: генерация сопроводительных под каждую вакансию
@@ -31,6 +31,8 @@ hh.ru ──Playwright──▶ search: страницы выдачи (cachePage
 ```
 
 Порядок важен: `digest` читает кэш последнего `search`, `cover` — последний дайджест, `apply` — письма, сохранённые шагом `cover`.
+
+> ☑️ **Галки в дайджесте.** В `data/digests/digest-ГГГГ-ММ-ДД.md` перед каждой вакансией стоит чекбокс `- [ ]` — отмечайте `- [x]` те, куда откликнулись сами. Учтите: при перезаписи дайджеста (повторная сборка или шаг «✉️ Письма для дайджеста») файл создаётся заново и ручные отметки сбрасываются.
 
 > ℹ️ `search` тянет не только страницы выдачи, но и **описания вакансий** (`cacheFull`) — по одной карточке на вакансию, поэтому шаг занимает минуты, а не секунды (≈3 с на карточку при `REQUEST_DELAY_MS=1500`). Уже скачанное и вакансии из истории пропускаются: повторный запуск быстрый, а Ctrl+C ничего не теряет — прогресс лежит в MongoDB. Если описаний всё же не хватит, `digest` и `cover` догрузят их сами.
 
@@ -334,8 +336,9 @@ npm start           # или: npm run ui, npx auto-hh, npx auto-hh ui (алиа�
 | --- | --- |
 | MongoDB `history` | Какие вакансии уже видели / на какие откликались (статусы `seen` / `applied`) |
 | MongoDB `cachePages`, `cacheFull`, `cacheJudgements`, `cacheCoverLetters` | Кэш: страницы выдачи и описания вакансий (пишет `search`), вердикты ИИ (`digest`), письма (`cover`). Позволяет продолжить после обрыва, не запрашивая hh.ru и не пересудя заново |
-| `digest-ГГГГ-ММ-ДД.md` (+ MongoDB `digest`) | Подходящие вакансии; письма дописываются шагом `cover` |
-| `rejected-ГГГГ-ММ-ДД.md` (+ MongoDB `rejected`) | Вакансии, отбракованные ИИ, с причинами |
+| `search/search-ГГГГ-ММ-ДД.md` | Выдача поиска за день — зеркало кэша страниц (MongoDB `cachePages`) |
+| `digests/digest-ГГГГ-ММ-ДД.md` (+ MongoDB `digest`) | Подходящие вакансии; письма дописываются шагом `cover` |
+| `rejected/rejected-ГГГГ-ММ-ДД.md` (+ MongoDB `rejected`) | Вакансии, отбракованные ИИ, с причинами |
 | `browser-profile/` | Профиль Chromium (cookies, localStorage) |
 | `apply-dom-*.html` | Дамп DOM, если Playwright не нашёл поле для письма |
 | `app.log` | Лог |
@@ -378,7 +381,8 @@ npm start           # или: npm run ui, npx auto-hh, npx auto-hh ui (алиа�
 │  │  └─ grade-resume.ts       # оценка резюме через ИИ
 │  ├─ store/                   # доступ к данным (MongoDB)
 │  │  ├─ cache-store.ts        # кэш (страницы, вердикты, письма)
-│  │  ├─ digest-store.ts       # дайджест в Markdown + MongoDB
+│  │  ├─ digest-store.ts       # дайджест и rejected в Markdown + MongoDB
+│  │  ├─ search-store.ts       # выдача поиска в Markdown (data/search/)
 │  │  ├─ history-store.ts      # история просмотров/откликов
 │  │  ├─ resume-store.ts       # регистрация резюме в MongoDB
 │  │  └─ reset.ts              # сброс файлов и коллекций
