@@ -3,7 +3,7 @@ import fs from "fs";
 import path from "path";
 import { connect, dbInstance } from "../clients/db.js";
 import * as collectCache from "./cache-store.js";
-import { DATA_DIR } from "../paths.js";
+import { DATA_DIR, SEARCH_DIR, DIGEST_DIR, REJECTED_DIR } from "../paths.js";
 import log from "../logger.js";
 
 export interface ResetSummary {
@@ -35,17 +35,23 @@ export function formatResetSummary(s: ResetSummary): string {
 }
 
 export default async function resetData(): Promise<ResetSummary> {
-  // Файлы data/: history.*, а также digest-2026-09-20.md / rejected-*.md.
-  const dir = DATA_DIR;
+  // Файлы артефактов: history.* в корне data/ (legacy digest-/rejected- — тоже там),
+  // выдача поиска в data/search/, дайджест в data/digests/, rejected в data/rejected/.
   const files: string[] = [];
-  if (fs.existsSync(dir)) {
+  const targets = [
+    { dir: DATA_DIR, pattern: /^(history|digest|rejected)[.-]/ },
+    { dir: SEARCH_DIR, pattern: /^search-.*\.md$/ },
+    { dir: DIGEST_DIR, pattern: /^digest-.*\.md$/ },
+    { dir: REJECTED_DIR, pattern: /^rejected-.*\.md$/ },
+  ];
+  for (const { dir, pattern } of targets) {
+    if (!fs.existsSync(dir)) continue;
     for (const name of fs.readdirSync(dir)) {
-      if (/^(history|digest|rejected)[.-]/.test(name)) {
-        const p = path.join(dir, name);
-        fs.unlinkSync(p);
-        log.info(`Removed ${p}`);
-        files.push(p);
-      }
+      if (!pattern.test(name)) continue;
+      const p = path.join(dir, name);
+      fs.unlinkSync(p);
+      log.info(`Removed ${p}`);
+      files.push(p);
     }
   }
 

@@ -2,7 +2,7 @@ import fs from "fs";
 import path from "path";
 import { connect, dbInstance } from "../clients/db.js";
 import { DigestEntry, DigestDoc } from "../types.js";
-import { DATA_DIR, ensureDir } from "../paths.js";
+import { DIGEST_DIR, REJECTED_DIR, ensureDir } from "../paths.js";
 import { dateKey } from "../time.js";
 
 function toMarkdown(entries: any[], title: string, date = dateKey()): string {
@@ -61,8 +61,8 @@ export async function getLatestDigest(): Promise<DigestDoc | null> {
 // date позволяет перезаписать дайджест конкретного дня (используется шагом cover).
 export async function writeDigest(entries: any[], date = dateKey()): Promise<string | null> {
   if (!entries.length) return null;
-  ensureDir();
-  const md = path.join(DATA_DIR, `digest-${date}.md`);
+  ensureDir(DIGEST_DIR);
+  const md = path.join(DIGEST_DIR, `digest-${date}.md`);
   fs.writeFileSync(md, toMarkdown(entries, 'Дайджест вакансий', date));
   await writeToMongo('digest', entries, date);
   return md;
@@ -70,8 +70,8 @@ export async function writeDigest(entries: any[], date = dateKey()): Promise<str
 
 export async function writeRejected(entries: any[], date = dateKey()): Promise<string | null> {
   if (!entries.length) return null;
-  ensureDir();
-  const md = path.join(DATA_DIR, `rejected-${date}.md`);
+  ensureDir(REJECTED_DIR);
+  const md = path.join(REJECTED_DIR, `rejected-${date}.md`);
   fs.writeFileSync(md, toMarkdown(entries, 'Отклонённые вакансии', date));
   await writeToMongo('rejected', entries, date);
   return md;
