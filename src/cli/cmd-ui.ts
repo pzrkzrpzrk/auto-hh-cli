@@ -26,6 +26,7 @@ let envResumeLabel: string | null | undefined;
 
 type MenuItem =
   | "search"
+  | "searchDigest"
   | "digest"
   | "digestShow"
   | "letters"
@@ -214,6 +215,23 @@ async function runSearch() {
   await cmdSearch(buildSearchOptions({ reset }));
 }
 
+// Комбинированный шаг: собрать ответы промптами, затем прогнать search → digest подряд.
+// Промпты задаются до запуска, чтобы сам прогон шёл без участия пользователя; падение
+// поиска прерывает цепочку (ошибку покажет dispatch), дайджест на пустом кэше сам предупредит.
+async function runSearchDigest() {
+  const reset = await confirm({
+    message: "Сбросить историю, кэш и дайджесты перед поиском? (необратимо)",
+    default: false,
+  });
+  const resume = await pickResume("Какое резюме использовать для оценки?");
+  const useAi = await confirm({ message: "Использовать ИИ-судью?", default: true });
+  const limit = await askCount("Максимум вакансий в дайджесте (0 — как в config.json):");
+
+  console.log();
+  await cmdSearch(buildSearchOptions({ reset }));
+  await cmdDigest("build", buildDigestOptions({ resume, useAi, limit }));
+}
+
 async function runDigest() {
   const resume = await pickResume("Какое резюме использовать для оценки?");
   const useAi = await confirm({ message: "Использовать ИИ-судью?", default: true });
@@ -324,6 +342,7 @@ async function mainMenu(): Promise<MenuItem> {
     pageSize: 15,
     choices: [
       { name: "🔍 Поиск вакансий (search)", value: "search" },
+      { name: "🔍🧠 Поиск + дайджест (search → digest)", value: "searchDigest" },
       { name: "🧠 Собрать дайджест (digest)", value: "digest" },
       { name: "✉️  Письма для дайджеста (cover)", value: "letters" },
       { name: "🚀 Отклики из дайджеста (apply)", value: "apply" },
@@ -347,6 +366,7 @@ async function mainMenu(): Promise<MenuItem> {
 async function dispatch(item: MenuItem) {
   switch (item) {
     case "search": return runSearch();
+    case "searchDigest": return runSearchDigest();
     case "digest": return runDigest();
     case "letters": return runLetters();
     case "apply": return runApply();
