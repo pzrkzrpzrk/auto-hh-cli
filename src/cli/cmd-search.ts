@@ -58,15 +58,18 @@ async function search(opts: Record<string, any> = {}) {
       return;
     }
 
-    // Выдача в файл (data/search/): берём весь кэш страниц за день, а не только текущий прогон, —
-    // так файл совпадает с Mongo cachePages. Ошибка записи не должна выглядеть как провал поиска:
-    // данные уже в Mongo, поэтому только логируем.
+    // Выдача в файл (data/search/): в файл за день дописываются только новые вакансии
+    // (дедуп по id против уже записанных), ранее найденные строки сохраняются. Ошибка записи
+    // не должна выглядеть как провал поиска: данные уже в Mongo, поэтому только логируем.
     try {
       const rows = flattenCollected(cache).map(toSearchEntry);
-      const file = writeSearchResults(rows, { query: cfg.search.text });
-      if (file) {
-        log.info(`Search results saved: ${file} (${rows.length} vacancies)`);
-        console.log(`\nВыдача сохранена: ${file}`);
+      const saved = writeSearchResults(rows, { query: cfg.search.text });
+      if (saved && saved.added > 0) {
+        log.info(`Search results saved: ${saved.file} (+${saved.added} new, total ${saved.total})`);
+        console.log(`\nВыдача сохранена: ${saved.file} (+${saved.added} новых, всего ${saved.total})`);
+      } else if (saved) {
+        log.info(`Search results unchanged: ${saved.file} (${saved.total} vacancies, no new)`);
+        console.log(`\nНовых вакансий нет — файл не изменился (${saved.file})`);
       }
     } catch (err: any) {
       log.error(`Search file dump failed: ${err.message}`);
