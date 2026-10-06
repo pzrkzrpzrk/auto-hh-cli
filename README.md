@@ -334,7 +334,7 @@ npm start           # или: npm run ui, npx auto-hh, npx auto-hh ui (алиа�
 | --- | --- |
 | MongoDB `history` | Какие вакансии уже видели / на какие откликались (статусы `seen` / `applied`) |
 | MongoDB `cachePages`, `cacheFull`, `cacheJudgements`, `cacheCoverLetters` | Кэш: страницы выдачи и описания вакансий (пишет `search`), вердикты ИИ (`digest`), письма (`cover`). Позволяет продолжить после обрыва, не запрашивая hh.ru и не пересудя заново |
-| `search/search-ГГГГ-ММ-ДД.md` | Выдача поиска за день — зеркало кэша страниц (MongoDB `cachePages`) |
+| `search/search-ГГГГ-ММ-ДД.md` | Выдача поиска за день — только новые вакансии, накопительно, без повторов (дедуп по id) |
 | `digests/digest-ГГГГ-ММ-ДД.md` (+ MongoDB `digest`) | Подходящие вакансии; письма дописываются шагом `cover` |
 | `rejected/rejected-ГГГГ-ММ-ДД.md` (+ MongoDB `rejected`) | Вакансии, отбракованные ИИ, с причинами |
 | `browser-profile/` | Профиль Chromium (cookies, localStorage) |

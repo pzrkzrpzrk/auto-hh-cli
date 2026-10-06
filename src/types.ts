@@ -66,3 +66,11 @@ export interface SearchEntry {
   salary: string;
   url?: string;
 }
+
+// Результат дозаписи выдачи в data/search/: added — сколько новых вакансий дописано,
+// total — сколько всего в файле за день.
+export interface SearchFileResult {
+  file: string;
+  added: number;
+  total: number;
+}
