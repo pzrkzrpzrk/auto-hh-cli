@@ -233,7 +233,12 @@ async function apply(opts: Record<string, any> = {}) {
 
   ensureProfile();
   const type = opts.type || 'latest';
-  const entries = await loadDigest(type);
+  const loaded = await loadDigest(type);
+  // Актуализированные (шаг `digest actualize`) вакансии пропускаем: их уже нет в поиске.
+  const entries = loaded.filter(e => !e.archived);
+  if (loaded.length !== entries.length) {
+    log.info(`Недоступных пропущено: ${loaded.length - entries.length}`);
+  }
 
   if (opts.limit && Number.isFinite(opts.limit) && opts.limit > 0) {
     entries.splice(opts.limit);

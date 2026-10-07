@@ -55,6 +55,11 @@ export interface DigestEntry {
   reason: string | null;
   comment: string | null;
   coverLetter: string;
+  // Актуализация (шаг `digest actualize`): помечается по наличию в последнем поиске.
+  // archived — вакансии больше нет в выдаче; lastSeenAt — дата поиска, где встречалась последний раз.
+  archived?: boolean;
+  lastSeenAt?: string | null;
+  checkedAt?: string | null;
 }
 
 // Строка выдачи поиска для .md-файла (data/search/) — те же поля, что у элемента cachePages.

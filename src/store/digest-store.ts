@@ -6,11 +6,18 @@ import { DIGEST_DIR, REJECTED_DIR, UNKNOWN_REGION, ensureDir, regionDir } from "
 import { dateKey } from "../time.js";
 
 function toMarkdown(entries: any[], title: string, date = dateKey()): string {
-  const lines: string[] = [`# ${title} — ${date} (${entries.length} вакансий)\n`];
-  for (const e of entries) {
+  const gone = entries.filter(e => e.archived).length;
+  const countNote = gone ? `${entries.length} вакансий, недоступно ${gone}` : `${entries.length} вакансий`;
+  const lines: string[] = [`# ${title} — ${date} (${countNote})\n`];
+  // Архивные записи (шаг actualize) уводим в конец: живые вакансии остаются сверху.
+  const ordered = gone
+    ? [...entries].sort((a, b) => Number(Boolean(a.archived)) - Number(Boolean(b.archived)))
+    : entries;
+  for (const e of ordered) {
     lines.push(`---`);
     lines.push(`**${e.title || '—'}** @ ${e.employer || '—'}`);
     lines.push(`- Регион: ${e.area || '—'}`);
+    if (e.archived) lines.push(`- Статус: больше не в поиске${e.checkedAt ? ` (проверено ${e.checkedAt})` : ''}`);
     lines.push(`- Зарплата: ${e.salary || '—'}`);
     if (e.publishedAt) lines.push(`- Опубликована: ${String(e.publishedAt).slice(0, 10)}`);
     if (e.score != null) lines.push(`- Оценка: ${e.score}/10`);
@@ -46,6 +53,15 @@ export async function getAllDigests(collection: string): Promise<DigestEntry[]> 
   await connect();
   const docs = await dbInstance().collection<DigestDoc>(collection).find({}, { projection: { entries: 1 }, sort: { date: -1 } }).toArray();
   return docs.flatMap(d => d.entries || []);
+}
+
+// Все документы коллекции с датами — вход шага actualize. Свежие даты сверху.
+export async function listDigestDocs(collection: string): Promise<DigestDoc[]> {
+  await connect();
+  const docs = await dbInstance().collection<DigestDoc>(collection)
+    .find({}, { projection: { date: 1, entries: 1 }, sort: { date: -1 } })
+    .toArray();
+  return docs.map(d => ({ date: d.date, entries: d.entries || [] }));
 }
 
 // Последний дайджест — вход шагов cover и apply. null: MongoDB недоступна или дайджестов нет.
