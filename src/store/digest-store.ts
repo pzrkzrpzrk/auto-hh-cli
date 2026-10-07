@@ -2,7 +2,7 @@ import fs from "fs";
 import path from "path";
 import { connect, dbInstance } from "../clients/db.js";
 import { DigestEntry, DigestDoc } from "../types.js";
-import { DIGEST_DIR, REJECTED_DIR, ensureDir } from "../paths.js";
+import { DIGEST_DIR, REJECTED_DIR, UNKNOWN_REGION, ensureDir, regionDir } from "../paths.js";
 import { dateKey } from "../time.js";
 
 function toMarkdown(entries: any[], title: string, date = dateKey()): string {
@@ -58,21 +58,49 @@ export async function getLatestDigest(): Promise<DigestDoc | null> {
   return { date: docs[0].date, entries: docs[0].entries || [] };
 }
 
-// date позволяет перезаписать дайджест конкретного дня (используется шагом cover).
-export async function writeDigest(entries: any[], date = dateKey()): Promise<string | null> {
-  if (!entries.length) return null;
-  ensureDir(DIGEST_DIR);
-  const md = path.join(DIGEST_DIR, `digest-${date}.md`);
-  fs.writeFileSync(md, toMarkdown(entries, 'Дайджест вакансий', date));
-  await writeToMongo('digest', entries, date);
-  return md;
+// Регион вакансии — имя папки. Плейсхолдер '—' (area не пришёл) — как «Не указан».
+function regionOf(entry: any): string {
+  const area = entry?.area;
+  return !area || area === '—' ? UNKNOWN_REGION : String(area);
 }
 
-export async function writeRejected(entries: any[], date = dateKey()): Promise<string | null> {
-  if (!entries.length) return null;
-  ensureDir(REJECTED_DIR);
-  const md = path.join(REJECTED_DIR, `rejected-${date}.md`);
-  fs.writeFileSync(md, toMarkdown(entries, 'Отклонённые вакансии', date));
+// Группировка записей по региону с сохранением порядка появления.
+function groupByArea(entries: any[]): Map<string, any[]> {
+  const groups = new Map<string, any[]>();
+  for (const e of entries) {
+    const key = regionOf(e);
+    const bucket = groups.get(key);
+    if (bucket) bucket.push(e);
+    else groups.set(key, [e]);
+  }
+  return groups;
+}
+
+// Пишет по файлу на регион: <baseDir>/<date>/<region>/<fileName>. Возвращает пути файлов.
+function writeArtifacts(baseDir: string, entries: any[], date: string, fileName: string, titlePrefix: string): string[] {
+  const files: string[] = [];
+  for (const [region, group] of groupByArea(entries)) {
+    const dir = regionDir(baseDir, date, region);
+    ensureDir(dir);
+    const md = path.join(dir, fileName);
+    fs.writeFileSync(md, toMarkdown(group, `${titlePrefix} — ${region}`, date));
+    files.push(md);
+  }
+  return files;
+}
+
+// date позволяет перезаписать дайджест конкретного дня (используется шагом cover).
+// Возвращает пути файлов по регионам (пустой массив — писать нечего).
+export async function writeDigest(entries: any[], date = dateKey()): Promise<string[]> {
+  if (!entries.length) return [];
+  const files = writeArtifacts(DIGEST_DIR, entries, date, 'digest.md', 'Дайджест вакансий');
+  await writeToMongo('digest', entries, date);
+  return files;
+}
+
+export async function writeRejected(entries: any[], date = dateKey()): Promise<string[]> {
+  if (!entries.length) return [];
+  const files = writeArtifacts(REJECTED_DIR, entries, date, 'rejected.md', 'Отклонённые вакансии');
   await writeToMongo('rejected', entries, date);
-  return md;
+  return files;
 }

@@ -115,9 +115,9 @@ async function coverDigest(opts: Record<string, any>, resume) {
   log.info(`Сопроводительных готово: ${ready}/${updated.length}`);
 
   if (ready) {
-    const file = await writeDigest(updated, digest.date)
+    const files = await writeDigest(updated, digest.date)
       .catch(err => { log.warn(`Не удалось обновить дайджест: ${err.message}`); return null; });
-    if (file) log.info(`Digest updated with cover letters: ${file}`);
+    if (files?.length) log.info(`Digest updated with cover letters: ${files.join(', ')}`);
   }
 
   printLetters(entries, letters);
