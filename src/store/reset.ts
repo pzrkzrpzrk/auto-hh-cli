@@ -72,8 +72,8 @@ export default async function resetData(): Promise<ResetSummary> {
   const files: string[] = [];
   removeFlat(DATA_DIR, name => /^(history|digest|rejected)[.-]/.test(name), files);
   removeRecursive(SEARCH_DIR, name => name === 'search.md' || /^search-.*\.md$/.test(name), files);
-  removeRecursive(DIGEST_DIR, name => name === 'digest.md' || /^digest-.*\.md$/.test(name), files);
-  removeRecursive(REJECTED_DIR, name => name === 'rejected.md' || /^rejected-.*\.md$/.test(name), files);
+  removeRecursive(DIGEST_DIR, name => name === 'digest.md' || name === 'actual.md' || /^digest-.*\.md$/.test(name), files);
+  removeRecursive(REJECTED_DIR, name => name === 'rejected.md' || name === 'actual.md' || /^rejected-.*\.md$/.test(name), files);
 
   // MongoDB. process.exit() тут быть не должно: иначе `search --reset` убивал бы
   // процесс сразу после очистки кэша — до самого поиска. Закрытие соединения

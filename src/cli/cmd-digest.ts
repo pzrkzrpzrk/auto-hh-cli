@@ -10,8 +10,8 @@ import * as collectCache from "../store/cache-store.js";
 import { vacancyMatchesFilter } from "../domain/filter.js";
 import { loadResume } from "../resume.js";
 import { judgeVacancy, judgeVacanciesBatch } from "../domain/judge";
-import { writeDigest, writeRejected, getLatestDigest, listDigestDocs } from "../store/digest-store";
-import { computeActualization } from "../domain/actualize.js";
+import { writeDigest, writeRejected, writeActualDigest, writeActualRejected, getLatestDigest, listDigestDocs } from "../store/digest-store";
+import { computeActualization, mergeActualized } from "../domain/actualize.js";
 import { registerResume } from "../store/resume-store.js";
 import { flattenCollected, fmtSalary } from "../domain/collect.js";
 import { DIGEST_DIR } from "../paths.js";
@@ -322,7 +322,8 @@ async function show(opts: Record<string, any> = {}) {
 }
 
 // Шаг актуализации: помечает в старых дайджестах/rejected вакансии, которых нет в последнем
-// поиске (удалены/скрыты). Ничего не удаляет — обновляет записи и перезаписывает .md по регионам.
+// поиске (удалены/скрыты). Ничего не удаляет — обновляет записи и перезаписывает .md по регионам,
+// а также пишет сводный снимок по всем прошлым датам в <today>/actual.md.
 async function actualize(opts: Record<string, any> = {}) {
   if (opts.config) process.env.CONFIG_PATH = opts.config;
   const cfg = loadConfig();
@@ -337,14 +338,20 @@ async function actualize(opts: Record<string, any> = {}) {
   const searchPeriod = Number(cfg.search?.search_period) || null;
   log.info(`Актуализация по поиску от ${today}: ${todayIds.size} вакансий в выдаче`);
 
-  const targets: { coll: string; label: string; write: (entries: any[], date?: string) => Promise<string[]> }[] = [
-    { coll: 'digest', label: 'digest', write: writeDigest },
-    { coll: 'rejected', label: 'rejected', write: writeRejected },
+  const targets: {
+    coll: string;
+    label: string;
+    write: (entries: any[], date?: string) => Promise<string[]>;
+    writeActual: (entries: any[], date?: string) => string | null;
+  }[] = [
+    { coll: 'digest', label: 'digest', write: writeDigest, writeActual: writeActualDigest },
+    { coll: 'rejected', label: 'rejected', write: writeRejected, writeActual: writeActualRejected },
   ];
 
   let checkedTotal = 0;
   let markedTotal = 0;
-  for (const { coll, label, write } of targets) {
+  const snapshots: string[] = [];
+  for (const { coll, label, write, writeActual } of targets) {
     const docs = await listDigestDocs(coll).catch(() => [] as any[]);
     const { docs: updated, stats } = computeActualization(docs, { todayIds, today, searchPeriod });
     checkedTotal += stats.total;
@@ -355,14 +362,21 @@ async function actualize(opts: Record<string, any> = {}) {
       continue;
     }
     const toWrite = updated.filter(d => d.changed);
+    // Сводный снимок по всем прошлым датам (кроме сегодня) — один файл <today>/actual.md.
+    const snapshot = mergeActualized(updated);
     if (!opts.dryRun) {
       for (const d of toWrite) await write(d.entries, d.date);
+      const actualFile = writeActual(snapshot, today);
+      if (actualFile) snapshots.push(actualFile);
     }
     log.info(`${label}: ${stats.dates} дат, ${stats.total} вакансий, недоступно ${stats.marked}, `
       + `обновлено дат ${toWrite.length}${opts.dryRun ? ' (dry-run)' : ''}`);
   }
 
   console.log(`\nАктуализация (поиск от ${today}): проверено ${checkedTotal} вакансий, помечено недоступными ${markedTotal}${opts.dryRun ? ' [dry-run]' : ''}`);
+  if (snapshots.length && !opts.dryRun) {
+    console.log(`Сводные снимки актуальных вакансий: ${snapshots.join(', ')}`);
+  }
   if (markedTotal && !opts.dryRun) {
     console.log('Недоступные вакансии не берутся в отклики (пункт «🚀 Отклики из дайджеста»).');
   }
