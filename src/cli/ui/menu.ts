@@ -6,6 +6,7 @@ import cmdDigest from "../cmd-digest.js";
 import cmdHistory from "../cmd-history.js";
 import cmdConfig from "../cmd-config.js";
 import {
+  runActualize,
   runApply,
   runCover,
   runDigest,
@@ -22,6 +23,7 @@ type MenuItem =
   | "search"
   | "digest"
   | "digestShow"
+  | "actualize"
   | "letters"
   | "apply"
   | "login"
@@ -59,6 +61,7 @@ async function mainMenu(): Promise<MenuItem> {
       { name: "🔑 Войти на hh.ru (apply --login)", value: "login" },
       new Separator(),
       { name: "📄 Последний дайджест (digest show)", value: "digestShow" },
+      { name: "♻️  Актуализировать старые дайджесты", value: "actualize" },
       { name: "🕓 История откликов (history)", value: "history" },
       { name: "🧾 Резюме (выбрать активное / list / show / register)", value: "resume" },
       { name: "🎯 Оценить резюме ИИ (grade)", value: "grade" },
@@ -85,6 +88,7 @@ async function dispatch(ctx: UiContext, item: MenuItem) {
       console.log();
       return cmdDigest("show", { json });
     }
+    case "actualize": return runActualize();
     case "history": {
       const json = await confirm({ message: "Вывести в JSON?", default: false });
       console.log();

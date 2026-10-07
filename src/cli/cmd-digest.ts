@@ -10,7 +10,8 @@ import * as collectCache from "../store/cache-store.js";
 import { vacancyMatchesFilter } from "../domain/filter.js";
 import { loadResume } from "../resume.js";
 import { judgeVacancy, judgeVacanciesBatch } from "../domain/judge";
-import { writeDigest, writeRejected, getLatestDigest } from "../store/digest-store";
+import { writeDigest, writeRejected, getLatestDigest, listDigestDocs } from "../store/digest-store";
+import { computeActualization } from "../domain/actualize.js";
 import { registerResume } from "../store/resume-store.js";
 import { flattenCollected, fmtSalary } from "../domain/collect.js";
 import { DIGEST_DIR } from "../paths.js";
@@ -320,7 +321,55 @@ async function show(opts: Record<string, any> = {}) {
   for (const f of files) console.log(fs.readFileSync(f, 'utf-8'));
 }
 
+// Шаг актуализации: помечает в старых дайджестах/rejected вакансии, которых нет в последнем
+// поиске (удалены/скрыты). Ничего не удаляет — обновляет записи и перезаписывает .md по регионам.
+async function actualize(opts: Record<string, any> = {}) {
+  if (opts.config) process.env.CONFIG_PATH = opts.config;
+  const cfg = loadConfig();
+
+  const cache = await collectCache.loadLatest().catch(() => null);
+  if (!cache) {
+    log.warn('Кэш поиска пуст — сначала выполните пункт меню «🔍 Поиск вакансий»');
+    return;
+  }
+  const today = cache.date;
+  const todayIds = new Set(flattenCollected(cache).map(i => String(i.id)));
+  const searchPeriod = Number(cfg.search?.search_period) || null;
+  log.info(`Актуализация по поиску от ${today}: ${todayIds.size} вакансий в выдаче`);
+
+  const targets: { coll: string; label: string; write: (entries: any[], date?: string) => Promise<string[]> }[] = [
+    { coll: 'digest', label: 'digest', write: writeDigest },
+    { coll: 'rejected', label: 'rejected', write: writeRejected },
+  ];
+
+  let checkedTotal = 0;
+  let markedTotal = 0;
+  for (const { coll, label, write } of targets) {
+    const docs = await listDigestDocs(coll).catch(() => [] as any[]);
+    const { docs: updated, stats } = computeActualization(docs, { todayIds, today, searchPeriod });
+    checkedTotal += stats.total;
+    markedTotal += stats.marked;
+
+    if (!stats.dates) {
+      log.info(`${label}: старых дат нет`);
+      continue;
+    }
+    const toWrite = updated.filter(d => d.changed);
+    if (!opts.dryRun) {
+      for (const d of toWrite) await write(d.entries, d.date);
+    }
+    log.info(`${label}: ${stats.dates} дат, ${stats.total} вакансий, недоступно ${stats.marked}, `
+      + `обновлено дат ${toWrite.length}${opts.dryRun ? ' (dry-run)' : ''}`);
+  }
+
+  console.log(`\nАктуализация (поиск от ${today}): проверено ${checkedTotal} вакансий, помечено недоступными ${markedTotal}${opts.dryRun ? ' [dry-run]' : ''}`);
+  if (markedTotal && !opts.dryRun) {
+    console.log('Недоступные вакансии не берутся в отклики (пункт «🚀 Отклики из дайджеста»).');
+  }
+}
+
 const SHOW_ACTIONS = new Set(['show', 'last', 'latest', 'view']);
+const ACTUALIZE_ACTIONS = new Set(['actualize', 'actualise', 'refresh', 'sync']);
 
 export default async function cmdDigest(action: any = 'build', opts: Record<string, any> = {}) {
   // Совместимость с прежним вызовом cmdDigest({ json: true }) — это показ дайджеста.
@@ -331,10 +380,11 @@ export default async function cmdDigest(action: any = 'build', opts: Record<stri
 
   const name = String(action).toLowerCase();
   if (SHOW_ACTIONS.has(name)) return show(opts);
+  if (ACTUALIZE_ACTIONS.has(name)) return actualize(opts);
   if (name === 'build' || name === 'make' || name === 'create') return build(opts);
 
-  console.error(`Неизвестное действие "digest ${action}". Доступно: build (по умолчанию), show.`);
+  console.error(`Неизвестное действие "digest ${action}". Доступно: build (по умолчанию), show, actualize.`);
   process.exitCode = 1;
 }
 
-export { build as buildDigest, show as showDigest };
+export { build as buildDigest, show as showDigest, actualize as actualizeDigest };

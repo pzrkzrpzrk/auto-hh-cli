@@ -41,6 +41,17 @@ export async function runDigest(ctx: UiContext) {
   await cmdDigest("build", buildDigestOptions({ resume, useAi, limit }));
 }
 
+/** Актуализация старых дайджестов/rejected по последнему поиску (без резюме и ИИ). */
+export async function runActualize() {
+  const dryRun = await confirm({
+    message: "Только показать результат, без записи (dry-run)?",
+    default: false,
+  });
+
+  console.log();
+  await cmdDigest("actualize", { dryRun });
+}
+
 export async function runLetters(ctx: UiContext) {
   const resume = await pickResume(ctx, "Какое резюме использовать для писем?");
   const force = await confirm({ message: "Перегенерировать письма, даже если они уже есть?", default: false });
