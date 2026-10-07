@@ -63,13 +63,18 @@ async function search(opts: Record<string, any> = {}) {
     // не должна выглядеть как провал поиска: данные уже в Mongo, поэтому только логируем.
     try {
       const rows = flattenCollected(cache).map(toSearchEntry);
-      const saved = writeSearchResults(rows, { query: cfg.search.text });
-      if (saved && saved.added > 0) {
-        log.info(`Search results saved: ${saved.file} (+${saved.added} new, total ${saved.total})`);
-        console.log(`\nВыдача сохранена: ${saved.file} (+${saved.added} новых, всего ${saved.total})`);
-      } else if (saved) {
-        log.info(`Search results unchanged: ${saved.file} (${saved.total} vacancies, no new)`);
-        console.log(`\nНовых вакансий нет — файл не изменился (${saved.file})`);
+      const results = writeSearchResults(rows, { query: cfg.search.text });
+      const added = results.reduce((n, r) => n + r.added, 0);
+      const total = results.reduce((n, r) => n + r.total, 0);
+      if (added > 0) {
+        log.info(`Search results saved: ${results.length} regions, +${added} new, total ${total}`);
+        console.log(`\nВыдача сохранена по регионам: ${results.length}, +${added} новых, всего ${total}`);
+        for (const r of results) if (r.added > 0) console.log(`  • ${r.file} (+${r.added})`);
+      } else if (results.length) {
+        log.info(`Search results unchanged: ${results.length} regions, ${total} vacancies, no new`);
+        console.log(`\nНовых вакансий нет — файлы не изменились (${results.length} регион(ов), всего ${total})`);
+      } else {
+        log.info('Search results: no vacancies to save');
       }
     } catch (err: any) {
       log.error(`Search file dump failed: ${err.message}`);

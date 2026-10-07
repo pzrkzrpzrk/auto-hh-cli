@@ -34,26 +34,46 @@ export function formatResetSummary(s: ResetSummary): string {
   ].join(', ');
 }
 
-export default async function resetData(): Promise<ResetSummary> {
-  // Файлы артефактов: history.* в корне data/ (legacy digest-/rejected- — тоже там),
-  // выдача поиска в data/search/, дайджест в data/digests/, rejected в data/rejected/.
-  const files: string[] = [];
-  const targets = [
-    { dir: DATA_DIR, pattern: /^(history|digest|rejected)[.-]/ },
-    { dir: SEARCH_DIR, pattern: /^search-.*\.md$/ },
-    { dir: DIGEST_DIR, pattern: /^digest-.*\.md$/ },
-    { dir: REJECTED_DIR, pattern: /^rejected-.*\.md$/ },
-  ];
-  for (const { dir, pattern } of targets) {
-    if (!fs.existsSync(dir)) continue;
-    for (const name of fs.readdirSync(dir)) {
-      if (!pattern.test(name)) continue;
-      const p = path.join(dir, name);
+// Плоский проход: удаляет совпавшие файлы в самом каталоге (legacy history.*/digest-* в data/).
+function removeFlat(dir: string, match: (name: string) => boolean, files: string[]): void {
+  if (!fs.existsSync(dir)) return;
+  for (const name of fs.readdirSync(dir)) {
+    if (!match(name)) continue;
+    const p = path.join(dir, name);
+    if (!fs.statSync(p).isFile()) continue;
+    fs.unlinkSync(p);
+    log.info(`Removed ${p}`);
+    files.push(p);
+  }
+}
+
+// Рекурсивный проход: удаляет совпавшие файлы в <dir>/<date>/<region>/ и подчищает пустые каталоги.
+function removeRecursive(dir: string, match: (name: string) => boolean, files: string[]): void {
+  if (!fs.existsSync(dir)) return;
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const p = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      removeRecursive(p, match, files);
+      if (!fs.readdirSync(p).length) fs.rmdirSync(p);
+      continue;
+    }
+    if (match(entry.name)) {
       fs.unlinkSync(p);
       log.info(`Removed ${p}`);
       files.push(p);
     }
   }
+}
+
+export default async function resetData(): Promise<ResetSummary> {
+  // Файлы артефактов: history.* в корне data/ (legacy digest-/rejected- — тоже там),
+  // новая раскладка — <dir>/<date>/<region>/<file>.md в data/search|digests|rejected/;
+  // старые плоские search-*/digest-*/rejected-*.md подчищаются тем же проходом.
+  const files: string[] = [];
+  removeFlat(DATA_DIR, name => /^(history|digest|rejected)[.-]/.test(name), files);
+  removeRecursive(SEARCH_DIR, name => name === 'search.md' || /^search-.*\.md$/.test(name), files);
+  removeRecursive(DIGEST_DIR, name => name === 'digest.md' || /^digest-.*\.md$/.test(name), files);
+  removeRecursive(REJECTED_DIR, name => name === 'rejected.md' || /^rejected-.*\.md$/.test(name), files);
 
   // MongoDB. process.exit() тут быть не должно: иначе `search --reset` убивал бы
   // процесс сразу после очистки кэша — до самого поиска. Закрытие соединения

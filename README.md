@@ -21,7 +21,7 @@ hh.ru ──Playwright──▶ search: страницы выдачи (cachePage
                                         ▼
              digest: локальный фильтр (навыки, исключения, ЗП) ── пропуск
                         └─▶ ИИ-судья: score 1–10, вердикт fit/no-fit
-                                └─▶ дайджест (data/digests/digest-ГГГГ-ММ-ДД.md + MongoDB)
+                                └─▶ дайджест (data/digests/ГГГГ-ММ-ДД/<Регион>/digest.md + MongoDB)
                                         │
                                         ▼
              cover: генерация сопроводительных под каждую вакансию
@@ -334,9 +334,9 @@ npm start           # или: npm run ui, npx auto-hh, npx auto-hh ui (алиа�
 | --- | --- |
 | MongoDB `history` | Какие вакансии уже видели / на какие откликались (статусы `seen` / `applied`) |
 | MongoDB `cachePages`, `cacheFull`, `cacheJudgements`, `cacheCoverLetters` | Кэш: страницы выдачи и описания вакансий (пишет `search`), вердикты ИИ (`digest`), письма (`cover`). Позволяет продолжить после обрыва, не запрашивая hh.ru и не пересудя заново |
-| `search/search-ГГГГ-ММ-ДД.md` | Выдача поиска за день — только новые вакансии, накопительно, без повторов (дедуп по id) |
-| `digests/digest-ГГГГ-ММ-ДД.md` (+ MongoDB `digest`) | Подходящие вакансии; письма дописываются шагом `cover` |
-| `rejected/rejected-ГГГГ-ММ-ДД.md` (+ MongoDB `rejected`) | Вакансии, отбракованные ИИ, с причинами |
+| `search/ГГГГ-ММ-ДД/<Регион>/search.md` | Выдача поиска за день по регионам — только новые вакансии, накопительно, без повторов (дедуп по id) |
+| `digests/ГГГГ-ММ-ДД/<Регион>/digest.md` (+ MongoDB `digest`) | Подходящие вакансии по регионам; письма дописываются шагом `cover` |
+| `rejected/ГГГГ-ММ-ДД/<Регион>/rejected.md` (+ MongoDB `rejected`) | Вакансии, отбракованные ИИ, с причинами. Регион берётся из `area` вакансии |
 | `browser-profile/` | Профиль Chromium (cookies, localStorage) |
 | `apply-dom-*.html` | Дамп DOM, если Playwright не нашёл поле для письма |
 | `app.log` | Лог |

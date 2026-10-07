@@ -250,20 +250,44 @@ async function build(opts: Record<string, any> = {}) {
       return;
     }
 
-    const rejectedFile = await writeRejected(rejected);
-    if (rejectedFile) log.info(`Rejected saved: ${rejectedFile} (${rejected.length} vacancies)`);
+    const rejectedFiles = await writeRejected(rejected);
+    if (rejectedFiles.length) {
+      log.info(`Rejected saved: ${rejectedFiles.length} regions, ${rejected.length} vacancies -> ${rejectedFiles.join(', ')}`);
+    }
 
     if (!matched.length) {
       log.info('No matching vacancies.');
       return;
     }
 
-    const file = await writeDigest(matched);
-    log.info(`Digest saved: ${file} (${matched.length} vacancies)`);
+    const files = await writeDigest(matched);
+    log.info(`Digest saved: ${files.length} regions, ${matched.length} vacancies -> ${files.join(', ')}`);
     console.log('\nДальше: пункт меню «✉️ Письма для дайджеста» — сгенерировать сопроводительные');
   } finally {
     await client.close?.();
   }
+}
+
+// Fallback-поиск дайджестов на диске, когда Mongo недоступна:
+// новая раскладка — <dir>/<date>/<region>/digest.md (берём самую свежую дату, все регионы),
+// legacy <dir>/digest-<date>.md — как запасной вариант (только самый свежий файл).
+function listDigestFiles(dir: string): string[] {
+  if (!fs.existsSync(dir)) return [];
+  const dateDirs = fs.readdirSync(dir, { withFileTypes: true })
+    .filter(e => e.isDirectory() && /^\d{4}-\d{2}-\d{2}$/.test(e.name))
+    .map(e => e.name)
+    .sort()
+    .reverse();
+  if (dateDirs.length) {
+    const latest = path.join(dir, dateDirs[0]);
+    return fs.readdirSync(latest, { withFileTypes: true })
+      .filter(e => e.isDirectory())
+      .map(e => path.join(latest, e.name, 'digest.md'))
+      .filter(p => fs.existsSync(p))
+      .sort();
+  }
+  const legacy = fs.readdirSync(dir).filter(f => /^digest-.*\.md$/.test(f)).sort().reverse();
+  return legacy.length ? [path.join(dir, legacy[0])] : [];
 }
 
 // Шаг показа: последний дайджест + письма из кэша (fallback — .md файл).
@@ -288,15 +312,12 @@ async function show(opts: Record<string, any> = {}) {
     return;
   }
 
-  const dir = DIGEST_DIR;
-  const files = fs.existsSync(dir)
-    ? fs.readdirSync(dir).filter(f => /^digest-.*\.md$/.test(f)).sort().reverse()
-    : [];
+  const files = listDigestFiles(DIGEST_DIR);
   if (!files.length) {
     log.info('No digest found. Сначала соберите дайджест: пункт меню «🧠 Собрать дайджест»');
     return;
   }
-  console.log(fs.readFileSync(path.join(dir, files[0]), 'utf-8'));
+  for (const f of files) console.log(fs.readFileSync(f, 'utf-8'));
 }
 
 const SHOW_ACTIONS = new Set(['show', 'last', 'latest', 'view']);

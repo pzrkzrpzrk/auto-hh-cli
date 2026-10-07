@@ -1,17 +1,18 @@
-// Выдача поиска в Markdown: data/search/search-ГГГГ-ММ-ДД.md.
-// Файл накапливает за день только новые вакансии (дедуп по id); источник правды для шагов
-// digest/cover остаётся в Mongo (cachePages), здесь только просмотр и сравнение выдачи без базы.
+// Выдача поиска в Markdown: data/search/<ГГГГ-ММ-ДД>/<Регион>/search.md.
+// Файл накапливает за день только новые вакансии (дедуп по id) — по регионам отдельно; источник правды
+// для шагов digest/cover остаётся в Mongo (cachePages), здесь только просмотр и сравнение выдачи без базы.
 import fs from "fs";
 import path from "path";
 import { SearchEntry, SearchFileResult } from "../types.js";
-import { SEARCH_DIR, ensureDir } from "../paths.js";
+import { SEARCH_DIR, UNKNOWN_REGION, ensureDir, regionDir } from "../paths.js";
 import { dateKey } from "../time.js";
 
 // Формат — как у digest-store: блок на вакансию, разделитель `---`.
 // Заголовок и тело разделены: при дозаписи обновляется только счётчик, уже записанные
 // блоки берутся из файла как есть (без повторного разбора).
-function header(date: string, count: number, query?: string): string {
-  const lines: string[] = [`# Результаты поиска — ${date} (${count} вакансий)\n`];
+function header(date: string, count: number, query?: string, region?: string): string {
+  const where = region ? `${region}, ` : '';
+  const lines: string[] = [`# Результаты поиска — ${where}${date} (${count} вакансий)\n`];
   if (query) lines.push(`Запрос: \`${query}\`\n`);
   return lines.join('\n');
 }
@@ -49,30 +50,51 @@ function fileBody(text: string): string {
   return idx < 0 ? '' : lines.slice(idx).join('\n');
 }
 
-/**
- * Дописывает в выдачу за день только новые вакансии (дедуп по id против уже записанных).
- *
- * Контракт: `{ file, added, total }`; `added === 0` — новых нет, файл не переписывается;
- * `null` — файла нет и писать нечего. Файл накапливает выдачу за дату и не теряет ранее
- * записанные строки (в отличие от прежней перезаписи из кэша). Список собирает вызывающий
- * (`flattenCollected(cache)` в cmd-search).
- */
-export function writeSearchResults(entries: SearchEntry[], opts: { date?: string; query?: string } = {}): SearchFileResult | null {
-  const date = opts.date || dateKey();
-  const md = path.join(SEARCH_DIR, `search-${date}.md`);
-  const exists = fs.existsSync(md);
-  const old = exists ? fs.readFileSync(md, 'utf8') : '';
+// Регион записи — имя папки. Плейсхолдер '—' (area не пришёл) — как «Не указан».
+function regionOf(entry: SearchEntry): string {
+  const area = (entry as any)?.area;
+  return !area || area === '—' ? UNKNOWN_REGION : String(area);
+}
 
-  const written = parseWrittenIds(old);
-  const fresh = entries.filter(e => !written.has(String(e.id)));
-  if (!fresh.length) {
-    return exists ? { file: md, added: 0, total: written.size } : null;
+/**
+ * Дописывает в выдачу за день (по регионам) только новые вакансии (дедуп по id против уже записанных).
+ *
+ * Контракт: массив `{ file, added, total }` — по одному элементу на регион; `added === 0` означает,
+ * что для региона новых нет и файл не переписывается. Регион без файла и без новых вакансий в результат
+ * не попадает. Файл накапливает выдачу за дату и не теряет ранее записанные строки. Список собирает
+ * вызывающий (`flattenCollected(cache)` в cmd-search).
+ */
+export function writeSearchResults(entries: SearchEntry[], opts: { date?: string; query?: string } = {}): SearchFileResult[] {
+  const date = opts.date || dateKey();
+
+  const groups = new Map<string, SearchEntry[]>();
+  for (const e of entries) {
+    const key = regionOf(e);
+    const bucket = groups.get(key);
+    if (bucket) bucket.push(e);
+    else groups.set(key, [e]);
   }
 
-  ensureDir(SEARCH_DIR);
-  const body = fileBody(old);
-  const total = written.size + fresh.length;
-  const merged = body ? `${body}\n${blocks(fresh)}` : blocks(fresh);
-  fs.writeFileSync(md, header(date, total, opts.query) + '\n' + merged);
-  return { file: md, added: fresh.length, total };
+  const results: SearchFileResult[] = [];
+  for (const [region, group] of groups) {
+    const dir = regionDir(SEARCH_DIR, date, region);
+    const md = path.join(dir, 'search.md');
+    const exists = fs.existsSync(md);
+    const old = exists ? fs.readFileSync(md, 'utf8') : '';
+
+    const written = parseWrittenIds(old);
+    const fresh = group.filter(e => !written.has(String(e.id)));
+    if (!fresh.length) {
+      if (exists) results.push({ file: md, added: 0, total: written.size });
+      continue;
+    }
+
+    ensureDir(dir);
+    const body = fileBody(old);
+    const total = written.size + fresh.length;
+    const merged = body ? `${body}\n${blocks(fresh)}` : blocks(fresh);
+    fs.writeFileSync(md, header(date, total, opts.query, region) + '\n' + merged);
+    results.push({ file: md, added: fresh.length, total });
+  }
+  return results;
 }
