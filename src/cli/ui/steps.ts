@@ -32,6 +32,23 @@ export async function runSearch() {
   await cmdSearch(buildSearchOptions({ reset }));
 }
 
+// Комбинированный шаг: собрать ответы промптами, затем прогнать search → digest подряд.
+// Промпты задаются до запуска, чтобы сам прогон шёл без участия пользователя; падение
+// поиска прерывает цепочку (ошибку покажет dispatch), дайджест на пустом кэше сам предупредит.
+export async function runSearchDigest(ctx: UiContext) {
+  const reset = await confirm({
+    message: "Сбросить историю, кэш и дайджесты перед поиском? (необратимо)",
+    default: false,
+  });
+  const resume = await pickResume(ctx, "Какое резюме использовать для оценки?");
+  const useAi = await confirm({ message: "Использовать ИИ-судью?", default: true });
+  const limit = await askCount("Максимум вакансий в дайджесте (0 — как в config.json):");
+
+  console.log();
+  await cmdSearch(buildSearchOptions({ reset }));
+  await cmdDigest("build", buildDigestOptions({ resume, useAi, limit }));
+}
+
 export async function runDigest(ctx: UiContext) {
   const resume = await pickResume(ctx, "Какое резюме использовать для оценки?");
   const useAi = await confirm({ message: "Использовать ИИ-судью?", default: true });
