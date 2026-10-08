@@ -83,3 +83,28 @@ export function computeActualization(
 
   return { docs: out, stats };
 }
+
+/**
+ * Сливает актуализированные документы разных дат в один список для сводного файла (actual.md).
+ * Дедуп по id: если вакансия встречалась в нескольких датах, берём запись с самой свежей датой
+ * (её статус archived/lastSeenAt — самый актуальный). Порядок: живые сверху, затем архивные;
+ * внутри группы — по свежести даты, затем по убыванию оценки. Чистая функция (легко тестировать).
+ */
+export function mergeActualized(docs: ActualizedDoc[]): DigestEntry[] {
+  const byId = new Map<string, { entry: DigestEntry; sourceDate: string }>();
+  for (const doc of docs) {
+    for (const entry of doc.entries || []) {
+      const key = String(entry.id);
+      const prev = byId.get(key);
+      if (!prev || doc.date > prev.sourceDate) byId.set(key, { entry, sourceDate: doc.date });
+    }
+  }
+  return [...byId.values()]
+    .sort((a, b) => {
+      const byArchived = Number(Boolean(a.entry.archived)) - Number(Boolean(b.entry.archived));
+      if (byArchived) return byArchived;
+      if (a.sourceDate !== b.sourceDate) return a.sourceDate < b.sourceDate ? 1 : -1;
+      return (b.entry.score ?? 0) - (a.entry.score ?? 0);
+    })
+    .map(x => x.entry);
+}

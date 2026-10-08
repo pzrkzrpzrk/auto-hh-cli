@@ -120,3 +120,25 @@ export async function writeRejected(entries: any[], date = dateKey()): Promise<s
   await writeToMongo('rejected', entries, date);
   return files;
 }
+
+// Сводный снимок актуализации: один файл на дату, без разбивки по регионам.
+// Пишется шагом `digest actualize` в <baseDir>/<date>/actual.md и собирает записи
+// всех прошедших дат. Пустой список — файла нет.
+function writeActualFile(baseDir: string, entries: any[], date: string, title: string): string | null {
+  if (!entries.length) return null;
+  const dir = path.join(baseDir, date);
+  ensureDir(dir);
+  const md = path.join(dir, 'actual.md');
+  fs.writeFileSync(md, toMarkdown(entries, title, date));
+  return md;
+}
+
+// Сводный снимок актуальных вакансий дайджеста за дату (все прошлые даты, дедуп — в actualize).
+export function writeActualDigest(entries: any[], date = dateKey()): string | null {
+  return writeActualFile(DIGEST_DIR, entries, date, 'Дайджест вакансий (актуальные)');
+}
+
+// Сводный снимок актуальных отклонённых вакансий за дату.
+export function writeActualRejected(entries: any[], date = dateKey()): string | null {
+  return writeActualFile(REJECTED_DIR, entries, date, 'Отклонённые вакансии (актуальные)');
+}
