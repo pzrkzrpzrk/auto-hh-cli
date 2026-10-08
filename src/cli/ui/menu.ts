@@ -16,11 +16,13 @@ import {
   runResumeMenu,
   runSchedule,
   runSearch,
+  runSearchDigest,
 } from "./steps.js";
 import { describeActiveResume, type UiContext } from "./resume.js";
 
 type MenuItem =
   | "search"
+  | "searchDigest"
   | "digest"
   | "digestShow"
   | "actualize"
@@ -55,6 +57,7 @@ async function mainMenu(): Promise<MenuItem> {
     pageSize: 15,
     choices: [
       { name: "🔍 Поиск вакансий (search)", value: "search" },
+      { name: "🔍🧠 Поиск + дайджест (search → digest)", value: "searchDigest" },
       { name: "🧠 Собрать дайджест (digest)", value: "digest" },
       { name: "✉️  Письма для дайджеста (cover)", value: "letters" },
       { name: "🚀 Отклики из дайджеста (apply)", value: "apply" },
@@ -79,6 +82,7 @@ async function mainMenu(): Promise<MenuItem> {
 async function dispatch(ctx: UiContext, item: MenuItem) {
   switch (item) {
     case "search": return runSearch();
+    case "searchDigest": return runSearchDigest(ctx);
     case "digest": return runDigest(ctx);
     case "letters": return runLetters(ctx);
     case "apply": return runApply();

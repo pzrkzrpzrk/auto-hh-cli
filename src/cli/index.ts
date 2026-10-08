@@ -3,7 +3,7 @@
 // Все шаги (поиск, дайджест, письма, отклики, планировщик, резюме) меню вызывает
 // напрямую из cmd-*, поэтому отдельных подкоманд у CLI больше нет.
 import {  Command  } from "commander";
-import cmdUi from "./cmd-ui.js";
+import cmdUi from "./ui/menu.js";
 import { close as closeDb } from "../clients/db";
 
 const program = new Command();
