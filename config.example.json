@@ -15,7 +15,9 @@
   "filter": {
     "excludedKeywords": [],
     "excludedCompanies": [],
-    "excludeArchived": true
+    "excludeArchived": true,
+    "minSalaryRub": 0,
+    "locationRule": true
   },
   "api": {
     "baseUrl": "https://api.z.ai/api/paas/v4/",

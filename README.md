@@ -47,8 +47,8 @@ npm install
 npx playwright install chromium
 
 # 2. Конфигурация
-cp .env.example .env          # затем заполните .env (см. ниже)
-# config.json уже есть в репозитории — отредактируйте его под себя
+cp .env.example .env                 # затем заполните .env (см. ниже)
+cp config.example.json config.json   # затем отредактируйте config.json под себя
 
 # 3. MongoDB (опционально, если нет своего инстанса)
 docker compose up -d          # поднимет mongo + mongo-express (localhost:8081, admin/admin)
@@ -197,6 +197,8 @@ npm start           # или: npm run ui, npx auto-hh, npx auto-hh ui (алиа�
 
 ## config.json
 
+`config.json` не хранится в git (он в `.gitignore`) — создайте его из шаблона: `cp config.example.json config.json`, затем правьте под себя. Ниже — полный список поддерживаемых полей.
+
 ```text
 {
   "search": { ... },     // запрос к API hh.ru
@@ -235,13 +237,13 @@ npm start           # или: npm run ui, npx auto-hh, npx auto-hh ui (алиа�
 
 | Поле | Что задаёт |
 | --- | --- |
-| `requiredSkills` | Список — хотя бы один навык должен встретиться в описании |
+| `minSalaryRub` | Минимальная зарплата в рублях: вакансии с меньшей (когда зарплата указана в RUR) отбрасываются. `0` — выключено |
 | `excludedKeywords` | Слова, при наличии которых вакансия отбрасывается |
 | `excludedCompanies` | Компании, которые игнорируем (подстрочное совпадение по названию работодателя, регистр не важен). Личный список удобнее держать в `.env` → `EXCLUDED_COMPANIES` — он **перебивает** это поле |
 | `excludeArchived` | Пропускать архивные вакансии |
 | `locationRule` | Правило локации: в регионах из `search.area` (по умолчанию Москва/СПб) — любые вакансии, в остальных — только удалёнка. `false` отключает правило. |
 
-> ℹ️ Личный блэклист компаний держите в `.env` → `EXCLUDED_COMPANIES` (через запятую): `.env` не попадает в git, а `config.json` — отслеживается. Если переменная не задана или пуста, работает список из `config.json`. Разделитель — запятая, поэтому внутри названия её быть не может: указывайте фрагмент имени (совпадение подстрочное).
+> ℹ️ Личный блэклист компаний держите в `.env` → `EXCLUDED_COMPANIES` (через запятую): ни `.env`, ни `config.json` в git не попадают — оба в `.gitignore`. Если переменная не задана или пуста, работает список из `config.json`. Разделитель — запятая, поэтому внутри названия её быть не может: указывайте фрагмент имени (совпадение подстрочное).
 
 ### `apply` — пороги и шаблоны
 
@@ -349,7 +351,7 @@ npm start           # или: npm run ui, npx auto-hh, npx auto-hh ui (алиа�
 ```
 .
 ├─ bin/auto-hh                 # CLI entry point (tsx; dotenv + tsx/cjs + run())
-├─ config.json                 # поиск, фильтр, ИИ, расписание
+├─ config.example.json         # шаблон конфига (скопируйте в config.json — он в .gitignore)
 ├─ .env                        # секреты и настройки (из .env.example)
 ├─ resumes/                    # директория с резюме (если задан RESUMES_DIR)
 ├─ src/
