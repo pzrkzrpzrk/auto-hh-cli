@@ -15,6 +15,14 @@ import { chromium } from "playwright";
 import { env } from "../config.js";
 import log from "../logger.js";
 import { sleep } from "../time.js";
+import {
+  findResumeList,
+  findResumeObject,
+  isEmptyResume,
+  mergeResume,
+  normalizeResume,
+} from "./hh-resume.js";
+import type { HhResumeData, HhResumeSummary } from "./hh-resume.js";
 
 const PROFILE = path.resolve(process.env.PW_USER_DATA_DIR || './data/browser-profile');
 
@@ -174,6 +182,14 @@ function mapVacancyView(v, opts = {}) {
   };
 }
 
+/** Страница hh.ru увела на форму входа: сессия в профиле истекла. */
+class LoginRequiredError extends Error {
+  constructor() {
+    super('Не залогинен на hh.ru. Войдите через пункт меню «🔑 Войти на hh.ru», затем повторите.');
+    this.name = 'LoginRequiredError';
+  }
+}
+
 class HHClient {
   constructor() {
     const e = env();
@@ -227,11 +243,42 @@ class HHClient {
     await this.init(true);
   }
 
+  // Читает JSON из template#HH-Lux-InitialState на уже открытой странице.
+  async readInitialState() {
+    const json = await this.page.evaluate(() => {
+      const tpl = document.querySelector('template#HH-Lux-InitialState');
+      return tpl ? tpl.innerHTML : null;
+    });
+    if (!json) return null;
+    try {
+      return JSON.parse(json);
+    } catch (err) {
+      log.warn(`Не удалось разобрать initial state: ${err.message}`);
+      return null;
+    }
+  }
+
+  // Сохраняет сырое состояние страницы для отладки разметки (HH_DUMP_STATE=1).
+  dumpState(state, url) {
+    try {
+      const dir = path.join(process.cwd(), 'data');
+      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+      const hash = (String(url).match(/\/resume\/([0-9a-f]{16,})/i) || [])[1] || 'page';
+      const file = path.join(dir, `tmp-resume-state-${hash.slice(0, 16)}.json`);
+      fs.writeFileSync(file, JSON.stringify(state, null, 2), 'utf-8');
+      log.info(`Initial state сохранён для отладки: ${file}`);
+    } catch (err) {
+      log.warn(`Не удалось сохранить initial state: ${err.message}`);
+    }
+  }
+
   // Открывает url, парсит JSON из template#HH-Lux-InitialState.
-  async fetchInitialState(url, { _retry = false } = {}) {
+  async fetchInitialState(url, { _retry = false, dump = false } = {}) {
     await this.init(this.headless);
     await sleep(this.delay);
     const resp = await this.page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    // Редирект на логин — это не «сломанная вёрстка», а истёкшая сессия профиля.
+    if (/\/account\/login/i.test(this.page.url())) throw new LoginRequiredError();
     if (!resp || !resp.ok()) {
       const status = resp?.status() || 0;
       throw new Error(`HTTP ${status} ${url}`);
@@ -239,20 +286,18 @@ class HHClient {
     if (await this.isCaptchaPage()) {
       if (_retry) throw new Error(`Captcha still present after solving on ${url}`);
       await this.solveCaptchaInteractive(url);
-      return this.fetchInitialState(url, { _retry: true });
+      return this.fetchInitialState(url, { _retry: true, dump });
     }
-    const json = await this.page.evaluate(() => {
-      const tpl = document.querySelector('template#HH-Lux-InitialState');
-      return tpl ? tpl.innerHTML : null;
-    });
-    if (!json) {
+    const data = await this.readInitialState();
+    if (!data) {
       if (!_retry && await this.isCaptchaPage()) {
         await this.solveCaptchaInteractive(url);
-        return this.fetchInitialState(url, { _retry: true });
+        return this.fetchInitialState(url, { _retry: true, dump });
       }
       throw new Error(`No initial state on ${url}`);
     }
-    return JSON.parse(json);
+    if (dump && process.env.HH_DUMP_STATE) this.dumpState(data, url);
+    return data;
   }
 
   async searchVacancies(params) {
@@ -320,6 +365,246 @@ class HHClient {
       return null;
     }
     return full;
+  }
+
+  // --- Резюме соискателя ---------------------------------------------------
+  // Страница соискательского API закрыта, поэтому список/карточка резюме читаются
+  // с сайта: initial state — основной источник, DOM — фолбэк при смене вёрстки.
+
+  /** Список резюме из личного кабинета: https://hh.ru/applicant/resumes. */
+  async listMyResumes(): Promise<HhResumeSummary[]> {
+    const url = 'https://hh.ru/applicant/resumes';
+    let state = null;
+    try {
+      state = await this.fetchInitialState(url, { dump: true });
+    } catch (err) {
+      if (err instanceof LoginRequiredError) throw err;
+      log.warn(`Не удалось разобрать состояние ${url}: ${err.message} — пробую DOM`);
+    }
+
+    let items = state ? findResumeList(state) : [];
+    if (!items.length) items = await this.listMyResumesFromDom();
+    if (!items.length) log.warn(`На ${url} не найдено ни одного резюме`);
+    return items;
+  }
+
+  /** Фолбэк списка: ссылки на /resume/<hash> на уже открытой странице. */
+  async listMyResumesFromDom(): Promise<HhResumeSummary[]> {
+    // Страница могла дорисовать список после domcontentloaded — ждём недолго.
+    await this.page.waitForSelector('a[href*="/resume/"]', { timeout: 5000 }).catch(() => {});
+
+    const items = await this.page.evaluate(() => {
+      const out = new Map();
+      for (const link of document.querySelectorAll('a[href*="/resume/"]')) {
+        const href = link.getAttribute('href') || '';
+        const match = href.match(/\/resume\/([0-9a-f]{16,})/i);
+        if (!match) continue;
+        const hash = match[1];
+        const title = (link.innerText || link.textContent || '').replace(/\s+/g, ' ').trim();
+        const prev = out.get(hash);
+        if (!prev) {
+          out.set(hash, { hash, title, status: null, updatedAt: null, url: `https://hh.ru/resume/${hash}` });
+        } else if (title.length > (prev.title || '').length) {
+          prev.title = title;
+        }
+      }
+      return Array.from(out.values());
+    });
+
+    return (items || []).map(item => ({ ...item, title: item.title || item.hash }));
+  }
+
+  /** Полное резюме по hash: https://hh.ru/resume/<hash>. */
+  async getMyResume(hash: string): Promise<HhResumeData | null> {
+    const url = `https://hh.ru/resume/${hash}`;
+    let state = null;
+    try {
+      state = await this.fetchInitialState(url, { dump: true });
+    } catch (err) {
+      if (err instanceof LoginRequiredError) throw err;
+      log.warn(`Не удалось разобрать состояние ${url}: ${err.message} — пробую DOM`);
+    }
+
+    let data: HhResumeData | null = null;
+    if (state) {
+      const raw = findResumeObject(state);
+      if (raw) data = normalizeResume(raw, hash);
+    }
+
+    const fromDom = await this.getMyResumeFromDom(hash).catch(err => {
+      log.warn(`DOM-разбор резюме ${hash} не удался: ${err.message}`);
+      return null;
+    });
+
+    const merged = mergeResume(data, fromDom);
+    if (!merged || isEmptyResume(merged)) {
+      log.warn(`Резюме ${hash} не удалось разобрать: ни initial state, ни DOM не дали данных`);
+      return null;
+    }
+    return merged;
+  }
+
+  /**
+   * Фолбэк карточки резюме: читаем блоки со страницы.
+   * Возвращаем ту же модель, что и normalizeResume, плюс rawText — если ни один
+   * блок не распознан, Markdown соберётся из текста страницы.
+   */
+  async getMyResumeFromDom(hash: string): Promise<HhResumeData | null> {
+    // Блоки резюме могут дорисоваться позже; если их нет вовсе — сработает rawText.
+    await this.page.waitForSelector('[data-qa^="resume-block"], [data-qa="resume"], h1', { timeout: 5000 }).catch(() => {});
+
+    const raw = await this.page.evaluate(() => {
+      // Страницу капчи/входа нельзя выдавать за резюме — иначе сохранится мусор.
+      if (document.querySelector('[data-qa="account-captcha-picture"], form[action*="captcha"]')) return null;
+
+      const text = (el) => (el ? (el.innerText || el.textContent || '').replace(/\s+/g, ' ').trim() : '');
+      const q = (sel, root = document) => root.querySelector(sel);
+      const all = (sel, root = document) => Array.from(root.querySelectorAll(sel));
+      const firstText = (root, selectors) => {
+        for (const sel of selectors) {
+          const el = q(sel, root);
+          if (el) {
+            const value = text(el);
+            if (value) return value;
+          }
+        }
+        return '';
+      };
+      const unique = (list) => Array.from(new Set(list.filter(Boolean)));
+
+      const title = firstText(document, [
+        '[data-qa="resume-block-title-position"]',
+        '[data-qa="resume-title"]',
+        'h1',
+      ]);
+      const about = firstText(document, ['[data-qa="resume-block-about"]', '[data-qa="resume-about"]']);
+
+      const skillsRoot = q('[data-qa="resume-block-skills"], [data-qa="resume-skills"]');
+      const skills = skillsRoot
+        ? unique(all('li, .bloko-tag__text, [data-qa="skills-block-content"] span', skillsRoot).map(text))
+        : [];
+
+      const experience = all('[data-qa="resume-block-experience-item"], .resume-block__experience-item').map(item => ({
+        company: firstText(item, [
+          '[data-qa="resume-block-experience-company"]',
+          '[data-qa="resume-block-experience-employer"]',
+        ]),
+        position: firstText(item, ['[data-qa="resume-block-experience-position"]']),
+        start: firstText(item, [
+          '[data-qa="resume-block-experience-date"]',
+          '.resume-block__experience-date',
+        ]),
+        end: '',
+        description: firstText(item, [
+          '[data-qa="resume-block-experience-description"]',
+          '[data-qa="resume-block-experience-additional-info"]',
+        ]),
+        industries: [],
+      }));
+
+      const education = all('[data-qa="resume-block-education-item"], .resume-block__education-item').map(item => ({
+        institution: firstText(item, [
+          '[data-qa="resume-block-education-name"]',
+          '[data-qa="resume-block-education-organization"]',
+        ]) || text(item),
+        faculty: '',
+        specialty: firstText(item, ['[data-qa="resume-block-education-organization"]']),
+        year: firstText(item, ['[data-qa="resume-block-education-year"]']),
+      }));
+
+      const languagesRoot = q('[data-qa="resume-block-languages"], [data-qa="resume-languages"]');
+      const languages = languagesRoot
+        ? unique(all('li, [data-qa="resume-block-language-item"]', languagesRoot).map(text))
+          .map(name => ({ name, level: null }))
+        : [];
+
+      const certificatesRoot = q('[data-qa="resume-block-certificates"], [data-qa="resume-certificates"]');
+      const certificates = certificatesRoot
+        ? unique(all('li, [data-qa="resume-block-certificate-item"]', certificatesRoot).map(text))
+          .map(title => ({ title, owner: null, issued: null, url: null }))
+        : [];
+
+      // Последний фолбэк: весь видимый текст резюме без навигации и кнопок.
+      const root = q('[data-qa="resume"], [data-qa="resume-content"], main') || document.body;
+      const noise = /^(скачать|редактировать|обновить|поделиться|вернуться|назад|откликнуться|показать контакты|hh\.ru)/i;
+      const rawText = (root.innerText || '')
+        .split('\n')
+        .map(line => line.trim())
+        .filter(line => line && !noise.test(line))
+        .join('\n');
+
+      return { title, about, skills, experience, education, languages, certificates, rawText };
+    });
+
+    if (!raw) return null;
+
+    return {
+      hash,
+      firstName: null,
+      lastName: null,
+      middleName: null,
+      title: raw.title || null,
+      salary: null,
+      area: null,
+      employment: null,
+      schedule: null,
+      workFormats: [],
+      businessTripReadiness: null,
+      relocation: null,
+      about: raw.about || null,
+      keySkills: raw.skills,
+      experience: raw.experience,
+      education: { primary: raw.education, additional: [] },
+      languages: raw.languages,
+      certificates: raw.certificates,
+      rawText: raw.rawText || null,
+      updatedAt: null,
+      url: `https://hh.ru/resume/${hash}`,
+    };
+  }
+
+  /**
+   * Скачивает PDF-версию резюме по ссылке «Скачать» на странице.
+   * URL не угадываем: если ссылки нет (или отдался не PDF), возвращаем null —
+   * Markdown-версия к этому моменту уже сохранена.
+   */
+  async downloadResumePdf(hash: string, destPath: string): Promise<string | null> {
+    await this.init(this.headless);
+    if (!this.page.url().includes(`/resume/${hash}`)) {
+      await this.page.goto(`https://hh.ru/resume/${hash}`, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    }
+    if (/\/account\/login/i.test(this.page.url())) throw new LoginRequiredError();
+
+    const href = await this.page.evaluate(() => {
+      const links = Array.from(document.querySelectorAll('a[href]')).map(link => ({
+        href: link.getAttribute('href') || '',
+        text: (link.innerText || link.textContent || '').toLowerCase(),
+      }));
+      const found = links.find(link => /resume_converter|resume[_-]?download/i.test(link.href))
+        || links.find(link => /pdf/i.test(link.href) && /скачать|download/.test(link.text));
+      return found ? found.href : null;
+    });
+
+    if (!href) {
+      log.warn('На странице резюме нет ссылки скачивания PDF — PDF пропущен');
+      return null;
+    }
+
+    const absolute = new URL(href, this.page.url()).toString();
+    const response = await this.ctx.request.get(absolute, { timeout: 60000 });
+    if (!response.ok()) throw new Error(`PDF: HTTP ${response.status()} ${absolute}`);
+
+    const body = await response.body();
+    if (body.subarray(0, 4).toString() !== '%PDF') {
+      log.warn(`Ссылка ${absolute} вернула не PDF — файл не сохранён`);
+      return null;
+    }
+
+    const dir = path.dirname(destPath);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(destPath, body);
+    log.info(`PDF резюме сохранён: ${destPath}`);
+    return destPath;
   }
 }
 
