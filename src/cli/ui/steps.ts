@@ -11,6 +11,7 @@ import cmdGradeResume from "../cmd-grade-resume.js";
 import cmdResume from "../cmd-resume.js";
 import { buildApplyOptions, buildCoverOptions, buildDigestOptions, buildSearchOptions } from "./options.js";
 import { askResumeName, describeActiveResume, pickResume, runPickActiveResume, type UiContext } from "./resume.js";
+import { runResumeDownload } from "./resume-download.js";
 
 /** Спрашивает неотрицательное число (0 = «как настроено» / без лимита). */
 async function askCount(message: string, def = "0"): Promise<number> {
@@ -99,6 +100,7 @@ export async function runResumeMenu(ctx: UiContext) {
     message: `Резюме (активное: ${describeActiveResume(ctx)}):`,
     choices: [
       { name: "🎯 выбрать активное для меню", value: "pick" },
+      { name: "⬇️ скачать с hh.ru (Markdown, опционально PDF)", value: "download" },
       new Separator(),
       { name: "list — показать доступные резюме", value: "list" },
       { name: "show — показать резюме", value: "show" },
@@ -112,6 +114,11 @@ export async function runResumeMenu(ctx: UiContext) {
   if (action === "pick") {
     console.log();
     await runPickActiveResume(ctx);
+    return;
+  }
+  if (action === "download") {
+    console.log();
+    await runResumeDownload(ctx);
     return;
   }
   if (action === "list") {

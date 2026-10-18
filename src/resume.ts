@@ -5,9 +5,31 @@ import path from "path";
 import crypto from "crypto";
 import type { Resume } from "./types.js";
 import log from "./logger.js";
+import { DATA_DIR } from "./paths.js";
 
 const DIR = process.env.RESUMES_DIR ? path.resolve(process.env.RESUMES_DIR) : null;
 const FILE = process.env.RESUME_PATH ? path.resolve(process.env.RESUME_PATH) : null;
+
+// Куда скачиваются резюме с hh.ru и откуда они читаются, если .env не задаёт путь.
+const DEFAULT_DIR = path.join(DATA_DIR, 'resumes');
+
+/**
+ * Каталог резюме: RESUMES_DIR → каталог RESUME_PATH → data/resumes.
+ * Скачивание и чтение используют одну функцию, иначе скачанное резюме
+ * не находилось бы без явного RESUMES_DIR.
+ */
+export function resumesDir(): string {
+  if (DIR) return DIR;
+  if (FILE) return path.dirname(FILE);
+  return DEFAULT_DIR;
+}
+
+/** Создаёт каталог резюме, если его нет. Возвращает путь. */
+export function ensureResumesDir(): string {
+  const dir = resumesDir();
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  return dir;
+}
 
 // Расширения резюме — единственный источник правды: из него собраны и фильтр директории,
 // и отрезание расширения, и перебор вариантов при загрузке по имени.
@@ -37,13 +59,31 @@ function parseFile(abs: string, name: string): Resume {
   return { name, id, type: 'text', text: fs.readFileSync(abs, 'utf-8'), filename: path.basename(abs) };
 }
 
-/** Сканирует RESUMES_DIR и возвращает список доступных резюме. */
-export function listResumes(): { name: string; filename: string }[] {
-  if (!DIR) return [];
-  if (!fs.existsSync(DIR)) return [];
-  return fs.readdirSync(DIR)
+function listInDir(dir: string): { name: string; filename: string }[] {
+  if (!fs.existsSync(dir)) return [];
+  return fs.readdirSync(dir)
     .filter(isResumeFile)
     .map(f => ({ name: path.basename(f, path.extname(f)), filename: f }));
+}
+
+/**
+ * Каталог для поиска резюме по имени.
+ * Если задан существующий RESUME_PATH, по имени ищем только его — иначе в корне
+ * проекта «резюме» нашлись бы README.md и прочие .md-файлы.
+ */
+function namedLookupDir(): string | null {
+  if (DIR) return DIR;
+  if (FILE && fs.existsSync(FILE)) return null;
+  return DEFAULT_DIR;
+}
+
+/** Сканирует каталог резюме и возвращает список доступных файлов. */
+export function listResumes(): { name: string; filename: string }[] {
+  if (DIR) return listInDir(DIR);
+  if (FILE && fs.existsSync(FILE)) {
+    return [{ name: path.basename(FILE, path.extname(FILE)), filename: path.basename(FILE) }];
+  }
+  return listInDir(DEFAULT_DIR);
 }
 
 /** Загружает резюме по имени (без расширения) или по RESUME_PATH/RESUMES_DIR. */
@@ -56,12 +96,13 @@ function stripExt(name: string): string {
 export function loadResume(name?: string): Resume | null {
   if (name) {
     const baseName = stripExt(name);
-    if (DIR) {
+    const dir = namedLookupDir();
+    if (dir) {
       for (const ext of RESUME_EXTS) {
-        const abs = path.join(DIR, `${baseName}${ext}`);
+        const abs = path.join(dir, `${baseName}${ext}`);
         if (fs.existsSync(abs)) return parseFile(abs, baseName);
       }
-      throw new Error(`Resume "${name}" not found in ${DIR}`);
+      throw new Error(`Resume "${name}" not found in ${dir}`);
     }
     if (FILE && path.basename(FILE, path.extname(FILE)) === baseName) {
       return parseFile(FILE, baseName);
@@ -78,10 +119,9 @@ export function loadResume(name?: string): Resume | null {
     log.warn(`RESUME_PATH не найден: ${FILE} — пробую RESUMES_DIR`);
   }
 
-  if (DIR && fs.existsSync(DIR)) {
-    const files = listResumes();
-    if (files.length) return loadResume(files[0].name);
-  }
+  const dir = namedLookupDir() || DEFAULT_DIR;
+  const files = listInDir(dir);
+  if (files.length) return loadResume(files[0].name);
 
   return null;
 }
