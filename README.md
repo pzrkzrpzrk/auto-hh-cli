@@ -373,14 +373,19 @@ npm start           # или: npm run ui, npx auto-hh, npx auto-hh ui (алиа�
 │  ├─ presentation/cli/         # ввод-вывод: команды и меню
 │  │  ├─ index.ts               # точка входа run(): регистрирует только меню
 │  │  ├─ commands/cmd-*.ts      # тонкие оболочки: печать результата + код возврата
+│  │  ├─ format/grade-report.ts # консольный отчёт и Markdown об оценке резюме
 │  │  └─ menu/                  # menu, options, resume, resume-download, steps
 │  ├─ application/              # сценарии (use cases)
 │  │  ├─ collect.ts             # сбор страниц поиска + хелперы (fmtSalary, flatten)
 │  │  ├─ search.ts              # поиск + догрузка карточек (события SearchEvent)
-│  │  ├─ digest.ts              # фильтр + ИИ-судья + актуализация дайджестов
+│  │  ├─ digest.ts              # фильтр + ИИ-судья + актуализация; показ дайджеста
 │  │  ├─ cover.ts               # сопроводительные (весь дайджест или один id)
 │  │  ├─ apply.ts               # цикл откликов через Playwright
 │  │  ├─ grade.ts               # загрузка резюме + оценка
+│  │  ├─ resume.ts              # резюме: list / register / show
+│  │  ├─ resume-download.ts     # скачивание резюме с hh.ru (+PDF)
+│  │  ├─ schedule.ts            # прогон пайплайна по cron
+│  │  ├─ history.ts             # история откликов (выборки)
 │  │  └─ reset.ts               # сброс файлов и коллекций
 │  ├─ domain/                   # правила и модели, без I/O
 │  │  ├─ models.ts              # Vacancy, Resume, Verdict, DigestEntry, HhResume*
@@ -392,10 +397,10 @@ npm start           # или: npm run ui, npx auto-hh, npx auto-hh ui (алиа�
 │  │  ├─ hh/                    # client.ts (поиск, карточки), resume.ts (разбор резюме)
 │  │  ├─ ai/client.ts           # единый OpenAI-совместимый клиент
 │  │  ├─ mongo/                 # db, cache-store, digest-store, history-store, resume-store
-│  │  ├─ files/                 # resume-loader, search-output
+│  │  ├─ files/                 # resume-loader, search-output, digest-files
 │  │  ├─ playwright/            # browser, apply-steps (действия на странице)
 │  │  └─ config/                # config, env, paths, apply-config
-│  ├─ shared/                   # logger, concurrency, retry, text-utils, time, path-utils
+│  ├─ shared/                   # logger, concurrency, retry, text-utils, time, cron, path-utils
 │  └─ composition.ts            # сборка зависимостей (composition root)
 ├─ scripts/                    # вспомогательные скрипты (judge-only, fill-cover-letters, …)
 ├─ migrations/                 # миграции MongoDB

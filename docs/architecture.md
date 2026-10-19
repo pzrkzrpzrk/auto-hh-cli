@@ -1,6 +1,6 @@
 # Архитектура auto-hh-cli
 
-- **Статус:** этапы 1–4 выполнены — структура приведена к целевой (раздел 4), домен не зависит от инфраструктуры, сценарии вынесены в `application/`, документация обновлена.
+- **Статус:** этапы 1–5 выполнены — структура приведена к целевой (раздел 4), домен не зависит от инфраструктуры, все сценарии вынесены в `application/`, команды только печатают; документация обновлена.
 - **Дата:** 2026-10-19.
 - **Ветка:** `refactoring/add-solid`.
 - **Состояние кода:** `src/` — 56 файлов, ≈5,9 тыс. строк; `npx tsc --noEmit` → exit 0.
@@ -122,11 +122,15 @@ src/
 │
 ├── application/
 │   ├── collect.ts              # из domain/collect.ts
-│   ├── digest.ts               # из cmd-digest
+│   ├── digest.ts               # из cmd-digest (+ показ и файловый fallback)
 │   ├── cover.ts                # из cmd-cover
 │   ├── apply.ts                # из cmd-apply
 │   ├── search.ts               # из cmd-search
 │   ├── grade.ts                # из cmd-grade-resume + loadResume
+│   ├── resume.ts               # из cmd-resume (list/register/show)
+│   ├── resume-download.ts      # из cmd-resume-download
+│   ├── schedule.ts             # из cmd-schedule (шаги приходят из presentation)
+│   ├── history.ts              # из cmd-history (выборки, а не печать)
 │   └── reset.ts                # из store/reset.ts
 │
 ├── infrastructure/
@@ -134,16 +138,17 @@ src/
 │   ├── ai/client.ts
 │   ├── mongo/{db.ts, cache-store.ts, digest-store.ts, history-store.ts,
 │   │          resume-store.ts}
-│   ├── files/{resume-loader.ts, search-output.ts}
+│   ├── files/{resume-loader.ts, search-output.ts, digest-files.ts}
 │   ├── playwright/{browser.ts, apply-steps.ts}
 │   └── config/{config.ts, env.ts, paths.ts, apply-config.ts}
 │
 ├── presentation/cli/
 │   ├── index.ts
-│   ├── commands/cmd-*.ts
+│   ├── commands/cmd-*.ts       # только выбор действия и печать
+│   ├── format/grade-report.ts  # консоль + Markdown отчёта об оценке
 │   └── menu/{menu,options,resume,resume-download,steps}.ts
 │
-├── shared/{logger,concurrency,retry,text-utils,time}.ts
+├── shared/{logger,concurrency,retry,text-utils,time,cron,path-utils}.ts
 └── composition.ts
 ```
 
@@ -223,6 +228,12 @@ src/
 3. Отметить в этом документе фактическое состояние (as-is → to-be выполнено).
 
 **Выполнено (2026-10-19):** дерево `src/` в `README.md` соответствует слоям, ссылка на селекторы ведёт в `infrastructure/playwright/apply-steps.ts`; в `REVIEW.md` и `docs/review/README.md` добавлена пометка, что пути в отчётах исторические.
+
+### Этап 5 — остальные команды (выполнено 2026-10-19)
+
+Все команды без бизнес-логики: `cmd-resume-download` → `application/resume-download.ts`, `cmd-resume` → `application/resume.ts`, `cmd-schedule` → `application/schedule.ts` + `shared/cron.ts`, `cmd-history` → `application/history.ts`, `cmd-grade-resume` → формат в `presentation/cli/format/grade-report.ts`, показ дайджеста и файловый fallback → `application/digest.ts` + `infrastructure/files/digest-files.ts`.
+
+Приём тот же, что на этапе 3: сценарий возвращает исход (`kind`) и события фаз, команда печатает и выставляет код возврата — порядок вывода в консоли сохраняется. Проверка после каждого шага: `tsc --noEmit` → 0, `node bin/auto-hh --version` → 1.0.0, сверка всех сообщений `console.*`/`log.*` со старым файлом.
 
 ---
 
