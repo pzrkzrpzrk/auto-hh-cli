@@ -17,7 +17,7 @@ export type DigestArtifactEntry = DigestEntry | RejectedEntry;
  * последнего снимка с вердиктами судьи.
  */
 export interface DigestCacheStore extends CacheStore {
-  latest(resumeId?: string): Promise<DigestCacheSnapshot | null>;
+  loadLatest(resumeId?: string): Promise<DigestCacheSnapshot | null>;
 }
 
 /** Хранилище дайджестов и отклонённых вакансий (MongoDB + .md-зеркала). */
