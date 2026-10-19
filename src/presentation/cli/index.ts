@@ -34,7 +34,7 @@ program.action((command?: string) => {
   return cmdUi();
 });
 
-// Точка входа CLI: parseAsync + гарантированное закрытие MongoDB.
+// Точка входа CLI: parseAsync + гарантированное закрытие общих ресурсов (composition root).
 // Без этого монитор соединения держит event loop и процесс не завершается после команды.
 export async function run(argv: string[] = process.argv): Promise<void> {
   try {

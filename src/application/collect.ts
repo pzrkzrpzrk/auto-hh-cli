@@ -4,10 +4,11 @@
 // fmtSalary переехал в shared/format.ts (им пользуется и домен), здесь — реэкспорт
 // для существующих импортов.
 import { fmtSalary } from "../shared/format.js";
+import type { SearchCacheSnapshot, VacancyListItem } from "../domain/search/types.js";
 
 // Плоский список собранных вакансий без дублей — вход для шага digest.
-function flattenCollected(cache): any[] {
-  const byId = new Map<string, any>();
+function flattenCollected(cache: Pick<SearchCacheSnapshot, 'pages'>): VacancyListItem[] {
+  const byId = new Map<string, VacancyListItem>();
   for (const page of Object.keys(cache.pages || {})) {
     for (const item of cache.pages[page] || []) {
       const id = String(item.id);

@@ -4,12 +4,13 @@ import { PageKey } from "../../domain/search/PageKey.js";
 import { SearchBucket } from "../../domain/search/SearchBucket.js";
 import { SearchQuery } from "../../domain/search/SearchQuery.js";
 import type { VacancySource } from "../../domain/search/VacancySource.js";
+import type { VacancyListItem } from "../../domain/search/types.js";
 import SearchCache from "./SearchCache.js";
 import { SearchRequestBuilder } from "./SearchRequestBuilder.js";
 
 export interface PageView {
   key: PageKey;
-  items: any[];
+  items: VacancyListItem[];
   /** true — страница взята из кэша, в источник не ходили. */
   fromCache: boolean;
   /** Всего найдено (только для страниц из источника). */

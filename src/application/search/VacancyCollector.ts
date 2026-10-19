@@ -4,7 +4,7 @@
 import { SearchQuery } from "../../domain/search/SearchQuery.js";
 import type { VacancySource } from "../../domain/search/VacancySource.js";
 import type { VacancyListItem } from "../../domain/search/types.js";
-import type { HistoryStore } from "../../domain/ports.js";
+import type { HistoryState, HistoryStore } from "../../domain/ports.js";
 import SearchCache from "./SearchCache.js";
 import { PageIterator } from "./PageIterator.js";
 import type { FullCardPolicy } from "./FullCardPolicy.js";
@@ -68,7 +68,7 @@ export class VacancyCollector {
     // Просмотренные не качаем, если политика это разрешает: digest всё равно их пропускает,
     // cover просит качать всем, чтобы не срезать вакансии без писем.
     const seen = policy.skipSeen && this.history
-      ? (await this.history.load().catch(() => ({ applied: {}, seen: {} }))).seen
+      ? (await this.history.load().catch((): HistoryState => ({ applied: {}, seen: {} }))).seen
       : {};
     const todo: string[] = [];
     for (const id of ids) {

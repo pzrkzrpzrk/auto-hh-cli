@@ -1,12 +1,15 @@
 // Кэш в отдельных MongoDB коллекциях: cachePages, cacheFull, cacheJudgements, cacheCoverLetters.
 import { connect, dbInstance } from "./db.js";
 import { dateKey } from "../../shared/time.js";
+import type { Vacancy } from "../../domain/models.js";
+import type { VacancyListItem } from "../../domain/search/types.js";
+import type { Judgement } from "../../domain/digest/JudgementSet.js";
 
 export interface CacheDoc {
   date: string;
-  pages: Record<string, any[]>;
-  fullById: Record<string, any>;
-  judgements: Record<string, any>;
+  pages: Record<string, VacancyListItem[]>;
+  fullById: Record<string, Vacancy>;
+  judgements: Record<string, Judgement>;
   coverLetters: Record<string, string>;
 }
 
@@ -75,7 +78,7 @@ export async function savePage(state: CacheDoc, pageNum: number | string, date?:
 }
 
 // Полная вакансия (описание, навыки): нужна и шагу digest, и шагу cover.
-export async function saveFullVacancy(vacancy: any, date?: Date): Promise<void> {
+export async function saveFullVacancy(vacancy: Vacancy, date?: Date): Promise<void> {
   await connect();
   const vacancyId = String(vacancy.id);
   await dbInstance().collection('cacheFull').updateOne(
@@ -97,14 +100,14 @@ async function findByIds(collection: string, vacancyIds: (string | number)[], va
 }
 
 // Полные вакансии по id — чтобы шаг cover не ходил на hh.ru лишний раз.
-export function getFullByVacancyIds(vacancyIds: (string | number)[]): Promise<Record<string, any>> {
-  return findByIds('cacheFull', vacancyIds, 'full');
+export function getFullByVacancyIds(vacancyIds: (string | number)[]): Promise<Record<string, Vacancy>> {
+  return findByIds('cacheFull', vacancyIds, 'full') as Promise<Record<string, Vacancy>>;
 }
 
 // Запись вердиктов по карте vacancyId → judgement. Отдельная функция нужна адаптеру
 // JudgementCache: сценарию дайджеста не обязательно держать весь CacheDoc.
 export async function saveJudgementsMap(
-  judgements: Record<string, any>,
+  judgements: Record<string, Judgement>,
   resumeId?: string,
   date?: Date,
 ): Promise<void> {

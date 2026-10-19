@@ -40,7 +40,7 @@ export class DigestEntryFactory {
         await this.history.markApplied(String(full.id), {
           title: full.name,
           employer: full.employer?.name,
-          url: full.alternate_url,
+          url: (full.alternate_url as string) || '',
           score,
           digestOnly: true,
         });
