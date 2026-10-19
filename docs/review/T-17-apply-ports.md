@@ -90,3 +90,34 @@ Select-String -Path src\domain\ports.ts -Pattern 'ApplicationGateway|Application
   - `type: 'all'` идёт через `digests.all()` (`byDate` не вызывается);
   - `ensureLoggedIn → false` → `{ kind: 'not-logged-in' }`;
   - `login: true` → `login()` вызван, `{ kind: 'login' }`.
+
+
+### ООП-редакция (2026-10-19)
+
+После закрытия тикета сценарий разложен на ООП-подсистему `application/apply/` в стиле
+`search/` и `digest/` — поведение и тексты логов не менялись:
+
+| Паттерн | Файл | Роль |
+|---|---|---|
+| Facade | `ApplyScenario.ts` | ручной вход → стратегия → конвейер плана → `gateway.withSession` |
+| Template Method | `ApplyStage.ts` | каркас стадии: `enabled → execute → onError` |
+| Chain of Responsibility | `ApplyPipeline.ts` + `stages.ts` | `LoadDigest → FilterArchived → Limit → AttachLetters → LoadHistory` |
+| Chain of Responsibility | `SkipRules.ts` | `MissingLetterRule → AlreadyAppliedRule`; решение несёт уровень лога и вклад в `skipped` |
+| Strategy | `DigestSelection.ts` | `latest` (`byDate`) и `all` (`all()`) — классы вместо ветки `if` |
+| Strategy / Null Object | `Pacing.ts` | `RandomPacing` (sleep+rand) и `NoPacing` для проверок |
+| Value Object | `ApplySummary.ts` | `ok/fail/skipped` + `toOutcome()` + строка сводки |
+| Ports & Adapters + RAII | `ApplyDeps.ts` + `application-gateway.ts` | сценарий не импортирует infrastructure; браузер закрывается в `finally` |
+
+`application/apply.ts` остался совместимой обёрткой `runApply(opts, deps)` — команда и
+`composition.ts` не менялись. `ApplySettings`, `ApplyDeps` и `ApplyOutcome` реэкспортируются
+из нового модуля, поэтому путь импорта для composition root прежний.
+
+Проверки ООП-редакции:
+
+- `npx tsc --noEmit` → exit 0;
+- `Select-String -Path src\application\apply.ts,src\application\apply\*.ts -Pattern 'infrastructure|mongo|playwright'`
+  → только комментарии и литерал `via: 'playwright'`;
+- smoke на фейковых портах (временный `data/tmp-apply-oop-smoke.ts`, удалён) — 7 сценариев:
+  архив/нет письма/уже откликнут/digest-only, `type=all`, `limit`, `not-logged-in` с закрытием
+  сессии, ручной вход без сессии, `ok=false` и исключение в `fail`, пауза только после реальной
+  попытки. Все assert'ы прошли, `npx tsx data/tmp-apply-oop-smoke.ts` → exit 0.

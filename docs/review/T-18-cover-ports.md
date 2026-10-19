@@ -91,3 +91,32 @@ npx tsx bin/auto-hh cover --limit 2   # письма уже есть → «ге�
   - письмо уже есть в дайджесте → `{ kind: 'digest' }`, `letters.save` не вызывается
     (фейк бросал бы исключение).
 - Живой прогон с реальными Mongo/ИИ не выполнялся (нет ключа и базы в этом окружении).
+
+### ООП-редакция (2026-10-19)
+
+Сценарий разложен на ООП-подсистему `application/cover/` по образцу `search/` и `digest/` —
+поведение, `CoverOutcome` и тексты логов не менялись:
+
+| Паттерн | Файл | Роль |
+|---|---|---|
+| Facade | `CoverScenario.ts` | проверки резюме/шаблона → выбор режима → результат |
+| Strategy | `CoverMode.ts` + `SingleVacancyMode.ts` / `DigestCoverMode.ts` | «одна вакансия» и «весь дайджест» — разные классы вместо ветки `if` |
+| Template Method | `CoverStage.ts` | каркас стадии: `enabled → execute → onError` |
+| Chain of Responsibility | `CoverPipeline.ts` + `stages.ts` | `LoadDigest → Limit → AttachLetters → EnsureCards → SelectItems → GenerateLetters → PersistDigest` |
+| Value Object | `CoverPlan.ts` | `CoverPlan`/`CoverProgress`: счётчики и ровно прежние строки «Вакансий…», «Сопроводительных готово…» |
+| Ports & Adapters | `CoverDeps.ts` | нет импортов `infrastructure`; конфиг читается один раз, а не трижды |
+
+`application/cover.ts` остался совместимой обёрткой `runCover(vacancyId, opts, deps, onVacancy)`;
+`composition.ts` и `cmd-cover.ts` не менялись, `CoverConfig`/`CoverDeps` реэкспортируются.
+
+Проверки ООП-редакции:
+
+- `npx tsc --noEmit` → exit 0;
+- `Select-String -Path src\application\cover.ts,src\application\cover\*.ts -Pattern 'infrastructure|mongo|resume-loader|loadConfig'`
+  → только комментарии и текст лога «нужна MongoDB»;
+- smoke на фейковых портах (временный `data/tmp-cover-oop-smoke.ts`, удалён) — 9 сценариев:
+  одна вакансия, `not-found`, кэш + генерация пачкой с обновлением дайджеста, все письма уже
+  есть, `force`, `limit` (команде — срез, дайджест — целиком), пустой дайджест и ошибка Mongo,
+  нет описаний вакансий, нет резюме; плюс формат `CoverPlan`/`CoverProgress`. Все assert'ы
+  прошли, `npx tsx data/tmp-cover-oop-smoke.ts` → exit 0.
+
