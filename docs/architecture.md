@@ -1,9 +1,9 @@
 # Архитектура auto-hh-cli
 
-- **Статус:** этапы 1–9 выполнены — структура приведена к целевой (раздел 4), домен не зависит от инфраструктуры, все сценарии в `application/`; поиск (этап 6) и дайджест (этап 7) переведены на ООП (порты, конвейер, репортёр), этап 8 закрыл `apply`/`cover` портами (T-17/T-18) и собрал их как ООП-подсистемы (фасады, конвейеры, стратегии), этап 9 — файловый I/O сценариев (T-20) и конфиг через `ConfigProvider` (T-19); документация обновлена.
+- **Статус:** этапы 1–9 выполнены — структура приведена к целевой (раздел 4), домен не зависит от инфраструктуры, все сценарии в `application/`; поиск (этап 6) и дайджест (этап 7) переведены на ООП (порты, конвейер, репортёр), этап 8 закрыл `apply`/`cover` портами (T-17/T-18) и собрал их как ООП-подсистемы (фасады, конвейеры, стратегии), этап 9 — файловый I/O сценариев (T-20), конфиг через `ConfigProvider` (T-19) и `shared`/домен без инфраструктуры (T-21); документация обновлена.
 - **Дата:** 2026-10-19.
 - **Ветка:** `refactoring/digest-oop`.
-- **Состояние кода:** `src/` — 144 файла, ≈8,15 тыс. строк; `npx tsc --noEmit` → exit 0.
+- **Состояние кода:** `src/` — 147 файлов, ≈8,27 тыс. строк; `npx tsc --noEmit` → exit 0.
 
 ---
 
@@ -65,17 +65,17 @@ presentation ──▶ application ──▶ domain
 
 ## 3. Текущее состояние
 
-Структура совпадает с целевой (раздел 4): `src/` — 144 файла, ≈8,15 тыс. строк, `npx tsc --noEmit` → exit 0.
+Структура совпадает с целевой (раздел 4): `src/` — 147 файлов, ≈8,27 тыс. строк, `npx tsc --noEmit` → exit 0.
 
 ```
-src/                              # 144 файла
-├── application/                  # 58 файлов, ≈2,41 тыс. строк — сценарии (use cases)
-├── domain/                       # 28 файлов, ≈1,80 тыс. строк — модели, правила, порты
-├── infrastructure/               # 29 файлов, ≈2,35 тыс. строк — адаптеры hh.ru, ИИ, Mongo,
-│                                 #   Playwright, файлы, конфигурация
+src/                              # 147 файлов
+├── application/                  # 58 файлов, ≈2,44 тыс. строк — сценарии (use cases)
+├── domain/                       # 29 файлов, ≈1,84 тыс. строк — модели, правила, порты
+├── infrastructure/               # 30 файлов, ≈2,38 тыс. строк — адаптеры hh.ru, ИИ, Mongo,
+│                                 #   Playwright, файлы, логирование, конфигурация
 ├── presentation/                 # 20 файлов, ≈1,17 тыс. строк — CLI: команды, меню, форматтеры
-├── shared/                       #  8 файлов, ≈0,26 тыс. строк — логгер, время, ретраи,
-│                                 #   текст, конкурентность
+├── shared/                       #  9 файлов, ≈0,28 тыс. строк — логгер-фасад, батчи, время,
+│                                 #   ретраи, текст
 └── composition.ts                # точка сборки зависимостей
 ```
 
@@ -121,8 +121,8 @@ src/
 ├── domain/
 │   ├── models.ts               # Vacancy, Resume, Verdict, DigestEntry, HhResume*
 │   ├── ports.ts                # CacheStore, HistoryStore, DataJanitor, ResumeFiles,
-│   │                           #   SearchReportWriter, AppConfig, ConfigProvider, SearchDeps,
-│   │                           #   ResumeSource, SourceProvider, AiProvider
+│   │                           #   SearchReportWriter, AppConfig, ConfigProvider, Logger,
+│   │                           #   SearchDeps, ResumeSource, SourceProvider, AiProvider
 │   ├── resume-block.ts
 │   ├── actualize.ts
 │   ├── adapt-resume.ts
@@ -221,6 +221,7 @@ src/
 │   ├── files/{resume-loader.ts, resume-files.ts, data-janitor.ts,
 │   │          search-output.ts, search-report-writer.ts, digest-files.ts,
 │   │          digest-file-source.ts}
+│   ├── logging/logger.ts        # адаптер LogSink: app.log + DEBUG
 │   ├── playwright/{browser.ts, apply-steps.ts, application-gateway.ts}
 │   └── config/{config.ts, env.ts, paths.ts, apply-config.ts}
 │
@@ -230,7 +231,7 @@ src/
 │   ├── format/{grade-report.ts, search-report.ts, digest-report.ts}  # консольные представления
 │   └── menu/{menu,options,resume,resume-download,steps}.ts
 │
-├── shared/{logger,concurrency,retry,text-utils,time,cron,path-utils,format}.ts
+├── shared/{logger,logging,batches,retry,text-utils,time,cron,path-utils,format}.ts
 └── composition.ts              # единая точка new HHClient(): vacancySource/resumeSource
 ```
 
@@ -549,9 +550,27 @@ E2E с живыми hh.ru, Mongo и ИИ не запускался — пров�
 `npx tsc --noEmit` → 0; смоук провайдера (явный путь, `CONFIG_PATH`, мемоизация, отсутствие
 мутации env) и проброса `opts.config` в digest/search/cover/actualize/schedule → exit 0.
 
-Ограничения: `grade.ts` (загрузка резюме) и `intFromEnv` в `DigestScenario` (настройки
-конкурентности) по-прежнему импортируют инфраструктуру; `node-cron` в `schedule` ждёт порт
-`Scheduler` — это тикеты T-21/T-22 в [`docs/review/`](review/README.md).
+### Этап 9.2 — `shared` и домен без инфраструктуры (выполнено 2026-10-19, T-21)
+
+1. `shared/logger.ts` — чистый фасад `LogSink` без `fs`/env; файловая реализация —
+   `infrastructure/logging/logger.ts` (единственное место с `LOG_FILE` и `DEBUG`),
+   composition root регистрирует sink. Домен получает `Logger` параметром:
+   `gradeResume`, `judge*`, `DigestMatcher`, `DigestEntryFactory`, письма.
+2. `shared/concurrency.ts` заменён на `shared/batches.ts`: `chunk`/`runBatches` без env и
+   глобального логгера; прогресс/ошибки — через необязательный `logger`, параллелизм — параметром.
+   Env-настройки `JUDGE_BATCH_SIZE`/`AI_CONCURRENCY`/`COVER_BATCH_SIZE` читает composition
+   (`DigestDeps.settings`, `CoverConfig`).
+3. `shared/retry.ts` больше не импортирует `openai` и env: transient-ошибки по `err.name`/`status`,
+   `attempts`/`baseDelayMs`/`maxDelayMs` передаёт `infrastructure/ai/client.ts`.
+4. Профиль и подпись писем (`APPLICANT_PROFILE`, `COVER_SIGNATURE`) приходят из `CoverConfig`;
+   домен не читает `process.env`.
+
+Проверка: `Select-String -Path src\shared -Pattern '../infrastructure|from "openai"'` → пусто;
+`Select-String -Path src\domain -Pattern 'process.env|shared/logger|shared/concurrency'` → пусто;
+`npx tsc --noEmit` → 0; смоук логов (файл, уровни, `Europe/Moscow`) и `retryOnTransient` → ok.
+
+Ограничения: `application → infrastructure` остался один импорт — `grade.ts` (загрузка резюме);
+`node-cron` в `schedule` ждёт порт `Scheduler` — это тикеты T-22.
 
 ---
 

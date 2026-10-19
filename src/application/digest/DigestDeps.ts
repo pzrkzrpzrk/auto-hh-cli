@@ -13,10 +13,20 @@ import type {
   ResumeRegistry,
 } from "../../domain/digest/ports.js";
 
+/** Лимиты ИИ-шагов: env читает composition root, сценарий получает числа. */
+export interface DigestSettings {
+  /** Размер пачки судьи (env JUDGE_BATCH_SIZE). */
+  judgeBatchSize: number;
+  /** Параллелизм ИИ-запросов (env AI_CONCURRENCY). */
+  aiConcurrency: number;
+}
+
 /** Всё, что нужно сборке дайджеста. */
 export interface DigestDeps {
   /** Конфиг читается по явному пути из opts.config; сценарий не трогает env. */
   config: ConfigProvider;
+  /** Лимиты пачек/параллелизма из env. */
+  settings: DigestSettings;
   /** Провайдер ИИ создаётся лениво — ровно там, где он нужен (как раньше); путь — из opts.config. */
   ai: (path?: string) => AiProvider | null;
   /** Хранилища сбора: кэш (с загрузкой снимка) и история откликов. */

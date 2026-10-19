@@ -15,6 +15,8 @@ import type { DigestFilterRules } from "./digest/types.js";
 import type { SearchCacheSnapshot, SearchConfig } from "./search/types.js";
 import type { VacancySource } from "./search/VacancySource.js";
 
+export type { Logger } from "./logging.js";
+
 /**
  * Конфигурация приложения — DTO из config.json. Описаны только секции, которые читают
  * сценарии; остальные ключи остаются на месте и доступны политикам/адаптерам.
@@ -46,7 +48,7 @@ export interface AppConfig {
 
 /**
  * Порт конфигурации (DIP): сценарий просит загрузить config.json по явному пути,
- * а не читает `process.env.CONFIG_PATH` и диск сам. Путь по умолчанию выбирает адаптер.
+ * а не читает переменную CONFIG_PATH и диск сам. Путь по умолчанию выбирает адаптер.
  */
 export interface ConfigProvider {
   load(path?: string): AppConfig;

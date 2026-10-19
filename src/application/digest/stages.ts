@@ -126,8 +126,8 @@ export class SelectStage extends DigestStage {
   readonly name = 'select';
 
   protected async execute(ctx: DigestContext): Promise<StageOutcome> {
-    const { accepted, rejected } = new DigestMatcher(ctx.policy).select(ctx.candidates, ctx.judgements);
-    const matched = await new DigestEntryFactory(ctx.deps.collect.history)
+    const { accepted, rejected } = new DigestMatcher(ctx.policy, log).select(ctx.candidates, ctx.judgements);
+    const matched = await new DigestEntryFactory(ctx.deps.collect.history, log)
       .create(accepted, ctx.policy.tracksHistory);
 
     ctx.accepted = accepted;

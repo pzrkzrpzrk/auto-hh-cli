@@ -1,7 +1,7 @@
 // Domain Service судейства: пачки, кэш вердиктов и частичное сохранение.
 // Заменяет judgeWithClaude из application/digest.ts: политика пачек и сохранение
 // после каждой пачки — здесь, а как именно спрашивать ИИ — в JudgeStrategy.
-import { chunk, runBatches } from "../../shared/concurrency.js";
+import { chunk, runBatches } from "../../shared/batches.js";
 import type { DigestPolicy } from "../../domain/digest/DigestPolicy.js";
 import type { JudgementSet } from "../../domain/digest/JudgementSet.js";
 import type { DigestCandidate } from "../../domain/digest/DigestCandidate.js";
@@ -46,7 +46,7 @@ export class JudgementService {
     }
 
     const batches = chunk(pending, policy.judgeBatchSize).map(group => group.map(c => c.full));
-    const opts = { minScore: policy.minScore, adaptResume: policy.adaptResume };
+    const opts = { minScore: policy.minScore, adaptResume: policy.adaptResume, logger: log };
     let judgedCount = 0;
 
     const runBatch = async (idx: number, batch: any[]) => {
@@ -72,6 +72,7 @@ export class JudgementService {
     // Ошибка пачки валит прогон (как раньше): пул не должен её глотать.
     await runBatches(batches, policy.aiConcurrency, (batch, index) => runBatch(index + 1, batch), {
       onError: (err) => { throw err; },
+      logger: log,
     });
     return { judgedCount };
   }

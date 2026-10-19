@@ -1,19 +1,32 @@
-// Простой логгер с уровнями и записью в файл.
-import fs from "fs";
-import { LOG_FILE, ensureDir } from "../infrastructure/config/paths.js";
+// Простой логгер с уровнями. Реализация записи (файл, env DEBUG) — в infrastructure,
+// чтобы shared не зависел от fs и config/paths. До регистрации sink пишет в консоль.
+import type { LogSink } from "./logging.js";
 
-function write(level: 'INFO' | 'WARN' | 'ERROR' | 'DEBUG', msg: string, meta?: any) {
-  ensureDir();
+function line(level: string, msg: string, meta?: unknown): string {
   const ts = new Date().toLocaleString('ru-RU', { timeZone: 'Europe/Moscow', hour12: false }).replace(',', '');
-  const line = `[${ts}] [${level}] ${msg}` +
-    (meta ? ' ' + JSON.stringify(meta) : '');
-  console.log(line);
-  fs.appendFileSync(LOG_FILE, line + '\n');
+  return `[${ts}] [${level}] ${msg}` + (meta ? ' ' + JSON.stringify(meta) : '');
 }
 
-const info = (m, meta?) => write('INFO', m, meta);
-const warn = (m, meta?) => write('WARN', m, meta);
-const error = (m, meta?) => write('ERROR', m, meta);
-const debug = (m, meta?) => process.env.DEBUG && write('DEBUG', m, meta);
+const consoleSink: LogSink = {
+  info: (m, meta) => console.log(line('INFO', m, meta)),
+  warn: (m, meta) => console.log(line('WARN', m, meta)),
+  error: (m, meta) => console.log(line('ERROR', m, meta)),
+  debug: () => {},
+};
 
-export default { info, warn, error, debug };
+let sink: LogSink = consoleSink;
+
+/** Установить реализацию логирования (composition root вызывает один раз). */
+export function setLogSink(next: LogSink): void {
+  sink = next;
+}
+
+const log: LogSink = {
+  info: (m, meta) => sink.info(m, meta),
+  warn: (m, meta) => sink.warn(m, meta),
+  error: (m, meta) => sink.error(m, meta),
+  debug: (m, meta) => sink.debug(m, meta),
+};
+
+export default log;
+export type { LogSink } from "./logging.js";

@@ -23,9 +23,13 @@ export interface Verdict {
   coverLetter?: string;
 }
 
+import type { Logger } from "./logging.js";
+
 export interface JudgeOpts {
   minScore?: number;
   adaptResume?: boolean;
+  /** Куда писать диагностику: домен не импортирует logger. */
+  logger?: Logger;
   [key: string]: unknown;
 }
 
