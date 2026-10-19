@@ -4,6 +4,8 @@
 
 > Номера строк сверены с рабочим деревом на коммите `c58e6dc` (все 16 тикетов проверены против этого же состояния).
 
+> **Пути в отчёте — исторические** (дерево до архитектурного рефакторинга). Актуальная раскладка слоёв — [`docs/architecture.md`](docs/architecture.md).
+
 - **Проект:** auto-hh-cli — CLI для поиска вакансий и откликов на hh.ru
 - **Стек:** TypeScript, Node.js (CJS, запуск через `tsx`), MongoDB (нативный драйвер), Playwright (persistent context), OpenAI-совместимый ИИ-клиент, `@inquirer/prompts`, `node-cron@4.2.1`
 - **Объём ревью:** весь `src/` (37 файлов, 3 548 строк), `package.json`, `tsconfig.json`, `config.json`, `.env.example`, `migrations/`, README

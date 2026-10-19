@@ -1,5 +1,5 @@
 // Логика отбора вакансий по критериям из config.filter.
-import { Vacancy } from "../types.js";
+import { Vacancy } from "./models.js";
 
 function lower(s) { return (s || '').toString().toLowerCase(); }
 
@@ -86,4 +86,34 @@ function vacancyMatchesFilter(
   return { ok: true };
 }
 
-export { vacancyMatchesFilter };
+// Чистый отбор кандидатов: по элементам выдачи и полным карточкам (cache.fullById)
+// решает, кто прошёл локальный фильтр. Без I/O — ни истории, ни логов: это делает
+// вызывающий код (шаг digest), поэтому функцию можно проверять без MongoDB.
+// Возвращает: candidates (full + verdict) и skipped (id/name/reason для лога и отметок).
+function selectCandidates(
+  items: any[],
+  cache: { fullById?: Record<string, any> },
+  cfg: any,
+): {
+  candidates: { full: Vacancy; verdict: { ok: boolean; reason?: string } }[];
+  skipped: { id: string; name: string; reason?: string }[];
+} {
+  const candidates: { full: Vacancy; verdict: { ok: boolean; reason?: string } }[] = [];
+  const skipped: { id: string; name: string; reason?: string }[] = [];
+  for (const item of items || []) {
+    const full = cache?.fullById?.[String(item.id)];
+    // Карточки нет (просмотрена ранее или ошибка загрузки) — вакансия не рассматривается.
+    if (!full) continue;
+
+    // anyRegions — регионы «любые вакансии» из config.search.area (остальные — только удалёнка).
+    const verdict = vacancyMatchesFilter(full, cfg.filter, { anyRegions: cfg.search?.area });
+    if (!verdict.ok) {
+      skipped.push({ id: String(item.id), name: full.name, reason: verdict.reason });
+      continue;
+    }
+    candidates.push({ full, verdict });
+  }
+  return { candidates, skipped };
+}
+
+export { vacancyMatchesFilter, selectCandidates };

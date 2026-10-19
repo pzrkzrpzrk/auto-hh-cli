@@ -1,7 +1,7 @@
 // Рендер резюме hh.ru в Markdown: файл должны читать ИИ-шаги (digest/cover/grade),
 // поэтому HTML описаний превращаем в текст, а не сохраняем разметку.
-import type { HhResumeData, HhResumeEducationItem, HhResumeSalary } from "../clients/hh-resume.js";
-import { sanitizeSegment } from "../paths.js";
+import type { HhResumeData, HhResumeEducationItem, HhResumeSalary } from "./models.js";
+import { sanitizeSegment } from "../shared/path-utils.js";
 
 const CURRENCY_SIGNS: Record<string, string> = {
   RUR: '₽',

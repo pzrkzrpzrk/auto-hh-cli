@@ -342,7 +342,7 @@ npm start           # или: npm run ui, npx auto-hh, npx auto-hh ui (алиа�
 
 ### Зарезервировано (не используется в основном потоке)
 
-`HH_CLIENT_ID`, `HH_CLIENT_SECRET`, `HH_REDIRECT_URI`, `HH_ACCESS_TOKEN`, `HH_REFRESH_TOKEN`, `HH_RESUME_ID` — для OAuth-сценария (`src/oauth-server.js`). Не задействованы, т.к. соискательский API закрыт.
+`HH_CLIENT_ID`, `HH_CLIENT_SECRET`, `HH_REDIRECT_URI`, `HH_ACCESS_TOKEN`, `HH_REFRESH_TOKEN`, `HH_RESUME_ID` — для OAuth-сценария (не реализован). Не задействованы, т.к. соискательский API закрыт.
 
 ---
 
@@ -370,41 +370,38 @@ npm start           # или: npm run ui, npx auto-hh, npx auto-hh ui (алиа�
 ├─ .env                        # секреты и настройки (из .env.example)
 ├─ resumes/                    # директория с резюме (если задан RESUMES_DIR)
 ├─ src/
-│  ├─ cli/                     # шаги пайплайна (cmd-*) + меню
-│  │  ├─ index.ts              # точка входа run(): регистрирует только меню
-│  │  ├─ cmd-search.ts         # шаг 1: поиск вакансий → кэш
-│  │  ├─ cmd-digest.ts         # шаг 2: фильтр + ИИ-судья → дайджест; `show` — показ
-│  │  ├─ cmd-cover.ts          # шаг 3: сопроводительные (весь дайджест или один id)
-│  │  ├─ cmd-apply.ts          # шаг 4: автоотклик через Playwright
-│  │  ├─ cmd-history.ts        # показать историю
-│  │  ├─ cmd-config.ts         # показать конфиг
-│  │  ├─ cmd-reset.ts          # сброс истории/кэша/дайджестов
-│  │  ├─ cmd-cover.ts          # одно письмо по vacancyId
-│  │  ├─ cmd-schedule.ts       # планировщик (node-cron)
-│  │  ├─ cmd-grade-resume.ts   # оценка резюме
-│  │  ├─ cmd-resume.ts         # управление резюме (list/register)
-│  │  └─ cmd-ui.ts             # интерактивное меню (единственная точка входа CLI)
-│  ├─ clients/                 # внешние API-клиенты
-│  │  ├─ ai-client.ts          # единый OpenAI-совместимый клиент
-│  │  ├─ hh-client.ts          # поиск и карточки через API hh.ru
-│  │  └─ db.ts                 # MongoDB connection manager
-│  ├─ domain/                  # доменная логика
-│  │  ├─ judge/                # ИИ-судья (одиночный + батч)
-│  │  ├─ cover-letter/         # генерация сопроводительных
-│  │  ├─ collect.ts            # сбор страниц поиска + хелперы (fmtSalary, flatten)
-│  │  ├─ filter.ts             # локальный пре-фильтр
-│  │  ├─ adapt-resume.ts       # адаптация резюме под вакансию
-│  │  └─ grade-resume.ts       # оценка резюме через ИИ
-│  ├─ store/                   # доступ к данным (MongoDB)
-│  │  ├─ cache-store.ts        # кэш (страницы, вердикты, письма)
-│  │  ├─ digest-store.ts       # дайджест и rejected в Markdown + MongoDB
-│  │  ├─ search-store.ts       # выдача поиска в Markdown (data/search/)
-│  │  ├─ history-store.ts      # история просмотров/откликов
-│  │  ├─ resume-store.ts       # регистрация резюме в MongoDB
-│  │  └─ reset.ts              # сброс файлов и коллекций
-│  ├─ resume.ts                # загрузка резюме (файл или директория)
-│  ├─ config.ts                # загрузка config.json + .env
-│  ├─ logger.ts / retry.ts / text-utils.ts / types.ts
+│  ├─ presentation/cli/         # ввод-вывод: команды и меню
+│  │  ├─ index.ts               # точка входа run(): регистрирует только меню
+│  │  ├─ commands/cmd-*.ts      # тонкие оболочки: печать результата + код возврата
+│  │  ├─ format/grade-report.ts # консольный отчёт и Markdown об оценке резюме
+│  │  └─ menu/                  # menu, options, resume, resume-download, steps
+│  ├─ application/              # сценарии (use cases)
+│  │  ├─ collect.ts             # сбор страниц поиска + хелперы (fmtSalary, flatten)
+│  │  ├─ search.ts              # поиск + догрузка карточек (события SearchEvent)
+│  │  ├─ digest.ts              # фильтр + ИИ-судья + актуализация; показ дайджеста
+│  │  ├─ cover.ts               # сопроводительные (весь дайджест или один id)
+│  │  ├─ apply.ts               # цикл откликов через Playwright
+│  │  ├─ grade.ts               # загрузка резюме + оценка
+│  │  ├─ resume.ts              # резюме: list / register / show
+│  │  ├─ resume-download.ts     # скачивание резюме с hh.ru (+PDF)
+│  │  ├─ schedule.ts            # прогон пайплайна по cron
+│  │  ├─ history.ts             # история откликов (выборки)
+│  │  └─ reset.ts               # сброс файлов и коллекций
+│  ├─ domain/                   # правила и модели, без I/O
+│  │  ├─ models.ts              # Vacancy, Resume, Verdict, DigestEntry, HhResume*
+│  │  ├─ ports.ts               # CacheStore, HistoryStore, CollectDeps, AiProvider
+│  │  ├─ filter.ts / resume-block.ts / actualize.ts / adapt-resume.ts
+│  │  ├─ resume-markdown.ts / grade-resume.ts
+│  │  └─ judge/ cover-letter/   # ИИ-судья и генерация писем
+│  ├─ infrastructure/           # адаптеры внешнего мира
+│  │  ├─ hh/                    # client.ts (поиск, карточки), resume.ts (разбор резюме)
+│  │  ├─ ai/client.ts           # единый OpenAI-совместимый клиент
+│  │  ├─ mongo/                 # db, cache-store, digest-store, history-store, resume-store
+│  │  ├─ files/                 # resume-loader, search-output, digest-files
+│  │  ├─ playwright/            # browser, apply-steps (действия на странице)
+│  │  └─ config/                # config, env, paths, apply-config
+│  ├─ shared/                   # logger, concurrency, retry, text-utils, time, cron, path-utils
+│  └─ composition.ts            # сборка зависимостей (composition root)
 ├─ scripts/                    # вспомогательные скрипты (judge-only, fill-cover-letters, …)
 ├─ migrations/                 # миграции MongoDB
 ├─ migrate-mongo-config.js     # настройки migrate-mongo (берёт MONGODB_URI из .env)
@@ -415,7 +412,7 @@ npm start           # или: npm run ui, npx auto-hh, npx auto-hh ui (алиа�
 
 ## Замечания и отладка
 
-- **Селекторы hh.ru меняются** — если автоотклик перестал работать, смотрите `data/app.log` и обновите массивы `respondSelectors`, `submitSelectors` и т.п. в `src/cli/cmd-apply.ts`.
+- **Селекторы hh.ru меняются** — если автоотклик перестал работать, смотрите `data/app.log` и обновите массивы `RESPONSE_BUTTON_SELECTORS` и прочие селекторы в `src/infrastructure/playwright/apply-steps.ts`.
 - **Тесты в вакансии.** По умолчанию (`PW_TEST_MODE=manual`) скрипт ставит окно браузера на передний план и ждёт ENTER в консоли — проходите тест вручную, отправляете отклик, затем ENTER → следующая вакансия. Режим `skip` пропускает такие вакансии. Ручной режим работает только при `PW_HEADLESS=false`.
 - **Ручное подтверждение отклика.** `apply` заполняет письмо, но не жмёт кнопку сам — вы нажимаете «Откликнуться» в браузере (защита от случайного). Таймаут ожидания — `PW_MANUAL_TIMEOUT_MS`.
 - **Лимит hh.ru** — ~200 откликов в день, не превышайте (задаётся `maxPerRun`).

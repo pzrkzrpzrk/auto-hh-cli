@@ -1,10 +1,6 @@
-import { loadConfig } from "../config.js";
-import { getClient, getModel, getMaxTokens } from "../clients/ai-client";
-import { loadResume } from "../resume.js";
-import { retryOnTransient } from "../retry.js";
-import log from "../logger.js";
-
-const apiConfig = loadConfig().api || {};
+import type { Resume } from "./models.js";
+import log from "../shared/logger.js";
+import type { AiProvider } from "./ports.js";
 
 function safeJsonParse(text: string): any {
   let cleaned = text.trim();
@@ -94,20 +90,20 @@ function buildSystemText(): string {
 }`;
 }
 
-async function gradeResume(resume?: any, resumeName?: string): Promise<Record<string, any> | null> {
-  const client = getClient(apiConfig);
-  if (!client) {
+// Резюме приходит готовым (загрузку с диска делает application/grade.ts):
+// у домена не остаётся ни файлов, ни путей — только правило оценки.
+async function gradeResume(ai: AiProvider | null, resume: Resume | null): Promise<Record<string, any> | null> {
+  if (!ai) {
     log.warn("gradeResume: no API client (check API key)");
     return null;
   }
 
-  const model = getModel(apiConfig);
-
-  const r = resume || loadResume(resumeName);
-  if (!r) {
+  if (!resume) {
     log.warn("gradeResume: resume not found (set RESUME_PATH)");
     return null;
   }
+
+  const r = resume;
 
   const resumeText = r.type === "pdf" ? `[PDF] ${r.filename}` : r.text;
 
@@ -120,18 +116,9 @@ async function gradeResume(resume?: any, resumeName?: string): Promise<Record<st
   ];
 
   try {
-    const resp = await retryOnTransient(
-      () =>
-        client.chat.completions.create({
-          model,
-          max_tokens: getMaxTokens(),
-          messages,
-          response_format: { type: "json_object" },
-        }),
-      { label: 'оценка резюме' }
-    );
+    const resp = await ai.chat({ messages, json: true, label: 'оценка резюме' });
 
-    const text = (resp as any).choices?.[0]?.message?.content;
+    const text = resp.text;
     if (!text) {
       log.warn("gradeResume: empty response");
       return null;
@@ -139,7 +126,7 @@ async function gradeResume(resume?: any, resumeName?: string): Promise<Record<st
 
     const parsed = safeJsonParse(text);
     log.debug(
-      `gradeResume: score=${parsed.overallScore} in=${(resp as any).usage?.prompt_tokens} out=${(resp as any).usage?.completion_tokens}`
+      `gradeResume: score=${parsed.overallScore} in=${resp.usage.prompt} out=${resp.usage.completion}`
     );
     return parsed;
   } catch (err: any) {

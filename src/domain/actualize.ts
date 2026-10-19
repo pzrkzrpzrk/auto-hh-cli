@@ -1,7 +1,7 @@
 // Актуализация старых дайджестов/rejected по последнему поиску.
 // Записи, которых нет в текущей выдаче, помечаются archived (не удаляются).
 // Логика чистая (без Mongo) — её удобно проверять на синтетических данных.
-import type { DigestDoc, DigestEntry } from "../types.js";
+import type { DigestDoc, DigestEntry } from "./models.js";
 
 export interface ActualizeOptions {
   // Идентификаторы вакансий из последнего поиска.
