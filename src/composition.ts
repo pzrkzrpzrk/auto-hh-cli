@@ -43,6 +43,10 @@ export function openResumeSource(): ResumeSession {
   return new HHResumeSource(new HHClient());
 }
 
+/** Источник резюме с жизненным циклом: команда скачивания без внешней сессии. */
+export const resumeSource: SourceProvider<ResumeSource> =
+  new HHSourceProvider(client => new HHResumeSource(client));
+
 /**
  * Провайдер ИИ для текущей конфигурации. null — ключ не задан: шаги работают без ИИ
  * (штатный режим, а не ошибка). Создаётся один раз на команду и передаётся в домен.
