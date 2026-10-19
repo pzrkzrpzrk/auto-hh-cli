@@ -5,13 +5,13 @@ import { DigestMatcher } from "../../domain/digest/DigestMatcher.js";
 import { DigestEntryFactory } from "../../domain/digest/DigestEntryFactory.js";
 import { JudgementSet } from "../../domain/digest/JudgementSet.js";
 import type { DigestCacheSnapshot } from "../../domain/digest/types.js";
-import { SkipSeenPolicy } from "../search/FullCardPolicy.js";
+import { SkipSeenPolicy } from "../../domain/search/FullCardPolicy.js";
 import SearchCache from "../search/SearchCache.js";
 import { VacancyCollector } from "../search/VacancyCollector.js";
 import type { DigestContext } from "./DigestContext.js";
 import { requireCache, requireSnapshot } from "./DigestContext.js";
 import { DigestStage, type StageOutcome } from "./DigestStage.js";
-import { JudgementService } from "./JudgementService.js";
+import { DigestJudgeRunner } from "./DigestJudgeRunner.js";
 
 // Дата кэша поиска: тем же ключом пишутся полные вакансии и вердикты ИИ.
 function sessionDate(snapshot: DigestCacheSnapshot): Date | undefined {
@@ -110,7 +110,7 @@ export class JudgeStage extends DigestStage {
   protected async execute(ctx: DigestContext): Promise<StageOutcome> {
     if (!ctx.policy.useJudge || !ctx.resume) return 'continue';
 
-    const { judgedCount } = await new JudgementService(ctx.deps.judgements).judge(
+    const { judgedCount } = await new DigestJudgeRunner(ctx.deps.judgements).judge(
       ctx.deps.ai(ctx.opts.config),
       ctx.resume,
       ctx.candidates,
@@ -128,9 +128,32 @@ export class SelectStage extends DigestStage {
   readonly name = 'select';
 
   protected async execute(ctx: DigestContext): Promise<StageOutcome> {
-    const { accepted, rejected } = new DigestMatcher(ctx.policy, log).select(ctx.candidates, ctx.judgements);
-    const matched = await new DigestEntryFactory(ctx.deps.collect.history, log)
-      .create(accepted, ctx.policy.tracksHistory);
+    const { accepted, rejected, events } = new DigestMatcher(ctx.policy).select(ctx.candidates, ctx.judgements);
+    // Логи вердиктов — здесь, а не в домене: матчер вернул факты событиями в прежнем порядке.
+    for (const event of events) {
+      if (event.kind === 'no-judgement') {
+        log.warn(`No judgement for ${event.id}, falling back to template`);
+      } else if (event.kind === 'rejected') {
+        log.info(`Claude rejected ${event.id} (score=${event.score}): ${event.reason}`);
+      } else {
+        log.info(`Claude approved ${event.id} (score=${event.score}): ${event.text}`);
+      }
+    }
+
+    const matched = new DigestEntryFactory().create(accepted);
+    // Отметка истории и лог Match — на стадии: домен остаётся без побочек.
+    for (const candidate of accepted) {
+      if (ctx.policy.tracksHistory) {
+        await ctx.deps.collect.history.markApplied(String(candidate.full.id), {
+          title: candidate.full.name,
+          employer: candidate.full.employer?.name,
+          url: (candidate.full.alternate_url as string) || '',
+          score: candidate.score,
+          digestOnly: true,
+        });
+      }
+      log.info(`Match: ${candidate.full.name} @ ${candidate.full.employer?.name} -> ${candidate.full.alternate_url}`);
+    }
 
     ctx.accepted = accepted;
     ctx.rejected = rejected;

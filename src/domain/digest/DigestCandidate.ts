@@ -39,8 +39,18 @@ export interface DigestFilterSelection {
   skipped: SkippedCandidate[];
 }
 
-/** Результат отбора: принятые кандидаты и готовые записи для rejected.md. */
+/**
+ * Событие отбора для логов стадии: правило не логирует само, а возвращает факты.
+ * `reason`/`text` могут быть null — шаблон лога печатает их как раньше.
+ */
+export type DigestSelectionEvent =
+  | { kind: 'no-judgement'; id: string }
+  | { kind: 'rejected'; id: string; score: number; reason: string | null }
+  | { kind: 'approved'; id: string; score: number; text: string | null };
+
+/** Результат отбора: принятые кандидаты, записи для rejected.md и события для логов. */
 export interface DigestSelection {
   accepted: AcceptedCandidate[];
   rejected: RejectedEntry[];
+  events: DigestSelectionEvent[];
 }
