@@ -1,57 +1,51 @@
-// Команда resume: управление резюме.
-import { listResumes, loadResume } from "../../../infrastructure/files/resume-loader.js";
-import { registerResume, listResumes as listMongo } from "../../../infrastructure/mongo/resume-store.js";
-import type { Resume } from "../../../domain/models.js";
-import log from "../../../shared/logger.js";
+// Команда resume: управление резюме (list/register/show).
+// Данные и проверки — application/resume.ts, здесь только печать и коды возврата.
+import {
+  listResumesForCli,
+  registerResumeByName,
+  loadResumeForShow,
+} from "../../../application/resume.js";
 
 async function cmdResumeList() {
-  const files = listResumes();
-  if (!files.length) {
+  const outcome = await listResumesForCli();
+  if (outcome.kind === 'empty') {
     console.log("No resumes found. Set RESUMES_DIR or RESUME_PATH.");
     return;
   }
 
-  const mongo = await listMongo();
-  const byId = new Map(mongo.map(r => [r.resumeId, r]));
-
   console.log("\n=== Доступные резюме ===\n");
-  for (const f of files) {
-    const resume = loadResume(f.name);
-    const registered = resume ? byId.get(resume.id) : null;
-    console.log(`  ${f.name} (${resume?.id || '?'})${registered ? '' : ' (не зарегистрировано)'}`);
-    console.log(`    Файл: ${f.filename}`);
-    if (registered) console.log(`    Добавлено: ${registered.createdAt.toISOString().slice(0, 10)}`);
+  for (const row of outcome.rows) {
+    console.log(`  ${row.name} (${row.id})${row.registeredAt ? '' : ' (не зарегистрировано)'}`);
+    console.log(`    Файл: ${row.filename}`);
+    if (row.registeredAt) console.log(`    Добавлено: ${row.registeredAt}`);
     console.log();
   }
 }
 
 async function cmdResumeRegister(name: string) {
-  if (!name) {
+  const outcome = await registerResumeByName(name);
+  if (outcome.kind === 'missing-name') {
     console.error('Укажите имя резюме: пункт меню «🧾 Резюме» → register <name>');
     process.exit(1);
   }
-  const resume = loadResume(name);
-  if (!resume) {
-    console.error(`Resume "${name}" not found`);
+  if (outcome.kind === 'not-found') {
+    console.error(`Resume "${outcome.name}" not found`);
     process.exit(1);
   }
-  await registerResume(resume);
-  log.info(`Resume "${name}" registered (id: ${resume.id})`);
 }
 
 async function cmdResumeShow(name?: string) {
-  let resume: Resume | null;
-  try {
-    resume = name ? loadResume(name) : loadResume();
-  } catch (err: any) {
-    console.error(err.message);
+  const outcome = loadResumeForShow(name);
+  if (outcome.kind === 'error') {
+    console.error(outcome.message);
     process.exit(1);
   }
-  if (!resume) {
+  if (outcome.kind === 'not-found') {
     console.error('Резюме не найдено. Задайте RESUME_PATH или RESUMES_DIR в .env, либо укажите имя: пункт меню «🧾 Резюме» → show <name>');
     process.exit(1);
   }
 
+  const resume = outcome.resume;
   console.log(`\n=== Резюме: ${resume.name} ===`);
   console.log(`  id:      ${resume.id}`);
   console.log(`  файл:    ${resume.filename}`);
