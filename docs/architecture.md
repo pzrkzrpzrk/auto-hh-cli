@@ -1,9 +1,9 @@
 # Архитектура auto-hh-cli
 
-- **Статус:** этапы 1–9 выполнены — структура приведена к целевой (раздел 4), домен не зависит от инфраструктуры, все сценарии в `application/`; поиск (этап 6) и дайджест (этап 7) переведены на ООП (порты, конвейер, репортёр), этап 8 закрыл `apply`/`cover` портами (T-17/T-18) и собрал их как ООП-подсистемы (фасады, конвейеры, стратегии), этап 9 — файловый I/O сценариев (T-20), конфиг через `ConfigProvider` (T-19) и `shared`/домен без инфраструктуры (T-21); документация обновлена.
+- **Статус:** этапы 1–9 выполнены — структура приведена к целевой (раздел 4), домен не зависит от инфраструктуры, все сценарии в `application/`; поиск (этап 6) и дайджест (этап 7) переведены на ООП (порты, конвейер, репортёр), этап 8 закрыл `apply`/`cover` портами (T-17/T-18) и собрал их как ООП-подсистемы (фасады, конвейеры, стратегии), этап 9 — файловый I/O (T-20), `ConfigProvider` (T-19), чистые `shared`/домен (T-21) и единый composition root с портом `Scheduler` (T-22); документация обновлена.
 - **Дата:** 2026-10-19.
 - **Ветка:** `refactoring/digest-oop`.
-- **Состояние кода:** `src/` — 147 файлов, ≈8,27 тыс. строк; `npx tsc --noEmit` → exit 0.
+- **Состояние кода:** `src/` — 149 файлов, ≈8,34 тыс. строк; `npx tsc --noEmit` → exit 0.
 
 ---
 
@@ -65,14 +65,14 @@ presentation ──▶ application ──▶ domain
 
 ## 3. Текущее состояние
 
-Структура совпадает с целевой (раздел 4): `src/` — 147 файлов, ≈8,27 тыс. строк, `npx tsc --noEmit` → exit 0.
+Структура совпадает с целевой (раздел 4): `src/` — 149 файлов, ≈8,34 тыс. строк, `npx tsc --noEmit` → exit 0.
 
 ```
-src/                              # 147 файлов
-├── application/                  # 58 файлов, ≈2,44 тыс. строк — сценарии (use cases)
+src/                              # 149 файлов
+├── application/                  # 59 файлов, ≈2,47 тыс. строк — сценарии (use cases)
 ├── domain/                       # 29 файлов, ≈1,84 тыс. строк — модели, правила, порты
-├── infrastructure/               # 30 файлов, ≈2,38 тыс. строк — адаптеры hh.ru, ИИ, Mongo,
-│                                 #   Playwright, файлы, логирование, конфигурация
+├── infrastructure/               # 31 файл, ≈2,39 тыс. строк — адаптеры hh.ru, ИИ, Mongo,
+│                                 #   Playwright, файлы, логирование, планировщик, конфигурация
 ├── presentation/                 # 20 файлов, ≈1,17 тыс. строк — CLI: команды, меню, форматтеры
 ├── shared/                       #  9 файлов, ≈0,28 тыс. строк — логгер-фасад, батчи, время,
 │                                 #   ретраи, текст
@@ -204,6 +204,7 @@ src/
 │   │   ├── ActualizeScenario.ts     # актуализация digest/rejected
 │   │   ├── ActualizeTarget.ts       # цели актуализации (digest/rejected)
 │   │   └── index.ts
+│   ├── config-view.ts          # просмотр config.json через ConfigProvider
 │   ├── grade.ts                # загрузка резюме + оценка
 │   ├── resume.ts               # резюме: list / register / show (порт ResumeFiles)
 │   ├── resume-download.ts      # скачивание резюме (порты ResumeSource, ResumeFiles)
@@ -222,6 +223,7 @@ src/
 │   │          search-output.ts, search-report-writer.ts, digest-files.ts,
 │   │          digest-file-source.ts}
 │   ├── logging/logger.ts        # адаптер LogSink: app.log + DEBUG
+│   ├── scheduling/node-cron.ts # адаптер Scheduler: единственный import node-cron
 │   ├── playwright/{browser.ts, apply-steps.ts, application-gateway.ts}
 │   └── config/{config.ts, env.ts, paths.ts, apply-config.ts}
 │
@@ -569,8 +571,26 @@ E2E с живыми hh.ru, Mongo и ИИ не запускался — пров�
 `Select-String -Path src\domain -Pattern 'process.env|shared/logger|shared/concurrency'` → пусто;
 `npx tsc --noEmit` → 0; смоук логов (файл, уровни, `Europe/Moscow`) и `retryOnTransient` → ok.
 
-Ограничения: `application → infrastructure` остался один импорт — `grade.ts` (загрузка резюме);
-`node-cron` в `schedule` ждёт порт `Scheduler` — это тикеты T-22.
+### Этап 9.3 — единый composition root и порт `Scheduler` (выполнено 2026-10-19, T-22)
+
+1. `domain/ports.ts` — `Scheduler { validate, schedule }`; `application/schedule.ts` больше
+   не импортирует `node-cron`, а получает планировщик через `ScheduleRuntimeDeps`.
+2. `infrastructure/scheduling/node-cron.ts` — единственный `import cron` в проекте; адаптер
+   оборачивает async-колбэк, сохраняя обработку ошибок шагов.
+3. `composition.ts` — `scheduleDeps` (config + scheduler), `gradeDeps` (ai + resumeFiles + logger)
+   и `closeResources()`; `cmd-schedule` добавляет `steps`, `cmd-grade-resume` получает `gradeDeps`.
+4. `application/config-view.ts` — просмотр конфига; `cmd-config` берёт `configProvider` из composition.
+   `menu/resume*` используют `application/resume` (`listResumeFiles`/`readResumeFile`) и `resumeDeps`.
+5. `presentation/cli/index.ts` закрывает Mongo через `closeResources()`; `presentation` не импортирует
+   инфраструктуру.
+
+Проверка: `Select-String -Path src\application -Pattern 'node-cron|infrastructure/'` → пусто;
+`Select-String -Path src\presentation -Pattern 'infrastructure/'` → пусто; `npx tsc --noEmit` → 0;
+смоук `runSchedule` (scheduled/invalid/no-cron, шаги и события), `gradeDeps`, `showConfig` → exit 0.
+
+Ограничения: прямых импортов инфраструктуры в `application`/`presentation` нет. Остались
+T-23 (`dependency-cruiser` + `strict`), T-24 (домен без побочек), T-25 (разбить адаптеры hh.ru),
+T-26 (тесты на фейковых портах).
 
 ---
 
