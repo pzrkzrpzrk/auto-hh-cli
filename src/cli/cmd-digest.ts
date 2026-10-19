@@ -7,7 +7,7 @@ import { getConcurrency } from "../clients/ai-client";
 import { loadConfig } from "../config.js";
 import history from "../store/history-store";
 import * as collectCache from "../store/cache-store.js";
-import { vacancyMatchesFilter } from "../domain/filter.js";
+import { selectCandidates } from "../domain/filter.js";
 import { loadResume } from "../resume.js";
 import { judgeVacancy, judgeVacanciesBatch } from "../domain/judge";
 import { writeDigest, writeRejected, writeActualDigest, writeActualRejected, getLatestDigest, listDigestDocs } from "../store/digest-store";
@@ -27,26 +27,20 @@ function sessionDate(cache) {
 }
 
 async function filterLocally(client, items, cache, cfg, deps: CollectDeps, markSeen = true) {
-  const candidates = [];
   // Догрузка карточек — общая с шагами search и cover. Просмотренные не качаем: ниже они всё равно пропускаются.
   const { failedIds } = await ensureFullVacancies(client, items, cache, deps, { skipSeen: true });
   // Карточки, которые не удалось скачать, помечаем просмотренными, чтобы не перебирать их при каждом запуске.
   if (markSeen) for (const id of failedIds) await deps.history.markSeen(id);
 
-  for (const item of items) {
-    const full = cache.fullById[String(item.id)];
-    // Не скачана (просмотрена ранее или ошибка) — пропускаем.
-    if (!full) continue;
-
-    // anyRegions — регионы «любые вакансии» из config.search.area (остальные — только удалёнка).
-    const verdict = vacancyMatchesFilter(full, cfg.filter, { anyRegions: cfg.search?.area });
-    // В dry-run историю не трогаем: прогон не должен оставлять следов.
-    if (markSeen) await deps.history.markSeen(item.id);
-    if (!verdict.ok) {
-      log.info(`Skip ${item.id} (${full.name}): ${verdict.reason}`);
-      continue;
-    }
-    candidates.push({ full, verdict });
+  // Сам отбор — чистая функция домена; здесь остаётся только I/O (история и лог).
+  const { candidates, skipped } = selectCandidates(items, cache, cfg);
+  // В dry-run историю не трогаем: прогон не должен оставлять следов.
+  if (markSeen) {
+    for (const c of candidates) await deps.history.markSeen(c.full.id);
+    for (const s of skipped) await deps.history.markSeen(s.id);
+  }
+  for (const { id, name, reason } of skipped) {
+    log.info(`Skip ${id} (${name}): ${reason}`);
   }
   return candidates;
 }
