@@ -1,26 +1,41 @@
 // Сценарий сопроводительных писем: одна вакансия или весь последний дайджест.
+// Зависимости — только порты: config.json, MongoDB и диск подставляет composition root.
 // Печать остаётся в команде: сценарий возвращает результат, а карточку вакансии
 // отдаёт в колбэк onVacancy — так порядок вывода в консоли не меняется.
 import { buildCoverLetter, buildCoverLettersBatch } from "../domain/cover-letter/index.js";
-import { loadResume } from "../infrastructure/files/resume-loader.js";
-import { loadConfig } from "../infrastructure/config/config.js";
-import { intFromEnv } from "../infrastructure/config/env.js";
-import * as collectCache from "../infrastructure/mongo/cache-store.js";
 import type { AiProvider, CollectDeps, SourceProvider } from "../domain/ports.js";
+import type { CoverLetterCache, DigestRepository, ResumeProvider } from "../domain/digest/ports.js";
+import type { DigestEntry, Resume, Vacancy } from "../domain/models.js";
 import type { VacancySource } from "../domain/search/VacancySource.js";
 import SearchCache from "./search/SearchCache.js";
 import { VacancyCollector } from "./search/VacancyCollector.js";
 import { AllVacanciesPolicy } from "./search/FullCardPolicy.js";
-import { getLatestDigest, writeDigest } from "../infrastructure/mongo/digest-store.js";
 import log from "../shared/logger.js";
 
-/** Зависимости сценария: конкретные реализации подставляет команда (composition root). */
+/** Настройки писем из config.json/env — читает composition root, сценарий их только использует. */
+export interface CoverConfig {
+  coverLetterTemplate?: string;
+  /** Адаптировать резюме под каждую вакансию (config.adaptResume !== false). */
+  adaptResume: boolean;
+  /** Сколько вакансий уходит в один запрос к ИИ (COVER_BATCH_SIZE). */
+  batchSize: number;
+}
+
+/** Зависимости сценария писем — только порты (DIP). */
 export interface CoverDeps {
   /** Провайдер ИИ создаётся лениво — ровно там, где он нужен (как раньше). */
   ai: () => AiProvider | null;
+  /** Шаблон письма, адаптация резюме и размер пачки. */
+  config: () => CoverConfig;
   collect: CollectDeps;
   /** Источник вакансий с жизненным циклом (браузер открывается только при догрузке). */
   source: SourceProvider<VacancySource>;
+  /** Чтение резюме с диска (RESUME_PATH / RESUMES_DIR). */
+  resumeFiles: ResumeProvider;
+  /** Последний дайджест и запись обновлённых писем. */
+  digests: DigestRepository;
+  /** Письма из cacheCoverLetters: чтение (с force) и запись. */
+  letters: CoverLetterCache;
 }
 
 /** Итог сценария: команда превращает его в печать (и код возврата для ошибок). */
@@ -39,12 +54,11 @@ export type OnVacancy = (full: any, vacancyId: string) => void;
 async function coverOne(
   ai: AiProvider | null,
   vacancyId: string,
-  opts: Record<string, any>,
-  resume,
+  resume: Resume,
   deps: CoverDeps,
   onVacancy?: OnVacancy,
 ): Promise<CoverOutcome> {
-  const cfg = loadConfig();
+  const cfg = deps.config();
   return deps.source.withSource(async source => {
     log.info(`Fetching vacancy ${vacancyId}...`);
     const full = await source.getVacancy(vacancyId);
@@ -56,10 +70,10 @@ async function coverOne(
     if (onVacancy) onVacancy(full, vacancyId);
 
     log.info('Generating cover letter...');
-    const letter = await buildCoverLetter(ai, cfg.apply.coverLetterTemplate, full, resume, cfg.adaptResume !== false);
+    const letter = await buildCoverLetter(ai, cfg.coverLetterTemplate, full, resume, cfg.adaptResume);
     if (!letter) return { kind: 'no-letter' };
 
-    await collectCache.saveLetter(String(full.id), letter).catch(err => log.warn(`saveLetter ${full.id}: ${err.message}`));
+    await deps.letters.save(String(full.id), letter).catch(err => log.warn(`saveLetter ${full.id}: ${err.message}`));
     return { kind: 'one', letter };
   });
 }
@@ -68,11 +82,11 @@ async function coverOne(
 async function coverDigest(
   ai: AiProvider | null,
   opts: Record<string, any>,
-  resume,
+  resume: Resume,
   deps: CoverDeps,
 ): Promise<CoverOutcome> {
-  const cfg = loadConfig();
-  const digest = await getLatestDigest().catch(() => null);
+  const cfg = deps.config();
+  const digest = await deps.digests.latest().catch(() => null);
   if (!digest || !digest.entries.length) {
     log.warn('Дайджест пуст — сначала соберите его: пункт меню «🧠 Собрать дайджест» (нужна MongoDB)');
     return { kind: 'empty' };
@@ -82,7 +96,7 @@ async function coverDigest(
   const entries = digest.entries.slice(0, limit);
 
   const letters = new Map<string, string>();
-  const withLetters = await collectCache.withCoverLetters(entries, { force: Boolean(opts.force) }).catch(() => entries);
+  const withLetters = await deps.letters.attach(entries, { force: Boolean(opts.force) }).catch(() => entries);
   for (const e of withLetters) if (e.coverLetter) letters.set(String(e.id), e.coverLetter);
 
   const pending = withLetters.filter(e => !e.coverLetter);
@@ -92,7 +106,8 @@ async function coverDigest(
   }
 
   // Описания вакансий: сначала из кэша cacheFull, недостающие — со страницы hh.ru.
-  const fullById = await collectCache.getFullByVacancyIds(pending.map(e => e.id)).catch(() => ({} as Record<string, any>));
+  const fullById = await deps.collect.cacheStore.getFullByVacancyIds(pending.map(e => e.id))
+    .catch(() => ({} as Record<string, Vacancy>));
   const missing = pending.filter(e => !fullById[String(e.id)]).map(e => String(e.id));
   if (missing.length) {
     log.info(`Подгружаю описания вакансий: ${missing.length}`);
@@ -110,22 +125,22 @@ async function coverDigest(
     return { kind: 'empty' };
   }
 
-  const batchSize = intFromEnv('COVER_BATCH_SIZE', 20, { min: 1 });
+  const batchSize = cfg.batchSize;
   log.info(`Генерация писем пачками по ${batchSize} для ${items.length} вакансий`);
   const generated = await buildCoverLettersBatch(ai, resume, items, batchSize, async (partial) => {
     for (const [id, letter] of partial.entries()) {
       letters.set(id, letter);
-      await collectCache.saveLetter(id, letter).catch(err => log.warn(`saveLetter ${id}: ${err.message}`));
+      await deps.letters.save(id, letter).catch(err => log.warn(`saveLetter ${id}: ${err.message}`));
     }
-  }, cfg.adaptResume !== false);
+  }, cfg.adaptResume);
   for (const [id, letter] of generated.entries()) letters.set(id, letter);
 
-  const updated = digest.entries.map(e => ({ ...e, coverLetter: letters.get(String(e.id)) || e.coverLetter || '' }));
+  const updated: DigestEntry[] = digest.entries.map(e => ({ ...e, coverLetter: letters.get(String(e.id)) || e.coverLetter || '' }));
   const ready = updated.filter(e => e.coverLetter).length;
   log.info(`Сопроводительных готово: ${ready}/${updated.length}`);
 
   if (ready) {
-    const files = await writeDigest(updated, digest.date)
+    const files = await deps.digests.save('digest', updated, digest.date)
       .catch(err => { log.warn(`Не удалось обновить дайджест: ${err.message}`); return null; });
     if (files?.length) log.info(`Digest updated with cover letters: ${files.join(', ')}`);
   }
@@ -143,19 +158,19 @@ export async function runCover(
   deps: CoverDeps,
   onVacancy?: OnVacancy,
 ): Promise<CoverOutcome> {
-  const cfg = loadConfig();
-  const resume = loadResume(opts.resume);
+  const cfg = deps.config();
+  const resume = deps.resumeFiles.load(opts.resume);
 
   if (!resume) {
     log.error('RESUME_PATH / RESUMES_DIR не заданы — без резюме письма не генерируются');
     return { kind: 'no-resume' };
   }
-  if (!cfg.apply?.coverLetterTemplate) {
+  if (!cfg.coverLetterTemplate) {
     log.warn('apply.coverLetterTemplate не задан в config.json — используется только ИИ');
   }
 
   const id = vacancyId ? String(vacancyId).trim() : '';
   const ai = deps.ai();
-  return id ? coverOne(ai, id, opts, resume, deps, onVacancy) : coverDigest(ai, opts, resume, deps);
+  return id ? coverOne(ai, id, resume, deps, onVacancy) : coverDigest(ai, opts, resume, deps);
 }
 

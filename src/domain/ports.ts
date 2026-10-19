@@ -2,7 +2,7 @@
 // Домен зависит от этих узких интерфейсов, а не от конкретных модулей store/ (MongoDB).
 // Реализации подставляет вызывающий код (CLI — временный composition root), поэтому
 // доменные шаги можно прогонять с подставными хранилищами, без базы.
-import type { HhResumeData, HhResumeSummary } from "./models.js";
+import type { DigestEntry, HhResumeData, HhResumeSummary, Vacancy } from "./models.js";
 import type { SearchCacheSnapshot } from "./search/types.js";
 import type { VacancySource } from "./search/VacancySource.js";
 
@@ -23,6 +23,8 @@ export interface CacheStore {
   load(date?: Date, resumeId?: string): Promise<SearchCacheSnapshot>;
   savePage(state: any, pageNum: number | string, date?: Date): Promise<void>;
   saveFullVacancy(vacancy: any, date?: Date): Promise<void>;
+  /** Полные карточки по id (cacheFull): карта vacancyId → вакансия. Нужна шагу cover. */
+  getFullByVacancyIds(vacancyIds: (string | number)[]): Promise<Record<string, Vacancy>>;
 }
 
 /** Зависимости шагов сбора вакансий. */
@@ -54,6 +56,37 @@ export interface ResumeSource {
  */
 export interface SourceProvider<T> {
   withSource<R>(fn: (source: T) => Promise<R>): Promise<R>;
+}
+
+// --- Отклик на вакансии ---------------------------------------------------
+
+/** Итог одного отклика: reason нужен только для счётчика и лога сценария. */
+export interface ApplyResult {
+  ok: boolean;
+  reason?: string;
+  note?: string;
+}
+
+/**
+ * Сессия отклика: браузер уже открыт, сценарий просит только «проверь вход» и «откликнись».
+ * Как и ResumeSource, скрывает страницу, селекторы и ручные подтверждения.
+ */
+export interface ApplicationSession {
+  ensureLoggedIn(): Promise<boolean>;
+  apply(entry: DigestEntry): Promise<ApplyResult>;
+}
+
+/**
+ * Провайдер сессии отклика (RAII): открыть браузер → работа → закрыть.
+ * Тот же приём, что SourceProvider: сценарий не знает ни про Playwright, ни про порядок закрытия.
+ */
+export interface ApplicationGateway {
+  withSession<R>(fn: (session: ApplicationSession) => Promise<R>): Promise<R>;
+}
+
+/** Ручной вход: headful-браузер, который живёт, пока пользователь его не закроет. */
+export interface LoginGateway {
+  login(): Promise<void>;
 }
 
 // --- ИИ-провайдер ---------------------------------------------------------

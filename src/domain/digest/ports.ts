@@ -41,9 +41,18 @@ export interface JudgementCache {
   save(judgements: Record<string, any>, resumeId?: string, date?: Date): Promise<void>;
 }
 
-/** Письма из кэша, подклеиваемые к записям дайджеста при показе/отклике. */
+/** Письма из кэша, подклеиваемые к записям дайджеста при показе, генерации и отклике. */
 export interface CoverLetterCache {
-  attach<T extends { id: string | number; coverLetter?: string }>(entries: T[]): Promise<T[]>;
+  /**
+   * Подклеить письма из кэша.
+   * force=true — считать, что писем нет ни в кэше, ни в записи (перегенерировать всё).
+   */
+  attach<T extends { id: string | number; coverLetter?: string }>(
+    entries: T[],
+    opts?: { force?: boolean },
+  ): Promise<T[]>;
+  /** Сохранить письмо (шаг cover): его читают digest show, cover и apply. */
+  save(vacancyId: string | number, letter: string): Promise<void>;
 }
 
 /** Регистрация резюме в коллекции resumes (без неё не связать вердикты с резюме). */
