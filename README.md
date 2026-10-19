@@ -373,11 +373,13 @@ npm start           # или: npm run ui, npx auto-hh, npx auto-hh ui (алиа�
 │  ├─ presentation/cli/         # ввод-вывод: команды и меню
 │  │  ├─ index.ts               # точка входа run(): регистрирует только меню
 │  │  ├─ commands/cmd-*.ts      # тонкие оболочки: печать результата + код возврата
-│  │  ├─ format/grade-report.ts # консольный отчёт и Markdown об оценке резюме
+│  │  ├─ format/                # grade-report (оценка резюме), search-report (фазы поиска)
 │  │  └─ menu/                  # menu, options, resume, resume-download, steps
 │  ├─ application/              # сценарии (use cases)
-│  │  ├─ collect.ts             # сбор страниц поиска + хелперы (fmtSalary, flatten)
-│  │  ├─ search.ts              # поиск + догрузка карточек (события SearchEvent)
+│  │  ├─ collect.ts             # утилиты выдачи: flattenCollected, fmtSalary
+│  │  ├─ search.ts              # runSearch() — обёртка над SearchScenario
+│  │  ├─ search/                # ООП-поиск: фасад, конвейер стадий, коллектор,
+│  │  │                         #   репозиторий кэша, итератор страниц, политики
 │  │  ├─ digest.ts              # фильтр + ИИ-судья + актуализация; показ дайджеста
 │  │  ├─ cover.ts               # сопроводительные (весь дайджест или один id)
 │  │  ├─ apply.ts               # цикл откликов через Playwright
@@ -389,19 +391,21 @@ npm start           # или: npm run ui, npx auto-hh, npx auto-hh ui (алиа�
 │  │  └─ reset.ts               # сброс файлов и коллекций
 │  ├─ domain/                   # правила и модели, без I/O
 │  │  ├─ models.ts              # Vacancy, Resume, Verdict, DigestEntry, HhResume*
-│  │  ├─ ports.ts               # CacheStore, HistoryStore, CollectDeps, AiProvider
+│  │  ├─ ports.ts               # CacheStore, HistoryStore, SearchDeps, ResumeSource,
+│  │  │                         #   SourceProvider, AiProvider
 │  │  ├─ filter.ts / resume-block.ts / actualize.ts / adapt-resume.ts
 │  │  ├─ resume-markdown.ts / grade-resume.ts
+│  │  ├─ search/                # VO (SearchQuery, SearchBucket, PageKey) и порт VacancySource
 │  │  └─ judge/ cover-letter/   # ИИ-судья и генерация писем
 │  ├─ infrastructure/           # адаптеры внешнего мира
-│  │  ├─ hh/                    # client.ts (поиск, карточки), resume.ts (разбор резюме)
+│  │  ├─ hh/                    # client, resume, vacancy-source, resume-source, source-provider
 │  │  ├─ ai/client.ts           # единый OpenAI-совместимый клиент
 │  │  ├─ mongo/                 # db, cache-store, digest-store, history-store, resume-store
 │  │  ├─ files/                 # resume-loader, search-output, digest-files
 │  │  ├─ playwright/            # browser, apply-steps (действия на странице)
 │  │  └─ config/                # config, env, paths, apply-config
 │  ├─ shared/                   # logger, concurrency, retry, text-utils, time, cron, path-utils
-│  └─ composition.ts            # сборка зависимостей (composition root)
+│  └─ composition.ts            # сборка зависимостей: источники hh.ru, ИИ, хранилища
 ├─ scripts/                    # вспомогательные скрипты (judge-only, fill-cover-letters, …)
 ├─ migrations/                 # миграции MongoDB
 ├─ migrate-mongo-config.js     # настройки migrate-mongo (берёт MONGODB_URI из .env)
