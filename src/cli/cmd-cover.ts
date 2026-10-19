@@ -6,7 +6,8 @@ import { loadResume } from "../resume.js";
 import { loadConfig } from "../config.js";
 import { intFromEnv } from "../env.js";
 import * as collectCache from "../store/cache-store.js";
-import { collectDeps } from "../composition.js";
+import { aiProvider, collectDeps } from "../composition.js";
+import type { AiProvider } from "../domain/ports.js";
 import { ensureFullVacancies, fmtSalary } from "../domain/collect.js";
 import { getLatestDigest, writeDigest } from "../store/digest-store.js";
 import log from "../logger.js";
@@ -30,7 +31,7 @@ function printLetters(entries: any[], letters: Map<string, string>) {
 }
 
 // Одна вакансия: письмо печатается в консоль и кладётся в кэш (чтобы apply его увидел).
-async function coverOne(vacancyId: string, opts: Record<string, any>, resume) {
+async function coverOne(ai: AiProvider | null, vacancyId: string, opts: Record<string, any>, resume) {
   const cfg = loadConfig();
   const client = new HHClient();
   try {
@@ -45,7 +46,7 @@ async function coverOne(vacancyId: string, opts: Record<string, any>, resume) {
     printVacancy(full, vacancyId);
 
     log.info('Generating cover letter...');
-    const letter = await buildCoverLetter(cfg.apply.coverLetterTemplate, full, resume);
+    const letter = await buildCoverLetter(ai, cfg.apply.coverLetterTemplate, full, resume);
     if (!letter) {
       log.warn('No cover letter generated (API may be unavailable)');
       return;
@@ -60,7 +61,7 @@ async function coverOne(vacancyId: string, opts: Record<string, any>, resume) {
 }
 
 // Весь последний дайджест: письма генерируются батчами и сохраняются в кэш + дайджест.
-async function coverDigest(opts: Record<string, any>, resume) {
+async function coverDigest(ai: AiProvider | null, opts: Record<string, any>, resume) {
   const digest = await getLatestDigest().catch(() => null);
   if (!digest || !digest.entries.length) {
     log.warn('Дайджест пуст — сначала соберите его: пункт меню «🧠 Собрать дайджест» (нужна MongoDB)');
@@ -103,7 +104,7 @@ async function coverDigest(opts: Record<string, any>, resume) {
 
   const batchSize = intFromEnv('COVER_BATCH_SIZE', 20, { min: 1 });
   log.info(`Генерация писем пачками по ${batchSize} для ${items.length} вакансий`);
-  const generated = await buildCoverLettersBatch(resume, items, batchSize, async (partial) => {
+  const generated = await buildCoverLettersBatch(ai, resume, items, batchSize, async (partial) => {
     for (const [id, letter] of partial.entries()) {
       letters.set(id, letter);
       await collectCache.saveLetter(id, letter).catch(err => log.warn(`saveLetter ${id}: ${err.message}`));
@@ -138,7 +139,8 @@ async function cover(vacancyId?: string, opts: Record<string, any> = {}) {
   }
 
   const id = vacancyId ? String(vacancyId).trim() : '';
-  return id ? coverOne(id, opts, resume) : coverDigest(opts, resume);
+  const ai = aiProvider();
+  return id ? coverOne(ai, id, opts, resume) : coverDigest(ai, opts, resume);
 }
 
 export default cover;

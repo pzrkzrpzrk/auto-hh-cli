@@ -23,3 +23,35 @@ export interface CollectDeps {
   cacheStore: CacheStore;
   history: HistoryStore;
 }
+
+// --- ИИ-провайдер ---------------------------------------------------------
+
+/** Сообщение модели: роль и содержимое (строка или блоки, как в OpenAI-совместимом API). */
+export interface AiMessage {
+  role: 'system' | 'user' | 'assistant';
+  content: string | any[];
+}
+
+export interface AiChatOptions {
+  messages: AiMessage[];
+  /** Лимит токенов ответа; по умолчанию — AI_MAX_TOKENS. */
+  maxTokens?: number;
+  /** Просить строгий JSON (response_format=json_object). */
+  json?: boolean;
+  /** Метка для лога ретраев. */
+  label?: string;
+}
+
+export interface AiChatResult {
+  text: string | null;
+  usage: { prompt?: number; completion?: number };
+}
+
+/**
+ * Порт ИИ: домен просит «ответь на сообщения», не зная ни SDK, ни провайдера.
+ * Ошибки пробрасываются — шаг сам решает, как их обработать.
+ */
+export interface AiProvider {
+  chat(opts: AiChatOptions): Promise<AiChatResult>;
+}
+

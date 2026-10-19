@@ -20,6 +20,11 @@ export function concurrencyFromEnv(def = 10): number {
   return intFromEnv('CONCURRENCY', def, { min: 1 });
 }
 
+/** Параллелизм ИИ-запросов: env `AI_CONCURRENCY` (>= 1), иначе `def` (10). */
+export function aiConcurrencyFromEnv(def = 10): number {
+  return intFromEnv('AI_CONCURRENCY', def, { min: 1 });
+}
+
 export interface RunBatchesOpts<T, R> {
   /** Вызывается после успешной обработки пачки — с её результатом и индексом (0-based). */
   onBatch?: (result: R, batch: T[], index: number) => void | Promise<void>;

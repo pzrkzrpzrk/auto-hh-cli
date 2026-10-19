@@ -1,12 +1,12 @@
 import OpenAI from "openai";
-import type { Resume } from "../types.js";
+import type { AiProvider, AiChatOptions, AiChatResult } from "../domain/ports.js";
+import { retryOnTransient } from "../retry.js";
 import { positiveIntFromEnv } from "../env.js";
 
 // Провайдер задаётся парой: config.json → api.baseUrl + api.model.
 // Дефолт — GLM-4.7-Flash (Z.ai): бесплатная, 200K контекста, 128K вывода.
 const DEFAULT_MODEL = 'glm-4.7-flash';
 const DEFAULT_MAX_TOKENS = 32768;
-const DEFAULT_CONCURRENCY = 10;
 
 let client: OpenAI | null = null;
 let lastConfig: any = null;
@@ -20,12 +20,6 @@ export function getModel(apiConfig?: any): string {
 // на рассуждения, поэтому дефолт заметно выше ожидаемого объёма ответа.
 export function getMaxTokens(): number {
   return positiveIntFromEnv('AI_MAX_TOKENS', DEFAULT_MAX_TOKENS);
-}
-
-// Сколько ИИ-запросов выполнять параллельно: бесплатные тарифы часто ограничивают
-// параллелизм, и при превышении приходят 429.
-export function getConcurrency(): number {
-  return positiveIntFromEnv('AI_CONCURRENCY', DEFAULT_CONCURRENCY);
 }
 
 export function getClient(apiConfig?: any): OpenAI | null {
@@ -46,13 +40,41 @@ export function getClient(apiConfig?: any): OpenAI | null {
   return client;
 }
 
-export function buildResumeBlock(resume: Resume, adaptedText: string | null = null): { type: string; text: string } | null {
-  if (!resume) return null;
-  if (adaptedText) {
-    return { type: 'text', text: `=== РЕЗЮМЕ СОИСКАТЕЛЯ (адаптированное под вакансию) ===\n${adaptedText}` };
+/**
+ * Адаптер OpenAI-совместимого API (Z.ai, DeepSeek, OpenAI, …) — единственное место,
+ * где домен упирается в SDK. Домен видит только порт AiProvider: провайдера можно
+ * заменить (другой SDK, мок в тестах), не трогая промпты и логику шагов.
+ */
+class OpenAiProvider implements AiProvider {
+  constructor(private readonly client: OpenAI, private readonly model: string) {}
+
+  async chat({ messages, maxTokens, json, label }: AiChatOptions): Promise<AiChatResult> {
+    const resp: any = await retryOnTransient(
+      () => this.client.chat.completions.create({
+        model: this.model,
+        max_tokens: maxTokens ?? getMaxTokens(),
+        messages: messages as any,
+        ...(json ? { response_format: { type: 'json_object' } } : {}),
+      }),
+      label ? { label } : {},
+    );
+
+    return {
+      text: resp?.choices?.[0]?.message?.content ?? null,
+      usage: {
+        prompt: resp?.usage?.prompt_tokens,
+        completion: resp?.usage?.completion_tokens,
+      },
+    };
   }
-  if (resume.type === 'pdf') {
-    return { type: 'text', text: `=== РЕЗЮМЕ СОИСКАТЕЛЯ (PDF) ===\n${resume.filename}` };
-  }
-  return { type: 'text', text: `=== РЕЗЮМЕ СОИСКАТЕЛЯ ===\n${resume.text}` };
+}
+
+/**
+ * Провайдер для текущей конфигурации. null — ключ не задан: шаги работают без ИИ
+ * (как раньше при пустом getClient), это штатный режим, а не ошибка.
+ */
+export function createAiProvider(apiConfig?: any): AiProvider | null {
+  const client = getClient(apiConfig);
+  if (!client) return null;
+  return new OpenAiProvider(client, getModel(apiConfig));
 }

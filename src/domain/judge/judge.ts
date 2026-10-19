@@ -1,13 +1,10 @@
 import log from "../../logger.js";
-import { retryOnTransient } from "../../retry.js";
-import { loadConfig } from "../../config";
-import { getClient, buildResumeBlock, getModel, getMaxTokens } from "../../clients/ai-client";
+import { buildResumeBlock } from "../resume-block.js";
+import type { AiProvider } from "../ports.js";
 import { stripHtml, parseJSON } from "../../text-utils.js";
 import { adaptResumeForVacancy } from "../adapt-resume.js";
 import type { Vacancy, Resume, Verdict, JudgeOpts } from "../../types.js";
 import { buildSystemText } from "./system-text.js";
-
-const apiConfig = loadConfig().api || {};
 
 // Гарантирует инвариант вердикта: fit=true ⇒ comment непустой, reason=null;
 // fit=false ⇒ reason непустой, comment=null.
@@ -63,11 +60,9 @@ function formatVacancyText(vacancy: Vacancy) {
 ${description}`;
 }
 
-async function judgeVacancy(resume: Resume, vacancy: Vacancy, opts: JudgeOpts = {}): Promise<Verdict | null> {
-  const c = getClient(apiConfig);
-  if (!c) return null;
+async function judgeVacancy(ai: AiProvider | null, resume: Resume, vacancy: Vacancy, opts: JudgeOpts = {}): Promise<Verdict | null> {
+  if (!ai) return null;
 
-  const model = getModel(apiConfig);
   const minScore = opts.minScore ?? 7;
 
   const vacancyBlock = {
@@ -89,17 +84,12 @@ async function judgeVacancy(resume: Resume, vacancy: Vacancy, opts: JudgeOpts = 
     },
   ];
   try {
-    const resp = await retryOnTransient(() => c.chat.completions.create({
-      model,
-      max_tokens: getMaxTokens(),
-      messages,
-      response_format: { type: 'json_object' },
-    }), { label: `судья ${vacancy.id}` });
-    const text = (resp as any).choices?.[0]?.message?.content;
+    const resp = await ai.chat({ messages, json: true, label: `судья ${vacancy.id}` });
+    const text = resp.text;
     if (!text) return null;
     const parsed = parseJSON(text);
     const verdict = normalizeVerdict(verdictList(parsed)[0] ?? {});
-    log.debug(`judge ${vacancy.id}: score=${verdict.score} fit=${verdict.fit} in=${(resp as any).usage?.prompt_tokens} out=${(resp as any).usage?.completion_tokens}`);
+    log.debug(`judge ${vacancy.id}: score=${verdict.score} fit=${verdict.fit} in=${resp.usage.prompt} out=${resp.usage.completion}`);
     return verdict;
   } catch (err) {
     log.warn(`judge failed for ${vacancy.id}: ${err.message}`);
@@ -109,12 +99,10 @@ async function judgeVacancy(resume: Resume, vacancy: Vacancy, opts: JudgeOpts = 
 
 // Батчевая версия: судит пачку вакансий за один запрос.
 // Возвращает Map<vacancyId, verdict> (verdict в том же формате, что judgeVacancy).
-async function judgeVacanciesBatch(resume: Resume, vacancies: Vacancy[], opts: JudgeOpts = {}): Promise<Map<string, Verdict> | null> {
-  const c = getClient(apiConfig);
-  if (!c) return null;
+async function judgeVacanciesBatch(ai: AiProvider | null, resume: Resume, vacancies: Vacancy[], opts: JudgeOpts = {}): Promise<Map<string, Verdict> | null> {
+  if (!ai) return null;
   if (!vacancies.length) return new Map();
 
-  const model = getModel(apiConfig);
   const minScore = opts.minScore ?? 7;
   const adapt = opts.adaptResume;
 
@@ -147,17 +135,12 @@ async function judgeVacanciesBatch(resume: Resume, vacancies: Vacancy[], opts: J
   ];
 
   try {
-    const resp = await retryOnTransient(() => c.chat.completions.create({
-      model,
-      max_tokens: getMaxTokens(),
-      messages,
-      response_format: { type: 'json_object' },
-    }), { label: `судья батч ${vacancies.length}` });
-    const text = (resp as any).choices?.[0]?.message?.content;
+    const resp = await ai.chat({ messages, json: true, label: `судья батч ${vacancies.length}` });
+    const text = resp.text;
     if (!text) return null;
     const parsed = parseJSON(text);
 
-    log.debug(`judge batch ${vacancies.length}: in=${(resp as any).usage?.prompt_tokens || 0} out=${(resp as any).usage?.completion_tokens || 0}`);
+    log.debug(`judge batch ${vacancies.length}: in=${resp.usage.prompt || 0} out=${resp.usage.completion || 0}`);
 
     const map = new Map();
     for (const v of verdictList(parsed)) {

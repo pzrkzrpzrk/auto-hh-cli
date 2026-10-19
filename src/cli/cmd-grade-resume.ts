@@ -1,6 +1,7 @@
 import { writeFileSync } from "fs";
 import { join } from "path";
 import log from "../logger.js";
+import { aiProvider } from "../composition.js";
 import { gradeResume } from "../domain/grade-resume.js";
 
 function bar(score: number, max: number): string {
@@ -156,7 +157,7 @@ function formatGrade(result: Record<string, any>): void {
 }
 
 async function cmdGradeResume(opts: Record<string, any> = {}) {
-  const result = await gradeResume(undefined, opts.resume);
+  const result = await gradeResume(aiProvider(), undefined, opts.resume);
   formatGrade(result);
 
   if (result) {

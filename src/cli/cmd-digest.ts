@@ -3,11 +3,11 @@
 import fs from "fs";
 import path from "path";
 import HHClient from "../clients/hh-client";
-import { getConcurrency } from "../clients/ai-client";
+import { chunk, runBatches, aiConcurrencyFromEnv } from "../concurrency.js";
 import { loadConfig } from "../config.js";
 import history from "../store/history-store";
 import * as collectCache from "../store/cache-store.js";
-import { collectDeps } from "../composition.js";
+import { aiProvider, collectDeps } from "../composition.js";
 import { selectCandidates } from "../domain/filter.js";
 import { loadResume } from "../resume.js";
 import { judgeVacancy, judgeVacanciesBatch } from "../domain/judge";
@@ -18,7 +18,6 @@ import type { DigestEntry } from "../types.js";
 import { flattenCollected, fmtSalary, ensureFullVacancies } from "../domain/collect.js";
 import type { CollectDeps } from "../domain/ports.js";
 import { DIGEST_DIR } from "../paths.js";
-import { chunk, runBatches } from "../concurrency.js";
 import { intFromEnv } from "../env.js";
 import log from "../logger.js";
 
@@ -46,7 +45,7 @@ async function filterLocally(client, items, cache, cfg, deps: CollectDeps, markS
   return candidates;
 }
 
-async function judgeWithClaude(resume, candidates, cache, minScore, adaptResume = false, resumeId?: string) {
+async function judgeWithClaude(ai, resume, candidates, cache, minScore, adaptResume = false, resumeId?: string) {
   const judgements = new Map();
   for (const [id, j] of Object.entries(cache.judgements)) judgements.set(id, j);
   let judgedCount = 0;
@@ -59,15 +58,15 @@ async function judgeWithClaude(resume, candidates, cache, minScore, adaptResume 
   const batchSize = intFromEnv('JUDGE_BATCH_SIZE', 10);
   const date = sessionDate(cache);
   const batches = chunk<any>(pending, batchSize).map(group => group.map(c => c.full));
-  const CONCURRENCY = getConcurrency();
+  const CONCURRENCY = aiConcurrencyFromEnv();
 
   async function runBatch(idx, batch) {
     log.info(`Judging batch ${idx}: ${batch.length} vacancies`);
-    const result = await judgeVacanciesBatch(resume, batch, { minScore, adaptResume });
+    const result = await judgeVacanciesBatch(ai, resume, batch, { minScore, adaptResume });
     if (!result) {
       log.warn(`Batch ${idx} failed, falling back to per-item judge`);
       for (const v of batch) {
-        const j = await judgeVacancy(resume, v, { minScore, adaptResume });
+        const j = await judgeVacancy(ai, resume, v, { minScore, adaptResume });
         if (j) {
           judgements.set(String(v.id), j);
           cache.judgements[String(v.id)] = j;
@@ -213,8 +212,9 @@ async function build(opts: Record<string, any> = {}) {
     log.info(`Local filter passed: ${candidates.length}/${items.length}`);
 
     const adaptResume = cfg.adaptResume !== false;
+    const ai = aiProvider();
     const { judgements, judgedCount } = useClaude
-      ? await judgeWithClaude(resume, candidates, cache, minScore, adaptResume, resumeId)
+      ? await judgeWithClaude(ai, resume, candidates, cache, minScore, adaptResume, resumeId)
       : { judgements: new Map(), judgedCount: 0 };
 
     const { accepted, rejected } = selectAccepted(candidates, judgements, useClaude, maxRun);
