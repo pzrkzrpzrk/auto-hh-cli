@@ -1,7 +1,7 @@
 // Команда apply: отклик через Playwright.
 import fs from "fs";
 import path from "path";
-import {  chromium  } from "playwright";
+import { openBrowser, PROFILE } from "../browser.js";
 import log from "../logger";
 import history from "../store/history-store";
 import  {getDigestsByDate, getAllDigests} from "../store/digest-store";
@@ -9,16 +9,11 @@ import { withCoverLetters } from "../store/cache-store.js";
 import { sleep, rand, dateKey } from "../time.js";
 import { intFromEnv } from "../env.js";
 
-const PROFILE = path.resolve(process.env.PW_USER_DATA_DIR || './data/browser-profile');
 const HEADLESS = String(process.env.PW_HEADLESS || 'false') === 'true';
 const MIN_DELAY = intFromEnv('PW_MIN_DELAY_MS', 500);
 const MAX_DELAY = intFromEnv('PW_MAX_DELAY_MS', 2000);
 const TEST_MODE = (process.env.PW_TEST_MODE || 'manual').toLowerCase();
 const TEST_TIMEOUT = intFromEnv('PW_TEST_TIMEOUT_MS', 0);
-
-function ensureProfile() {
-  if (!fs.existsSync(PROFILE)) fs.mkdirSync(PROFILE, { recursive: true });
-}
 
 async function loadDigest(type: string) {
   if (type === 'all') {
@@ -209,14 +204,9 @@ function waitForEnter(message) {
 }
 
 async function loginFlow() {
-  ensureProfile();
   log.info(`Launching headful browser, profile: ${PROFILE}`);
   log.info('Залогиньтесь на hh.ru вручную, потом просто закройте браузер.');
-  const ctx = await chromium.launchPersistentContext(PROFILE, {
-    headless: false,
-    viewport: { width: 1280, height: 800 },
-  });
-  const page = ctx.pages()[0] || await ctx.newPage();
+  const { page } = await openBrowser({ headless: false });
   await page.goto('https://hh.ru/account/login', { waitUntil: 'domcontentloaded' });
   await new Promise(() => {}); // бесконечное ожидание — браузер жив, пока не закроют.
 }
@@ -227,7 +217,6 @@ async function apply(opts: Record<string, any> = {}) {
     return;
   }
 
-  ensureProfile();
   const type = opts.type || 'latest';
   const loaded = await loadDigest(type);
   // Актуализированные (шаг `digest actualize`) вакансии пропускаем: их уже нет в поиске.
@@ -249,11 +238,7 @@ async function apply(opts: Record<string, any> = {}) {
     log.warn(`${withoutLetter} вакансий без сопроводительного — пропускаю (сгенерируйте: пункт меню «✉️ Письма для дайджеста»)`);
   }
 
-  const ctx = await chromium.launchPersistentContext(PROFILE, {
-    headless: HEADLESS,
-    viewport: { width: 1280, height: 800 },
-  });
-  const page = ctx.pages()[0] || await ctx.newPage();
+  const { ctx, page } = await openBrowser({ headless: HEADLESS });
 
   // Проверка авторизации.
   await page.goto('https://hh.ru/applicant/resumes', { waitUntil: 'domcontentloaded' });

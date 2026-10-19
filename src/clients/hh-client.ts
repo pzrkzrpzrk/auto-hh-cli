@@ -11,7 +11,7 @@
 // Возвращаемые объекты приведены к формату прежнего API hh.ru, чтобы остальной код не менять.
 import path from "path";
 import fs from "fs";
-import { chromium } from "playwright";
+import { openBrowser, assertProfileExists } from "../browser.js";
 import { env } from "../config.js";
 import log from "../logger.js";
 import { sleep } from "../time.js";
@@ -23,8 +23,6 @@ import {
   normalizeResume,
 } from "./hh-resume.js";
 import type { HhResumeData, HhResumeSummary } from "./hh-resume.js";
-
-const PROFILE = path.resolve(process.env.PW_USER_DATA_DIR || './data/browser-profile');
 
 function decodeEntities(s) {
   if (!s) return '';
@@ -203,16 +201,13 @@ class HHClient {
   async init(headless = true) {
     if (this.ctx && this.headless === headless) return;
     if (this.ctx) await this.close();
-    if (!fs.existsSync(PROFILE)) {
-      throw new Error(`Browser profile not found: ${PROFILE}. Run the menu item «🔑 Войти на hh.ru» first.`);
-    }
+    // Профиль обязателен: без сохранённой сессии hh.ru скрейпинг не работает.
+    assertProfileExists();
     log.info(`Launching Playwright context for hh.ru scraping (headless=${headless})`);
-    this.ctx = await chromium.launchPersistentContext(PROFILE, {
-      headless,
-      viewport: { width: 1280, height: 800 },
-    });
+    const { ctx, page } = await openBrowser({ headless });
+    this.ctx = ctx;
+    this.page = page;
     this.headless = headless;
-    this.page = this.ctx.pages()[0] || await this.ctx.newPage();
   }
 
   async close() {
