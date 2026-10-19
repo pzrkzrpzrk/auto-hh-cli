@@ -46,5 +46,3 @@ export async function showDigest(deps: DigestShowDeps): Promise<DigestShowOutcom
   return new DigestShowScenario(deps).run();
 }
 
-
-
