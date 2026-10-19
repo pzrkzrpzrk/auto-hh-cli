@@ -14,7 +14,7 @@ import { writeDigest, writeRejected, writeActualDigest, writeActualRejected, get
 import { computeActualization, mergeActualized } from "../domain/actualize.js";
 import { registerResume } from "../store/resume-store.js";
 import type { DigestEntry } from "../types.js";
-import { flattenCollected, fmtSalary } from "../domain/collect.js";
+import { flattenCollected, fmtSalary, ensureFullVacancies } from "../domain/collect.js";
 import { DIGEST_DIR } from "../paths.js";
 import { chunk, runBatches } from "../concurrency.js";
 import { intFromEnv } from "../env.js";
@@ -27,26 +27,15 @@ function sessionDate(cache) {
 
 async function filterLocally(client, items, cache, cfg, markSeen = true) {
   const candidates = [];
-  const date = sessionDate(cache);
+  // Догрузка карточек — общая с шагами search и cover. Просмотренные не качаем: ниже они всё равно пропускаются.
+  const { failedIds } = await ensureFullVacancies(client, items, cache, { skipSeen: true });
+  // Карточки, которые не удалось скачать, помечаем просмотренными, чтобы не перебирать их при каждом запуске.
+  if (markSeen) for (const id of failedIds) await history.markSeen(id);
+
   for (const item of items) {
-    let full = cache.fullById[String(item.id)];
-    if (!full) {
-      if (await history.isSeen(item.id)) continue;
-      try {
-        full = await client.getVacancy(item.id);
-      } catch (err) {
-        log.warn(`Failed to fetch vacancy ${item.id}: ${err.message}`);
-        if (markSeen) await history.markSeen(item.id);
-        continue;
-      }
-      if (!full) {
-        log.warn(`Empty vacancy ${item.id}, skipping`);
-        if (markSeen) await history.markSeen(item.id);
-        continue;
-      }
-      cache.fullById[String(item.id)] = full;
-      await collectCache.saveFullVacancy(full, date);
-    }
+    const full = cache.fullById[String(item.id)];
+    // Не скачана (просмотрена ранее или ошибка) — пропускаем.
+    if (!full) continue;
 
     // anyRegions — регионы «любые вакансии» из config.search.area (остальные — только удалёнка).
     const verdict = vacancyMatchesFilter(full, cfg.filter, { anyRegions: cfg.search?.area });
