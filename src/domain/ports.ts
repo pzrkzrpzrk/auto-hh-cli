@@ -11,8 +11,46 @@ import type {
   SearchFileResult,
   Vacancy,
 } from "./models.js";
-import type { SearchCacheSnapshot } from "./search/types.js";
+import type { DigestFilterRules } from "./digest/types.js";
+import type { SearchCacheSnapshot, SearchConfig } from "./search/types.js";
 import type { VacancySource } from "./search/VacancySource.js";
+
+/**
+ * Конфигурация приложения — DTO из config.json. Описаны только секции, которые читают
+ * сценарии; остальные ключи остаются на месте и доступны политикам/адаптерам.
+ */
+export interface AppConfig {
+  api?: {
+    apiKey?: string;
+    baseUrl?: string;
+    model?: string;
+    [key: string]: unknown;
+  };
+  apply?: {
+    coverLetterTemplate?: string;
+    minClaudeScore?: number;
+    maxPerRun?: number;
+    dryRun?: boolean;
+    [key: string]: unknown;
+  };
+  adaptResume?: boolean;
+  search?: SearchConfig;
+  filter?: DigestFilterRules;
+  schedule?: {
+    cron?: string;
+    steps?: string[];
+    [key: string]: unknown;
+  };
+  [key: string]: unknown;
+}
+
+/**
+ * Порт конфигурации (DIP): сценарий просит загрузить config.json по явному пути,
+ * а не читает `process.env.CONFIG_PATH` и диск сам. Путь по умолчанию выбирает адаптер.
+ */
+export interface ConfigProvider {
+  load(path?: string): AppConfig;
+}
 
 /**
  * История откликов и просмотров — домену нужны только эти две операции:
@@ -85,8 +123,9 @@ export interface SearchReportWriter {
   write(entries: SearchEntry[], opts?: { date?: string; query?: string }): Promise<SearchFileResult[]>;
 }
 
-/** Зависимости сценария поиска: хранилища, источник и файловые артефакты. */
+/** Зависимости сценария поиска: хранилища, конфиг, источник и файловые артефакты. */
 export interface SearchDeps extends CollectDeps {
+  config: ConfigProvider;
   source: SourceProvider<VacancySource>;
   /** Сброс данных перед поиском (`search --reset`). */
   janitor: DataJanitor;

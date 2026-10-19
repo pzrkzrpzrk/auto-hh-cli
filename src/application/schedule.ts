@@ -1,13 +1,15 @@
 // Сценарий планировщика: запуск пайплайна (search → digest → cover) по cron-расписанию.
 // Сами шаги приходят из presentation (application не зависит от команд), печать — тоже там.
 import cron from "node-cron";
-import { loadConfig } from "../infrastructure/config/config.js";
 import { getNextDate } from "../shared/cron.js";
 import log from "../shared/logger.js";
+import type { ConfigProvider } from "../domain/ports.js";
 
 export type PipelineStep = (opts?: Record<string, any>) => Promise<any>;
 
 export interface ScheduleDeps {
+  /** Конфиг читается по явному пути из opts.config; сценарий не трогает env. */
+  config: ConfigProvider;
   /** Шаги пайплайна по именам из config.schedule.steps. */
   steps: Record<string, PipelineStep>;
 }
@@ -39,9 +41,13 @@ export async function runSchedule(
   deps: ScheduleDeps,
   report?: (event: ScheduleEvent) => void,
 ): Promise<ScheduleOutcome> {
-  const cfg = loadConfig();
+  const cfg = deps.config.load(opts.config);
   // Резюме из меню ui (если выбрано) — иначе шаги digest/cover возьмут дефолт из .env.
-  const stepOpts: Record<string, any> = opts.resume ? { resume: opts.resume } : {};
+  // Путь к конфигу передаём шагам, чтобы альтернативный файл действовал на весь прогон.
+  const stepOpts: Record<string, any> = {
+    ...(opts.resume ? { resume: opts.resume } : {}),
+    ...(opts.config ? { config: opts.config } : {}),
+  };
 
   if (!cfg.schedule?.cron) {
     return { kind: 'no-cron' };

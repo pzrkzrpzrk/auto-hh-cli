@@ -1,7 +1,6 @@
 // Сценарий актуализации (Facade): помечает в старых дайджестах и rejected вакансии,
 // которых нет в последней выдаче. Ничего не удаляет — перезаписывает .md по регионам
 // и пишет сводный снимок по всем прошлым датам в <today>/actual.md.
-import { loadConfig } from "../../infrastructure/config/config.js";
 import { computeActualization, mergeActualized } from "../../domain/actualize.js";
 import { flattenCollected } from "../collect.js";
 import log from "../../shared/logger.js";
@@ -21,8 +20,7 @@ export class ActualizeScenario {
   constructor(private readonly deps: ActualizeDeps) {}
 
   async run(opts: DigestRunOptions = {}): Promise<ActualizeResult | null> {
-    if (opts.config) process.env.CONFIG_PATH = opts.config;
-    const cfg = loadConfig();
+    const cfg = this.deps.config.load(opts.config);
 
     const cache = await this.deps.cacheStore.loadLatest().catch(() => null);
     if (!cache) {

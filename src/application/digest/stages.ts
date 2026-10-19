@@ -109,7 +109,7 @@ export class JudgeStage extends DigestStage {
     if (!ctx.policy.useJudge) return 'continue';
 
     const { judgedCount } = await new JudgementService(ctx.deps.judgements).judge(
-      ctx.deps.ai(),
+      ctx.deps.ai(ctx.opts.config),
       ctx.resume,
       ctx.candidates,
       ctx.judgements,

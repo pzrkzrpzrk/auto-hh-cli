@@ -14,14 +14,14 @@ composition root, тестируемость. Исходные факты на 2
 в 12 файлах, `shared → infrastructure` — 3 файла, `presentation → infrastructure` — 4 файла, тестов нет,
 `strict: false`, ~175 токенов `any`.
 
-После T-17, T-18 и T-20: `application → infrastructure` — 6 импортов в 5 файлах (`grade`, `schedule`
-и чтение конфига в `DigestScenario`/`ActualizeScenario`/`SearchScenario`); остальные цифры без изменений.
+После T-17, T-18, T-19 и T-20: `application → infrastructure` — 2 импорта в 2 файлах
+(`grade` — `resume-loader`, `DigestScenario` — `intFromEnv`); остальные цифры без изменений.
 
 | ID | Тикет | Приоритет | Покрывает | Зависит от | Статус |
 |---|---|---|---|---|---|
 | [T-17](T-17-apply-ports.md) | `apply.ts` за порты: Playwright/Mongo → адаптеры | P0 | Dependency Rule, I/O в use case | — | ✅ |
 | [T-18](T-18-cover-ports.md) | `cover.ts` на существующие порты | P0 | Dependency Rule, порты протекают | — | ✅ |
-| [T-19](T-19-config-provider.md) | `ConfigProvider` вместо `loadConfig()` и мутации env | P0 | скрытые зависимости, глобальное состояние | T-18 (✅) | ☐ |
+| [T-19](T-19-config-provider.md) | `ConfigProvider` вместо `loadConfig()` и мутации env | P0 | скрытые зависимости, глобальное состояние | T-18 (✅) | ✅ |
 | [T-20](T-20-file-ports.md) | Файловый I/O из `application` в адаптеры | P0 | `reset`, `resume-download`, `search/stages` | — | ✅ |
 | [T-21](T-21-shared-decoupling.md) | `shared` без инфраструктуры, домен без `process.env` | P1 | транзитивная утечка в домен | T-17 (✅), T-18 (✅) | ☐ |
 | [T-22](T-22-composition-scheduler.md) | Единый composition root + порт `Scheduler` | P1 | `node-cron` в use case, 4 импорта в CLI | T-17, T-18, T-20 | ☐ |
@@ -30,7 +30,7 @@ composition root, тестируемость. Исходные факты на 2
 | [T-25](T-25-hh-adapters-split.md) | Разбить `hh/client.ts` (619) и `resume.ts` (399) | P2 | SRP адаптеров hh.ru | T-23 | ☐ |
 | [T-26](T-26-fake-port-tests.md) | Тесты на фейковых портах (`node:test` + `tsx`) | P2 | тестируемость | T-17, T-18, T-19 | ☐ |
 
-**Сделано:** T-17, T-18, T-20 (issues #27, #28, #30). **Открыто:** T-19, T-21…T-26
+**Сделано:** T-17, T-18, T-19, T-20 (issues #27, #28, #29, #30). **Открыто:** T-21…T-26
 (issues #29, #31–#36).
 
 Порядок: **T-17 → T-18 → T-19 → T-20** (P0, восстановить Dependency Rule), затем **T-21 → T-22 → T-23**

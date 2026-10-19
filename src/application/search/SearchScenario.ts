@@ -1,6 +1,5 @@
 // Фасад сценария поиска: сброс → открытие источника → конвейер стадий.
 // Стадии ничего не знают друг о друге, порядок и «стоп» задаёт конвейер.
-import { loadConfig } from "../../infrastructure/config/config.js";
 import { formatResetSummary } from "../reset.js";
 import type { SearchDeps } from "../../domain/ports.js";
 import { SearchQuery } from "../../domain/search/SearchQuery.js";
@@ -27,8 +26,6 @@ export class SearchScenario {
   }
 
   async run(opts: Record<string, any> = {}): Promise<void> {
-    if (opts.config) process.env.CONFIG_PATH = opts.config;
-
     // Сброс — до открытия источника, как и раньше (resetData вызывался до new HHClient).
     let didReset = false;
     if (opts.reset) {
@@ -39,7 +36,7 @@ export class SearchScenario {
 
     try {
       await this.deps.source.withSource(async source => {
-        const cfg = loadConfig();
+        const cfg = this.deps.config.load(opts.config);
         log.info('Searching vacancies', cfg.search);
 
         const cache = await SearchCache.load(this.deps.cacheStore);

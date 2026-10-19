@@ -1,9 +1,9 @@
 # Архитектура auto-hh-cli
 
-- **Статус:** этапы 1–9 выполнены — структура приведена к целевой (раздел 4), домен не зависит от инфраструктуры, все сценарии в `application/`; поиск (этап 6) и дайджест (этап 7) переведены на ООП (порты, конвейер, репортёр), этап 8 закрыл `apply`/`cover` портами (T-17/T-18) и собрал их как ООП-подсистемы (фасады, конвейеры, стратегии), этап 9 — файловый I/O сценариев (T-20); документация обновлена.
+- **Статус:** этапы 1–9 выполнены — структура приведена к целевой (раздел 4), домен не зависит от инфраструктуры, все сценарии в `application/`; поиск (этап 6) и дайджест (этап 7) переведены на ООП (порты, конвейер, репортёр), этап 8 закрыл `apply`/`cover` портами (T-17/T-18) и собрал их как ООП-подсистемы (фасады, конвейеры, стратегии), этап 9 — файловый I/O сценариев (T-20) и конфиг через `ConfigProvider` (T-19); документация обновлена.
 - **Дата:** 2026-10-19.
 - **Ветка:** `refactoring/digest-oop`.
-- **Состояние кода:** `src/` — 144 файла, ≈8,08 тыс. строк; `npx tsc --noEmit` → exit 0.
+- **Состояние кода:** `src/` — 144 файла, ≈8,15 тыс. строк; `npx tsc --noEmit` → exit 0.
 
 ---
 
@@ -65,13 +65,13 @@ presentation ──▶ application ──▶ domain
 
 ## 3. Текущее состояние
 
-Структура совпадает с целевой (раздел 4): `src/` — 144 файла, ≈8,08 тыс. строк, `npx tsc --noEmit` → exit 0.
+Структура совпадает с целевой (раздел 4): `src/` — 144 файла, ≈8,15 тыс. строк, `npx tsc --noEmit` → exit 0.
 
 ```
 src/                              # 144 файла
 ├── application/                  # 58 файлов, ≈2,41 тыс. строк — сценарии (use cases)
-├── domain/                       # 28 файлов, ≈1,76 тыс. строк — модели, правила, порты
-├── infrastructure/               # 29 файлов, ≈2,33 тыс. строк — адаптеры hh.ru, ИИ, Mongo,
+├── domain/                       # 28 файлов, ≈1,80 тыс. строк — модели, правила, порты
+├── infrastructure/               # 29 файлов, ≈2,35 тыс. строк — адаптеры hh.ru, ИИ, Mongo,
 │                                 #   Playwright, файлы, конфигурация
 ├── presentation/                 # 20 файлов, ≈1,17 тыс. строк — CLI: команды, меню, форматтеры
 ├── shared/                       #  8 файлов, ≈0,26 тыс. строк — логгер, время, ретраи,
@@ -120,8 +120,9 @@ src/                              # 144 файла
 src/
 ├── domain/
 │   ├── models.ts               # Vacancy, Resume, Verdict, DigestEntry, HhResume*
-│   ├── ports.ts                # CacheStore, HistoryStore, SearchDeps, ResumeSource,
-│   │                           #   SourceProvider, AiProvider
+│   ├── ports.ts                # CacheStore, HistoryStore, DataJanitor, ResumeFiles,
+│   │                           #   SearchReportWriter, AppConfig, ConfigProvider, SearchDeps,
+│   │                           #   ResumeSource, SourceProvider, AiProvider
 │   ├── resume-block.ts
 │   ├── actualize.ts
 │   ├── adapt-resume.ts
@@ -280,7 +281,7 @@ src/
 
 **Domain Service — `DigestFilter`.** Локальный пре-фильтр: правила `config.filter` (архив, компании, ключевые слова, зарплата, локация) и регионы «любые вакансии» из `config.search.area` собираются один раз в конструкторе (`DigestFilter.from(cfg)`), наружу — `matches(vacancy)` и `select(items, cache)`. Раньше это были функции с мешком `any` (`vacancyMatchesFilter`/`selectCandidates`); теперь фильтр создаётся в `DigestScenario` и передаётся стадии через контекст, а `LocalFilterStage` только логирует пропуски и отмечает историю.
 
-**Ports & Adapters — `domain/digest/ports.ts`.** `DigestRepository`, `JudgementCache`, `CoverLetterCache`, `ResumeRegistry`, `ResumeProvider`, `DigestFileSource` и `DigestCacheStore` описывают ровно то, что нужно сценарию. Реализации — в `infrastructure/mongo` и `infrastructure/files`; `Select-String 'infrastructure/(mongo|files|hh)' src/application/digest` не находит совпадений (чтение `loadConfig` осталось исключением, как в `SearchScenario`).
+**Ports & Adapters — `domain/digest/ports.ts`.** `DigestRepository`, `JudgementCache`, `CoverLetterCache`, `ResumeRegistry`, `ResumeProvider`, `DigestFileSource` и `DigestCacheStore` описывают ровно то, что нужно сценарию. Реализации — в `infrastructure/mongo` и `infrastructure/files`; `Select-String 'infrastructure/(mongo|files|hh)' src/application/digest` не находит совпадений. Конфиг приходит через `DigestDeps.config` (`ConfigProvider`, T-19), а не читается сценарием с диска.
 
 **Repository — `MongoDigestRepository`.** Прячет выбор `writeDigest`/`writeRejected` и `writeActualDigest`/`writeActualRejected` за `save(kind)`, `saveActual(kind)`, `latest()`, `byDate()`, `all()` и `listDocs()`. `ActualizeScenario` больше не держит таблицу функций записи: цели описаны `DigestKind` и `ActualizeTarget`, поэтому новый артефакт добавляется одной строкой.
 
@@ -517,17 +518,40 @@ E2E с живыми hh.ru, Mongo и ИИ не запускался — пров�
    работают только с портами; сброс приходит в `SearchScenario` через `deps.janitor` и выполняется
    до открытия источника, как и раньше.
 4. `composition.ts`: `resetDeps`, `historyDeps`, `resumeDeps`, `resumeDownloadDeps`;
-   `searchDeps` собирается с `janitor` и `reportWriter`; при этом сохранены `applyDeps`/`coverDeps`
-   (ООП-подсистемы этапа 8). Команды передают deps, не собирая адаптеры.
+   `searchDeps` собирается с `config`, `janitor` и `reportWriter`; при этом сохранены
+   `applyDeps`/`coverDeps` (ООП-подсистемы этапа 8). Команды передают deps, не собирая адаптеры.
 
 Проверка: `Get-ChildItem -Recurse -File src\application -Filter *.ts | Select-String -Pattern 'from "fs"|from "path"|mongo/'` → пусто;
 `npx tsc --noEmit` → 0; `node bin/auto-hh --version` → 1.0.0; смоук на фейковых портах —
 файлы резюме (save/overwrite/list/load/путь PDF), скачивание с событиями, reset/history/search
 через порты, стадия выдачи через `SearchReportWriter` и её ошибка без падения поиска.
 
-Ограничения: `grade.ts` (чтение резюме), `schedule.ts` (cron + конфиг), `DigestScenario`/
-`ActualizeScenario`/`SearchScenario` (чтение конфига) по-прежнему импортируют инфраструктуру —
-это тикеты T-19/T-22 в [`docs/review/`](review/README.md).
+### Этап 9.1 — конфиг за портом (выполнено 2026-10-19, T-19)
+
+1. `domain/ports.ts`: `AppConfig` — DTO config.json (`api`, `apply`, `adaptResume`, `search`,
+   `filter`, `schedule` + неизвестные ключи) и `ConfigProvider { load(path?) }`; `SearchDeps`
+   получил `config`.
+2. `infrastructure/config/config.ts`: `FileConfigProvider` — явный путь важнее `CONFIG_PATH`,
+   кэш по абсолютному пути, один `configProvider` на процесс; `loadConfig(path?)` остался
+   совместимой обёрткой для `cmd-config`.
+3. `DigestDeps`, `ActualizeDeps`, `ScheduleDeps` получили `config`; `CoverDeps.config` принимает
+   путь. `DigestScenario`, `ActualizeScenario`, `SearchScenario`, `schedule` и `CoverScenario`
+   вызывают `deps.config.load(opts.config)` / `deps.config(opts.config)`;
+   `process.env.CONFIG_PATH` в `application` больше не присваивается.
+4. `composition.ts`: общий провайдер для `searchDeps`, `digestDeps`, `actualizeDeps`,
+   `coverConfig` и `aiProvider`; `aiProvider(path?)` берёт ключ/`baseUrl` из того же файла,
+   что и сценарий; `runSchedule` передаёт `config` в шаги, `cmd-schedule` получает провайдер
+   из composition.
+5. `SearchContext.cfg` типизирован `AppConfig`; стадия выдачи пишет через `deps.reportWriter`
+   (T-20) и берёт запрос из `cfg.search?.text`.
+
+Проверка: `Get-ChildItem src\application -Recurse -Filter *.ts | Select-String -Pattern 'CONFIG_PATH|config/config'` → пусто;
+`npx tsc --noEmit` → 0; смоук провайдера (явный путь, `CONFIG_PATH`, мемоизация, отсутствие
+мутации env) и проброса `opts.config` в digest/search/cover/actualize/schedule → exit 0.
+
+Ограничения: `grade.ts` (загрузка резюме) и `intFromEnv` в `DigestScenario` (настройки
+конкурентности) по-прежнему импортируют инфраструктуру; `node-cron` в `schedule` ждёт порт
+`Scheduler` — это тикеты T-21/T-22 в [`docs/review/`](review/README.md).
 
 ---
 

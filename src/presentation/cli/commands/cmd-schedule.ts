@@ -1,6 +1,7 @@
 // Команда schedule: тонкая оболочка над application/schedule.ts.
 // Здесь только состав шагов (команды пайплайна) и печать фаз расписания.
 import { runSchedule, type ScheduleEvent } from "../../../application/schedule.js";
+import { configProvider } from "../../../composition.js";
 import search from "./cmd-search.js";
 import digest from "./cmd-digest.js";
 import cover from "./cmd-cover.js";
@@ -32,7 +33,7 @@ function printEvent(e: ScheduleEvent) {
 }
 
 export default async function cmdSchedule(opts: Record<string, any> = {}) {
-  const outcome = await runSchedule(opts, { steps: STEPS }, printEvent);
+  const outcome = await runSchedule(opts, { config: configProvider, steps: STEPS }, printEvent);
 
   if (outcome.kind === 'no-cron') {
     console.error("schedule.cron не задан в config.json");

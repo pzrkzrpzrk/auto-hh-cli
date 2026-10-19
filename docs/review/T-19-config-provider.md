@@ -26,30 +26,54 @@
 
 ## Что сделать
 
-- [ ] `domain/ports.ts`: порт `ConfigProvider { load(path?: string): AppConfig }`
+- [x] `domain/ports.ts`: порт `ConfigProvider { load(path?: string): AppConfig }`
       (`AppConfig` — тип, вынесенный из `config.ts`, без fs внутри).
-- [ ] `infrastructure/config/config.ts`: `FileConfigProvider implements ConfigProvider`,
+- [x] `infrastructure/config/config.ts`: `FileConfigProvider implements ConfigProvider`,
       мемоизация по `absPath`, явный параметр `path` вместо чтения `process.env.CONFIG_PATH`
       в глубине (env остаётся дефолтом для адаптера).
-- [ ] Сценарии (`DigestScenario`, `ActualizeScenario`, `SearchScenario`, `schedule`, `cover`):
+- [x] Сценарии (`DigestScenario`, `ActualizeScenario`, `SearchScenario`, `schedule`, `cover`):
       получать `cfg`/`CoverConfig` из deps; удалить присваивания `process.env.CONFIG_PATH`.
       `opts.config` передаётся в `deps.config.load(opts.config)`.
-- [ ] `composition.ts`: один `configProvider` на процесс; `coverConfig()` и `digestDeps` используют его.
-- [ ] CLI: `opts.config` остаётся внешним контрактом (`--config`) — меняется только способ доставки.
+- [x] `composition.ts`: один `configProvider` на процесс; `coverConfig()` и `digestDeps` используют его.
+- [x] CLI: `opts.config` остаётся внешним контрактом (`--config`) — меняется только способ доставки.
 
 ## Definition of Done
 
-- [ ] `Select-String -Path src\application -Pattern 'process\.env\.CONFIG_PATH\s*='` → пусто.
-- [ ] `Select-String -Path src\application -Pattern 'config/config'` → пусто.
-- [ ] `npx tsc --noEmit` → exit 0.
-- [ ] Поведение не изменилось: `opts.config` по-прежнему позволяет указать другой файл для одного прогона;
+- [x] `Get-ChildItem src\application -Recurse -Filter *.ts | Select-String -Pattern 'process\.env\.CONFIG_PATH\s*='` → пусто.
+- [x] `Get-ChildItem src\application -Recurse -Filter *.ts | Select-String -Pattern 'config/config'` → пусто.
+- [x] `npx tsc --noEmit` → exit 0.
+- [x] Поведение не изменилось: `opts.config` по-прежнему позволяет указать другой файл для одного прогона;
       параллельные прогоны в одном процессе больше не влияют друг на друга.
+
+## Выполнено (2026-10-19)
+
+- `domain/ports.ts` — `AppConfig` (DTO config.json: `api`, `apply`, `adaptResume`, `search`,
+  `filter`, `schedule` + неизвестные ключи) и `ConfigProvider { load(path?) }`; `SearchDeps.config`
+  добавлен к хранилищам и источнику.
+- `infrastructure/config/config.ts` — `FileConfigProvider`: явный путь важнее `CONFIG_PATH`,
+  `path.resolve` и `Map<absPath, AppConfig>`; `configProvider` — один экземпляр на процесс,
+  `loadConfig(path?)` оставлен совместимой обёрткой для `cmd-config`.
+- `DigestDeps`/`ActualizeDeps`/`ScheduleDeps` получили `config: ConfigProvider`;
+  `CoverDeps.config` принимает путь. `DigestScenario`, `ActualizeScenario`,
+  `SearchScenario`, `schedule` и `CoverScenario` читают конфиг только через deps и передают
+  `opts.config`; присваиваний `process.env.CONFIG_PATH` в `application` нет.
+- `composition.ts` — `searchDeps`, `digestDeps`, `actualizeDeps`, `coverConfig` и `aiProvider`
+  используют общий `configProvider`; `cmd-schedule` получает его из composition.
+- `aiProvider(path?)` и `DigestDeps.ai`/`CoverDeps.ai` принимают путь: альтернативный
+  `opts.config` действует и на ключ/`baseUrl` ИИ, а не только на политику. `runSchedule`
+  передаёт `config` в шаги пайплайна.
+- `SearchContext.cfg` типизирован `AppConfig`, `ExportSearchFileStage` читает
+  `ctx.cfg.search?.text` (конфиг может не содержать `search`).
+- Проверка: `Get-ChildItem src\application -Recurse -Filter *.ts | Select-String -Pattern 'CONFIG_PATH|config/config'`
+  → пусто; `npx tsc --noEmit` → exit 0; смоук `FileConfigProvider` (явный путь, `CONFIG_PATH`,
+  мемоизация, отсутствие мутации env) и проброс `opts.config` в `DigestScenario`,
+  `SearchScenario`, `CoverScenario`, `ActualizeScenario`, `runSchedule` → exit 0.
 
 ## Проверка
 
 ```powershell
 npx tsc --noEmit
-Select-String -Path src\application -Pattern 'CONFIG_PATH|config/config'
+Get-ChildItem src\application -Recurse -Filter *.ts | Select-String -Pattern 'CONFIG_PATH|config/config'
 npx tsx bin/auto-hh ui   # пункт «Конфигурация» читает тот же файл
 ```
 

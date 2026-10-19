@@ -16,10 +16,10 @@ export interface CoverConfig {
 
 /** Зависимости сценария писем — только порты. */
 export interface CoverDeps {
-  /** Провайдер ИИ создаётся лениво — ровно там, где он нужен (как раньше). */
-  ai: () => AiProvider | null;
-  /** Шаблон письма, адаптация резюме и размер пачки. */
-  config: () => CoverConfig;
+  /** Провайдер ИИ создаётся лениво — ровно там, где он нужен (как раньше); путь — из opts.config. */
+  ai: (path?: string) => AiProvider | null;
+  /** Шаблон письма, адаптация резюме и размер пачки; путь — из opts.config. */
+  config: (path?: string) => CoverConfig;
   collect: CollectDeps;
   /** Источник вакансий с жизненным циклом (браузер открывается только при догрузке). */
   source: SourceProvider<VacancySource>;

@@ -399,8 +399,8 @@ npm start           # или: npm run ui, npx auto-hh, npx auto-hh ui (алиа�
 │  ├─ domain/                   # правила и модели, без I/O
 │  │  ├─ models.ts              # Vacancy, Resume, Verdict, DigestEntry, HhResume*
 │  │  ├─ ports.ts               # CacheStore, HistoryStore, DataJanitor, ResumeFiles,
-│  │  │                         #   SearchReportWriter, SearchDeps, ResumeSource,
-│  │  │                         #   SourceProvider, AiProvider
+│  │  │                         #   SearchReportWriter, AppConfig, ConfigProvider,
+│  │  │                         #   SearchDeps, ResumeSource, SourceProvider, AiProvider
 │  │  ├─ resume-block.ts / actualize.ts / adapt-resume.ts
 │  │  ├─ resume-markdown.ts / grade-resume.ts
 │  │  ├─ search/                # VO (SearchQuery, SearchBucket, PageKey) и порт VacancySource
@@ -415,7 +415,7 @@ npm start           # или: npm run ui, npx auto-hh, npx auto-hh ui (алиа�
 │  │  ├─ files/                 # resume-loader, resume-files, data-janitor, search-output,
 │  │  │                         #   search-report-writer, digest-files, digest-file-source
 │  │  ├─ playwright/            # browser, apply-steps, application-gateway (порты отклика)
-│  │  └─ config/                # config, env, paths, apply-config
+│  │  └─ config/                # config (FileConfigProvider), env, paths, apply-config
 │  ├─ shared/                   # logger, concurrency, retry, text-utils, time, cron, path-utils, format
 │  └─ composition.ts            # сборка зависимостей: источники hh.ru, ИИ, хранилища
 ├─ scripts/                    # вспомогательные скрипты (judge-only, fill-cover-letters, …)

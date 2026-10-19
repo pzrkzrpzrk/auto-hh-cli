@@ -15,7 +15,7 @@ import FileDataJanitor from "./infrastructure/files/data-janitor.js";
 import FileResumeFiles from "./infrastructure/files/resume-files.js";
 import FileSearchReportWriter from "./infrastructure/files/search-report-writer.js";
 import { createAiProvider } from "./infrastructure/ai/client.js";
-import { loadConfig } from "./infrastructure/config/config.js";
+import { configProvider } from "./infrastructure/config/config.js";
 import { intFromEnv } from "./infrastructure/config/env.js";
 import { MIN_DELAY, MAX_DELAY } from "./infrastructure/config/apply-config.js";
 import PlaywrightApplicationGateway from "./infrastructure/playwright/application-gateway.js";
@@ -41,6 +41,9 @@ import type { ResetDeps } from "./application/reset.js";
 import type { ResumeDeps } from "./application/resume.js";
 import type { ResumeDownloadDeps } from "./application/resume-download.js";
 
+// Адаптер конфигурации — один на процесс; команды получают его через composition.
+export { configProvider };
+
 // Зависимости шагов сбора вакансий: search, digest, cover.
 // cacheStore типизирован портом дайджеста (нужен loadLatest), search он тоже удовлетворяет.
 export const collectDeps: CollectDeps & { cacheStore: DigestCacheStore } = { cacheStore, history };
@@ -59,9 +62,10 @@ const searchReportWriter = new FileSearchReportWriter();
 export const vacancySource: SourceProvider<VacancySource> =
   new HHSourceProvider(client => new HHVacancySource(client));
 
-/** Зависимости сценария поиска: хранилища + источник вакансий + файловые артефакты. */
+/** Зависимости сценария поиска: хранилища, конфиг, источник и файловые артефакты. */
 export const searchDeps: SearchDeps = {
   ...collectDeps,
+  config: configProvider,
   source: vacancySource,
   janitor: dataJanitor,
   reportWriter: searchReportWriter,
@@ -87,6 +91,7 @@ export const resumeDeps: ResumeDeps = { files: resumeFiles, registry: resumeRegi
 
 /** Зависимости сценария сборки дайджеста. */
 export const digestDeps: DigestDeps = {
+  config: configProvider,
   ai: aiProvider,
   collect: collectDeps,
   source: vacancySource,
@@ -104,12 +109,16 @@ export const digestShowDeps: DigestShowDeps = {
   files: digestFileSource,
 };
 
-/** Зависимости актуализации: кэш поиска и репозиторий дайджестов. */
-export const actualizeDeps: ActualizeDeps = { cacheStore, digest: digestRepository };
+/** Зависимости актуализации: конфиг, кэш поиска и репозиторий дайджестов. */
+export const actualizeDeps: ActualizeDeps = {
+  config: configProvider,
+  cacheStore,
+  digest: digestRepository,
+};
 
 /** Настройки писем: config.json + COVER_BATCH_SIZE читаются здесь, а не в сценарии. */
-function coverConfig(): CoverConfig {
-  const cfg = loadConfig();
+function coverConfig(path?: string): CoverConfig {
+  const cfg = configProvider.load(path);
   return {
     coverLetterTemplate: cfg.apply?.coverLetterTemplate,
     adaptResume: cfg.adaptResume !== false,
@@ -168,6 +177,6 @@ export const resumeDownloadDeps: ResumeDownloadDeps = {
  * Провайдер ИИ для текущей конфигурации. null — ключ не задан: шаги работают без ИИ
  * (штатный режим, а не ошибка). Создаётся один раз на команду и передаётся в домен.
  */
-export function aiProvider(): AiProvider | null {
-  return createAiProvider(loadConfig().api || {});
+export function aiProvider(path?: string): AiProvider | null {
+  return createAiProvider(configProvider.load(path).api || {});
 }

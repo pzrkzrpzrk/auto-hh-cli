@@ -1,7 +1,7 @@
 // Зависимости сценариев дайджеста: только порты домена, без Mongo и fs.
 // Раньше этот интерфейс жил рядом со свободными функциями в application/digest.ts;
 // теперь он в модуле сценария, а composition root импортирует его отсюда.
-import type { AiProvider, CollectDeps, SourceProvider } from "../../domain/ports.js";
+import type { AiProvider, CollectDeps, ConfigProvider, SourceProvider } from "../../domain/ports.js";
 import type { VacancySource } from "../../domain/search/VacancySource.js";
 import type {
   CoverLetterCache,
@@ -15,8 +15,10 @@ import type {
 
 /** Всё, что нужно сборке дайджеста. */
 export interface DigestDeps {
-  /** Провайдер ИИ создаётся лениво — ровно там, где он нужен (как раньше). */
-  ai: () => AiProvider | null;
+  /** Конфиг читается по явному пути из opts.config; сценарий не трогает env. */
+  config: ConfigProvider;
+  /** Провайдер ИИ создаётся лениво — ровно там, где он нужен (как раньше); путь — из opts.config. */
+  ai: (path?: string) => AiProvider | null;
   /** Хранилища сбора: кэш (с загрузкой снимка) и история откликов. */
   collect: CollectDeps & { cacheStore: DigestCacheStore };
   /** Источник вакансий с жизненным циклом (браузер открывается только при догрузке). */
@@ -44,6 +46,7 @@ export interface DigestShowDeps {
 
 /** Минимальный набор для `digest actualize`. */
 export interface ActualizeDeps {
+  config: ConfigProvider;
   cacheStore: DigestCacheStore;
   digest: DigestRepository;
 }

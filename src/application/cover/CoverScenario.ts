@@ -21,7 +21,7 @@ export class CoverScenario {
     opts: Record<string, any>,
     onVacancy?: OnVacancy,
   ): Promise<CoverOutcome> {
-    const cfg = this.deps.config();
+    const cfg = this.deps.config(opts.config);
     const resume = this.deps.resumeFiles.load(opts.resume);
 
     if (!resume) {
@@ -33,7 +33,7 @@ export class CoverScenario {
     }
 
     const id = vacancyId ? String(vacancyId).trim() : '';
-    const ai = this.deps.ai();
+    const ai = this.deps.ai(opts.config);
     const mode = this.selectMode(id, opts, cfg, resume, ai, onVacancy);
     return mode.run();
   }
