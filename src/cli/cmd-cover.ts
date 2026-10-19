@@ -6,7 +6,7 @@ import { loadResume } from "../resume.js";
 import { loadConfig } from "../config.js";
 import { intFromEnv } from "../env.js";
 import * as collectCache from "../store/cache-store.js";
-import history from "../store/history-store.js";
+import { collectDeps } from "../composition.js";
 import { ensureFullVacancies, fmtSalary } from "../domain/collect.js";
 import { getLatestDigest, writeDigest } from "../store/digest-store.js";
 import log from "../logger.js";
@@ -89,7 +89,7 @@ async function coverDigest(opts: Record<string, any>, resume) {
     const client = new HHClient();
     try {
       // Общая догрузка карточек (та же, что в search/digest): skipSeen не нужен — письма пишем всем.
-      await ensureFullVacancies(client, missing, { fullById }, { cacheStore: collectCache, history });
+      await ensureFullVacancies(client, missing, { fullById }, collectDeps);
     } finally {
       await client.close?.();
     }

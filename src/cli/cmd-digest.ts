@@ -7,6 +7,7 @@ import { getConcurrency } from "../clients/ai-client";
 import { loadConfig } from "../config.js";
 import history from "../store/history-store";
 import * as collectCache from "../store/cache-store.js";
+import { collectDeps } from "../composition.js";
 import { selectCandidates } from "../domain/filter.js";
 import { loadResume } from "../resume.js";
 import { judgeVacancy, judgeVacanciesBatch } from "../domain/judge";
@@ -208,7 +209,7 @@ async function build(opts: Record<string, any> = {}) {
   const client = new HHClient();
   try {
     log.info(`Building digest from search cache ${cache.date}: ${items.length} vacancies`);
-    const candidates = await filterLocally(client, items, cache, cfg, { cacheStore: collectCache, history }, !dryRun);
+    const candidates = await filterLocally(client, items, cache, cfg, collectDeps, !dryRun);
     log.info(`Local filter passed: ${candidates.length}/${items.length}`);
 
     const adaptResume = cfg.adaptResume !== false;

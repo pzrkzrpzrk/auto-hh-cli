@@ -3,7 +3,7 @@
 import HHClient from "../clients/hh-client.js";
 import { loadConfig } from "../config.js";
 import * as collectCache from "../store/cache-store.js";
-import history from "../store/history-store.js";
+import { collectDeps } from "../composition.js";
 import { collectVacancies, collectFullVacancies, flattenCollected, fmtSalary } from "../domain/collect.js";
 import resetData, { formatResetSummary } from "../store/reset.js";
 import { writeSearchResults } from "../store/search-store.js";
@@ -42,7 +42,7 @@ async function search(opts: Record<string, any> = {}) {
     const cfg = loadConfig();
     log.info('Searching vacancies', cfg.search);
     const cache = await collectCache.load();
-    const items = await collectVacancies(client, cfg.search, cache, { cacheStore: collectCache, history });
+    const items = await collectVacancies(client, cfg.search, cache, collectDeps);
 
     console.log(`\n=== НАЙДЕНО: ${items.length} ===`);
     for (const item of items.slice(0, PREVIEW_LIMIT)) {
@@ -84,7 +84,7 @@ async function search(opts: Record<string, any> = {}) {
 
     // Описания (cacheFull) нужны шагам digest и cover — забираем их сразу, пока открыт браузер.
     try {
-      const full = await collectFullVacancies(client, items, cache, { cacheStore: collectCache, history });
+      const full = await collectFullVacancies(client, items, cache, collectDeps);
       const parts = [`+${full.saved}`];
       if (full.cached) parts.push(`уже в кэше ${full.cached}`);
       if (full.skippedSeen) parts.push(`просмотренных пропущено ${full.skippedSeen}`);
