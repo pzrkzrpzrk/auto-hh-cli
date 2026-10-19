@@ -5,7 +5,7 @@ import {  chromium  } from "playwright";
 import log from "../logger";
 import history from "../store/history-store";
 import  {getDigestsByDate, getAllDigests} from "../store/digest-store";
-import { getLettersByVacancyIds } from "../store/cache-store.js";
+import { withCoverLetters } from "../store/cache-store.js";
 import { sleep, rand, dateKey } from "../time.js";
 import { intFromEnv } from "../env.js";
 
@@ -243,11 +243,7 @@ async function apply(opts: Record<string, any> = {}) {
   log.info(`${entries.length} vacancies in digest`);
 
   // Письма генерируются отдельным шагом (пункт меню «✉️ Письма для дайджеста») и лежат в cacheCoverLetters.
-  const letters = await getLettersByVacancyIds(entries.map(e => e.id)).catch(() => ({} as Record<string, string>));
-  const planned = entries.map(entry => ({
-    ...entry,
-    coverLetter: letters[String(entry.id)] || entry.coverLetter || '',
-  }));
+  const planned = await withCoverLetters(entries);
   const withoutLetter = planned.filter(e => !e.coverLetter).length;
   if (withoutLetter) {
     log.warn(`${withoutLetter} вакансий без сопроводительного — пропускаю (сгенерируйте: пункт меню «✉️ Письма для дайджеста»)`);

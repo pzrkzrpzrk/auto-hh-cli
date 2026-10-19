@@ -13,6 +13,7 @@ import { judgeVacancy, judgeVacanciesBatch } from "../domain/judge";
 import { writeDigest, writeRejected, writeActualDigest, writeActualRejected, getLatestDigest, listDigestDocs } from "../store/digest-store";
 import { computeActualization, mergeActualized } from "../domain/actualize.js";
 import { registerResume } from "../store/resume-store.js";
+import type { DigestEntry } from "../types.js";
 import { flattenCollected, fmtSalary } from "../domain/collect.js";
 import { DIGEST_DIR } from "../paths.js";
 import { chunk, runBatches } from "../concurrency.js";
@@ -286,8 +287,7 @@ function listDigestFiles(dir: string): string[] {
 async function show(opts: Record<string, any> = {}) {
   const digest = await getLatestDigest().catch(() => null);
   if (digest) {
-    const letters = await collectCache.getLettersByVacancyIds(digest.entries.map(e => e.id)).catch(() => ({}));
-    const entries = digest.entries.map(e => ({ ...e, coverLetter: letters[String(e.id)] || e.coverLetter || '' }));
+    const entries = await collectCache.withCoverLetters<DigestEntry>(digest.entries);
     if (opts.json) {
       console.log(JSON.stringify(entries, null, 2));
     } else {
