@@ -4,10 +4,10 @@
 //
 // Здесь же — точка, где позже подключаются другие адаптеры (ИИ-провайдер, уведомления):
 // домен о них не знает, знает только этот файл.
-import * as cacheStore from "./store/cache-store.js";
-import history from "./store/history-store.js";
-import { createAiProvider } from "./clients/ai-client.js";
-import { loadConfig } from "./config.js";
+import * as cacheStore from "./infrastructure/mongo/cache-store.js";
+import history from "./infrastructure/mongo/history-store.js";
+import { createAiProvider } from "./infrastructure/ai/client.js";
+import { loadConfig } from "./infrastructure/config/config.js";
 import type { AiProvider, CollectDeps } from "./domain/ports.js";
 
 // Зависимости шагов сбора вакансий: search, digest, cover.

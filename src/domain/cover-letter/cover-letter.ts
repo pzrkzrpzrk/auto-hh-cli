@@ -1,11 +1,11 @@
-import log from "../../logger.js";
-import { loadConfig } from "../../config.js";
+import log from "../../shared/logger.js";
+import { loadConfig } from "../../infrastructure/config/config.js";
 import { buildResumeBlock } from "../resume-block.js";
 import type { AiProvider } from "../ports.js";
-import { stripHtml, parseJSON } from "../../text-utils.js";
+import { stripHtml, parseJSON } from "../../shared/text-utils.js";
 import { adaptResumeForVacancy } from "../adapt-resume.js";
 import { buildBatchSystemText, coverSignature } from "./system-text.js";
-import { chunk, runBatches, aiConcurrencyFromEnv } from "../../concurrency.js";
+import { chunk, runBatches, aiConcurrencyFromEnv } from "../../shared/concurrency.js";
 
 function buildFromTemplate(template, vacancy) {
   const ctx = {

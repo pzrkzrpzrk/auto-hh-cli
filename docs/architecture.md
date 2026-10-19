@@ -1,6 +1,6 @@
 # Архитектура auto-hh-cli
 
-- **Статус:** план (код не перемещён). Документ описывает целевую структуру и порядок миграции.
+- **Статус:** этап 1 выполнен — структура приведена к целевой (раздел 4), импорты пересчитаны. Этапы 2–4 впереди.
 - **Дата:** 2026-10-19.
 - **Ветка:** `refactoring/add-solid`.
 - **Состояние кода:** `src/` — 56 файлов, ≈5,9 тыс. строк; `npx tsc --noEmit` → exit 0.
@@ -114,6 +114,7 @@ src/
 │   ├── filter.ts
 │   ├── resume-block.ts
 │   ├── actualize.ts
+│   ├── adapt-resume.ts
 │   ├── resume-markdown.ts
 │   ├── judge/{judge.ts, system-text.ts}
 │   ├── cover-letter/{cover-letter.ts, system-text.ts}
@@ -140,8 +141,7 @@ src/
 ├── presentation/cli/
 │   ├── index.ts
 │   ├── commands/cmd-*.ts
-│   ├── menu/{menu,options,resume,resume-download,steps}.ts
-│   └── apply/cmd-apply.ts
+│   └── menu/{menu,options,resume,resume-download,steps}.ts
 │
 ├── shared/{logger,concurrency,retry,text-utils,time}.ts
 └── composition.ts

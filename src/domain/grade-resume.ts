@@ -1,5 +1,5 @@
-import { loadResume } from "../resume.js";
-import log from "../logger.js";
+import { loadResume } from "../infrastructure/files/resume-loader.js";
+import log from "../shared/logger.js";
 import type { AiProvider } from "./ports.js";
 
 function safeJsonParse(text: string): any {
