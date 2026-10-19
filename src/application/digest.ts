@@ -1,6 +1,7 @@
 // Сценарий сборки и актуализации дайджеста.
 // Оркестрация: кэш поиска → локальный фильтр → ИИ-судья → digest/rejected (файлы + Mongo).
 // Вывод в консоль остаётся в команде: сценарий отдаёт данные и колбэк onMatched.
+import { readFileSync } from "fs";
 import HHClient from "../infrastructure/hh/client.js";
 import { chunk, runBatches, aiConcurrencyFromEnv } from "../shared/concurrency.js";
 import { loadConfig } from "../infrastructure/config/config.js";
@@ -15,9 +16,12 @@ import {
   writeActualDigest,
   writeActualRejected,
   listDigestDocs,
+  getLatestDigest,
 } from "../infrastructure/mongo/digest-store.js";
 import { computeActualization, mergeActualized } from "../domain/actualize.js";
 import { registerResume } from "../infrastructure/mongo/resume-store.js";
+import { listDigestFiles } from "../infrastructure/files/digest-files.js";
+import { DIGEST_DIR } from "../infrastructure/config/paths.js";
 import type { DigestEntry } from "../domain/models.js";
 import { flattenCollected, fmtSalary, ensureFullVacancies } from "./collect.js";
 import type { AiProvider, CollectDeps } from "../domain/ports.js";
@@ -316,5 +320,24 @@ export async function actualizeDigests(opts: Record<string, any> = {}): Promise<
 
   return { today, checkedTotal, markedTotal, snapshots, dryRun: Boolean(opts.dryRun) };
 }
+
+// Шаг показа: последний дайджест + письма из кэша; fallback — .md файлы на диске.
+export type DigestShowOutcome =
+  | { kind: 'mongo'; date: string; entries: DigestEntry[] }
+  | { kind: 'files'; contents: string[] }
+  | { kind: 'none' };
+
+export async function showDigest(opts: Record<string, any> = {}): Promise<DigestShowOutcome> {
+  const digest = await getLatestDigest().catch(() => null);
+  if (digest) {
+    const entries = await collectCache.withCoverLetters<DigestEntry>(digest.entries);
+    return { kind: 'mongo', date: digest.date, entries };
+  }
+
+  const files = listDigestFiles(DIGEST_DIR);
+  if (!files.length) return { kind: 'none' };
+  return { kind: 'files', contents: files.map(f => readFileSync(f, 'utf-8')) };
+}
+
 
 
