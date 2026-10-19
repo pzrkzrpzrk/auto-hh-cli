@@ -14,6 +14,8 @@ import HHResumeSource from "./infrastructure/hh/resume-source.js";
 import HHSourceProvider from "./infrastructure/hh/source-provider.js";
 import type { AiProvider, CollectDeps, ResumeSource, SearchDeps, SourceProvider } from "./domain/ports.js";
 import type { VacancySource } from "./domain/search/VacancySource.js";
+import type { CoverDeps } from "./application/cover.js";
+import type { DigestDeps } from "./application/digest.js";
 
 // Зависимости шагов сбора вакансий: search, digest, cover.
 export const collectDeps: CollectDeps = { cacheStore, history };
@@ -27,6 +29,10 @@ export const vacancySource: SourceProvider<VacancySource> =
 
 /** Зависимости сценария поиска: хранилища + источник вакансий. */
 export const searchDeps: SearchDeps = { ...collectDeps, source: vacancySource };
+
+/** Зависимости сценариев digest и cover: ИИ + хранилища + источник вакансий. */
+export const digestDeps: DigestDeps = { ai: aiProvider, collect: collectDeps, source: vacancySource };
+export const coverDeps: CoverDeps = { ai: aiProvider, collect: collectDeps, source: vacancySource };
 
 /** Открытая сессия резюме: меню держит её между списком и скачиванием и закрывает само. */
 export interface ResumeSession extends ResumeSource {
