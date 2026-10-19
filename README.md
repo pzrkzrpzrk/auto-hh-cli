@@ -14,6 +14,7 @@
 2. **`digest`** — по кэшу поиска: локальный фильтр → ИИ-судья → **дайджест** (файл + MongoDB).
 3. **`cover`** — сопроводительные письма для вакансий дайджеста (батчами, с кэшем).
 4. **`apply`** — открыть сохранённую сессию браузера и откликнуться, подставляя готовые письма.
+5. **`digest actualize`** — пометить в дайджестах/rejected за прошлые даты вакансии, которых уже нет в последнем поиске (опционально; ничего не удаляет) и собрать сводный снимок актуальных вакансий за день.
 
 ```
 hh.ru ──Playwright──▶ search: страницы выдачи (cachePages) + описания (cacheFull)
@@ -21,7 +22,7 @@ hh.ru ──Playwright──▶ search: страницы выдачи (cachePage
                                         ▼
              digest: локальный фильтр (навыки, исключения, ЗП) ── пропуск
                         └─▶ ИИ-судья: score 1–10, вердикт fit/no-fit
-                                └─▶ дайджест (digest-ГГГГ-ММ-ДД.md + MongoDB)
+                                └─▶ дайджест (data/digests/ГГГГ-ММ-ДД/<Регион>/digest.md + MongoDB)
                                         │
                                         ▼
              cover: генерация сопроводительных под каждую вакансию
@@ -46,8 +47,8 @@ npm install
 npx playwright install chromium
 
 # 2. Конфигурация
-cp .env.example .env          # затем заполните .env (см. ниже)
-# config.json уже есть в репозитории — отредактируйте его под себя
+cp .env.example .env                 # затем заполните .env (см. ниже)
+cp config.example.json config.json   # затем отредактируйте config.json под себя
 
 # 3. MongoDB (опционально, если нет своего инстанса)
 docker compose up -d          # поднимет mongo + mongo-express (localhost:8081, admin/admin)
@@ -89,6 +90,19 @@ resumes/ivan.md
 
 > ℹ️ Если `RESUME_PATH` указывает на несуществующий файл, инструмент пишет предупреждение в лог и берёт первое резюме из `RESUMES_DIR` (раньше в этом случае резюме молча считалось отсутствующим).
 
+### Или скачайте резюме с hh.ru
+
+Пункт меню **🧾 Резюме → ⬇️ скачать с hh.ru** открывает сохранённую сессию браузера, показывает список ваших резюме и сохраняет выбранные в `RESUMES_DIR` (если переменная пуста — в `data/resumes`):
+
+- **`.md`** — основной формат: структурированный текст, который читают ИИ-шаги (`digest`, `cover`, `grade`);
+- **`.pdf`** — опциональная копия для человека; кладётся в `<RESUMES_DIR>/pdf/` и в список резюме не попадает.
+
+Имя файла — `<фамилия-имя>-<8 символов hash>.md`: оно стабильно между скачиваниями, поэтому `resumeId` и привязки вердиктов/писем в MongoDB не меняются. Существующие файлы перезаписываются только после подтверждения.
+
+> ℹ️ Нужна действующая сессия hh.ru в профиле Playwright. Если она истекла, команда попросит войти через пункт «🔑 Войти на hh.ru». Скачивание идёт через браузер (сайт hh.ru), потому что соискательский API закрыт.
+
+> ℹ️ Если структура страницы не распозналась, запустите с `HH_DUMP_STATE=1` — сырое состояние сохранится в `data/tmp-resume-state-*.json` для отладки.
+
 ### Шаг 3 — поднимите MongoDB и примените миграции
 
 ```bash
@@ -109,6 +123,7 @@ npm run migrate:up
 | Подпункт | Что делает |
 | --- | --- |
 | 🎯 выбрать активное | Выбрать резюме из `RESUMES_DIR` — подставится в `digest` / `cover` / `grade` / `schedule` в текущей сессии меню |
+| ⬇️ скачать с hh.ru | Скачать выбранные резюме из личного кабинета: `.md` для ИИ + опционально `.pdf` |
 | `list` | Показать доступные резюме |
 | `show` | Показать содержимое резюме (например `resumes/ivan.md`) |
 | `register` | Зарегистрировать резюме в MongoDB |
@@ -159,7 +174,7 @@ npm start           # или: npm run ui, npx auto-hh, npx auto-hh ui (алиа�
 | 🔑 Войти на hh.ru | Открыть браузер и войти вручную — сессия сохранится в профиль |
 | 📄 Последний дайджест | Показать последний дайджест (можно в JSON) |
 | 🕓 История откликов | Показать историю просмотров и откликов (можно в JSON) |
-| 🧾 Резюме | Выбрать активное резюме списком из `RESUMES_DIR` + `list` / `show` / `register` |
+| 🧾 Резюме | Выбрать активное резюме списком из `RESUMES_DIR` + скачать с hh.ru + `list` / `show` / `register` |
 | 🎯 Оценить резюме ИИ | Оценка резюме «глазами рекрутера» → `resume-grade.md` |
 | ✉️ Письмо по id | Одно сопроводительное для вакансии по id (ввод id и выбор резюме) |
 | ⏰ Планировщик | Шаги из `config.schedule.steps` по cron; блокирующий, выход по Ctrl+C |
@@ -195,6 +210,8 @@ npm start           # или: npm run ui, npx auto-hh, npx auto-hh ui (алиа�
 ---
 
 ## config.json
+
+`config.json` не хранится в git (он в `.gitignore`) — создайте его из шаблона: `cp config.example.json config.json`, затем правьте под себя. Ниже — полный список поддерживаемых полей.
 
 ```text
 {
@@ -234,13 +251,13 @@ npm start           # или: npm run ui, npx auto-hh, npx auto-hh ui (алиа�
 
 | Поле | Что задаёт |
 | --- | --- |
-| `requiredSkills` | Список — хотя бы один навык должен встретиться в описании |
+| `minSalaryRub` | Минимальная зарплата в рублях: вакансии с меньшей (когда зарплата указана в RUR) отбрасываются. `0` — выключено |
 | `excludedKeywords` | Слова, при наличии которых вакансия отбрасывается |
 | `excludedCompanies` | Компании, которые игнорируем (подстрочное совпадение по названию работодателя, регистр не важен). Личный список удобнее держать в `.env` → `EXCLUDED_COMPANIES` — он **перебивает** это поле |
 | `excludeArchived` | Пропускать архивные вакансии |
 | `locationRule` | Правило локации: в регионах из `search.area` (по умолчанию Москва/СПб) — любые вакансии, в остальных — только удалёнка. `false` отключает правило. |
 
-> ℹ️ Личный блэклист компаний держите в `.env` → `EXCLUDED_COMPANIES` (через запятую): `.env` не попадает в git, а `config.json` — отслеживается. Если переменная не задана или пуста, работает список из `config.json`. Разделитель — запятая, поэтому внутри названия её быть не может: указывайте фрагмент имени (совпадение подстрочное).
+> ℹ️ Личный блэклист компаний держите в `.env` → `EXCLUDED_COMPANIES` (через запятую): ни `.env`, ни `config.json` в git не попадают — оба в `.gitignore`. Если переменная не задана или пуста, работает список из `config.json`. Разделитель — запятая, поэтому внутри названия её быть не может: указывайте фрагмент имени (совпадение подстрочное).
 
 ### `apply` — пороги и шаблоны
 
@@ -290,6 +307,7 @@ npm start           # или: npm run ui, npx auto-hh, npx auto-hh ui (алиа�
 | `MONGODB_URI` | `mongodb://localhost:27017/autohh` | URI MongoDB для кэша, истории и дайджестов |
 | `MONGODB_TIMEOUT_MS` | `10000` | Таймаут подключения к MongoDB: если база недоступна, команда сообщит об этом быстро, а не через 30 с |
 | `DEBUG` | — | Любое непустое значение включает `log.debug` |
+| `HH_DUMP_STATE` | — | Сохранять initial state страниц резюме в `data/tmp-resume-state-*.json` — для отладки разбора вёрстки hh.ru |
 
 > ℹ️ Переменная называется **`RESUMES_DIR`** (с «S») — в `.env.example` она задана правильно; старое имя `RESUME_DIR` не читается. Если `RESUME_PATH` указывает на несуществующий файл, резюме не загрузится и ИИ-шаги будут отключены (в логе — `RESUME_PATH not set`).
 
@@ -324,7 +342,7 @@ npm start           # или: npm run ui, npx auto-hh, npx auto-hh ui (алиа�
 
 ### Зарезервировано (не используется в основном потоке)
 
-`HH_CLIENT_ID`, `HH_CLIENT_SECRET`, `HH_REDIRECT_URI`, `HH_ACCESS_TOKEN`, `HH_REFRESH_TOKEN`, `HH_RESUME_ID` — для OAuth-сценария (`src/oauth-server.js`). Не задействованы, т.к. соискательский API закрыт.
+`HH_CLIENT_ID`, `HH_CLIENT_SECRET`, `HH_REDIRECT_URI`, `HH_ACCESS_TOKEN`, `HH_REFRESH_TOKEN`, `HH_RESUME_ID` — для OAuth-сценария (не реализован). Не задействованы, т.к. соискательский API закрыт.
 
 ---
 
@@ -334,8 +352,9 @@ npm start           # или: npm run ui, npx auto-hh, npx auto-hh ui (алиа�
 | --- | --- |
 | MongoDB `history` | Какие вакансии уже видели / на какие откликались (статусы `seen` / `applied`) |
 | MongoDB `cachePages`, `cacheFull`, `cacheJudgements`, `cacheCoverLetters` | Кэш: страницы выдачи и описания вакансий (пишет `search`), вердикты ИИ (`digest`), письма (`cover`). Позволяет продолжить после обрыва, не запрашивая hh.ru и не пересудя заново |
-| `digest-ГГГГ-ММ-ДД.md` (+ MongoDB `digest`) | Подходящие вакансии; письма дописываются шагом `cover` |
-| `rejected-ГГГГ-ММ-ДД.md` (+ MongoDB `rejected`) | Вакансии, отбракованные ИИ, с причинами |
+| `search/ГГГГ-ММ-ДД/<Регион>/search.md` | Выдача поиска за день по регионам — только новые вакансии, накопительно, без повторов (дедуп по id) |
+| `digests/ГГГГ-ММ-ДД/<Регион>/digest.md` (+ MongoDB `digest`) | Подходящие вакансии по регионам; письма дописываются шагом `cover` |
+| `rejected/ГГГГ-ММ-ДД/<Регион>/rejected.md` (+ MongoDB `rejected`) | Вакансии, отбракованные ИИ, с причинами. Регион берётся из `area` вакансии |
 | `browser-profile/` | Профиль Chromium (cookies, localStorage) |
 | `apply-dom-*.html` | Дамп DOM, если Playwright не нашёл поле для письма |
 | `app.log` | Лог |
@@ -347,60 +366,70 @@ npm start           # или: npm run ui, npx auto-hh, npx auto-hh ui (алиа�
 ```
 .
 ├─ bin/auto-hh                 # CLI entry point (tsx; dotenv + tsx/cjs + run())
-├─ config.json                 # поиск, фильтр, ИИ, расписание
+├─ config.example.json         # шаблон конфига (скопируйте в config.json — он в .gitignore)
 ├─ .env                        # секреты и настройки (из .env.example)
 ├─ resumes/                    # директория с резюме (если задан RESUMES_DIR)
 ├─ src/
-│  ├─ cli/                     # шаги пайплайна (cmd-*) + меню
-│  │  ├─ index.ts              # точка входа run(): регистрирует только меню
-│  │  ├─ cmd-search.ts         # шаг 1: поиск вакансий → кэш
-│  │  ├─ cmd-digest.ts         # шаг 2: фильтр + ИИ-судья → дайджест; `show` — показ
-│  │  ├─ cmd-cover.ts          # шаг 3: сопроводительные (весь дайджест или один id)
-│  │  ├─ cmd-apply.ts          # шаг 4: автоотклик через Playwright
-│  │  ├─ cmd-history.ts        # показать историю
-│  │  ├─ cmd-config.ts         # показать конфиг
-│  │  ├─ cmd-reset.ts          # сброс истории/кэша/дайджестов
-│  │  ├─ cmd-cover.ts          # одно письмо по vacancyId
-│  │  ├─ cmd-schedule.ts       # планировщик (node-cron)
-│  │  ├─ cmd-grade-resume.ts   # оценка резюме
-│  │  ├─ cmd-resume.ts         # управление резюме (list/register)
-│  │  └─ cmd-ui.ts             # интерактивное меню (единственная точка входа CLI)
-│  ├─ clients/                 # внешние API-клиенты
-│  │  ├─ ai-client.ts          # единый OpenAI-совместимый клиент
-│  │  ├─ hh-client.ts          # поиск и карточки через API hh.ru
-│  │  └─ db.ts                 # MongoDB connection manager
-│  ├─ domain/                  # доменная логика
-│  │  ├─ judge/                # ИИ-судья (одиночный + батч)
-│  │  ├─ cover-letter/         # генерация сопроводительных
-│  │  ├─ collect.ts            # сбор страниц поиска + хелперы (fmtSalary, flatten)
-│  │  ├─ filter.ts             # локальный пре-фильтр
-│  │  ├─ adapt-resume.ts       # адаптация резюме под вакансию
-│  │  └─ grade-resume.ts       # оценка резюме через ИИ
-│  ├─ store/                   # доступ к данным (MongoDB)
-│  │  ├─ cache-store.ts        # кэш (страницы, вердикты, письма)
-│  │  ├─ digest-store.ts       # дайджест в Markdown + MongoDB
-│  │  ├─ history-store.ts      # история просмотров/откликов
-│  │  ├─ resume-store.ts       # регистрация резюме в MongoDB
-│  │  └─ reset.ts              # сброс файлов и коллекций
-│  ├─ resume.ts                # загрузка резюме (файл или директория)
-│  ├─ config.ts                # загрузка config.json + .env
-│  ├─ logger.ts / retry.ts / text-utils.ts / types.ts
+│  ├─ presentation/cli/         # ввод-вывод: команды и меню
+│  │  ├─ index.ts               # точка входа run(): регистрирует только меню
+│  │  ├─ commands/cmd-*.ts      # тонкие оболочки: печать результата + код возврата
+│  │  ├─ format/                # grade-report, search-report, digest-report (консольные представления)
+│  │  └─ menu/                  # menu, options, resume, resume-download, steps
+│  ├─ application/              # сценарии (use cases)
+│  │  ├─ collect.ts             # утилиты выдачи: flattenCollected (fmtSalary — в shared/format.ts)
+│  │  ├─ search.ts              # runSearch() — обёртка над SearchScenario
+│  │  ├─ search/                # ООП-поиск: фасад, конвейер стадий, коллектор,
+│  │  │                         #   репозиторий кэша, итератор страниц, политики
+│  │  ├─ digest.ts              # фасад: buildDigest / showDigest / actualizeDigests
+│  │  ├─ digest/                # ООП-дайджест: политика, конвейер 7 стадий, сервис судейства,
+│  │  │                         #   сценарии показа и актуализации, стратегии ИИ
+│  │  ├─ cover.ts               # сопроводительные (весь дайджест или один id)
+│  │  ├─ apply.ts               # цикл откликов через Playwright
+│  │  ├─ grade.ts               # загрузка резюме + оценка
+│  │  ├─ resume.ts              # резюме: list / register / show
+│  │  ├─ resume-download.ts     # скачивание резюме с hh.ru (+PDF)
+│  │  ├─ schedule.ts            # прогон пайплайна по cron
+│  │  ├─ history.ts             # история откликов (выборки)
+│  │  └─ reset.ts               # сброс файлов и коллекций
+│  ├─ domain/                   # правила и модели, без I/O
+│  │  ├─ models.ts              # Vacancy, Resume, Verdict, DigestEntry, HhResume*
+│  │  ├─ ports.ts               # CacheStore, HistoryStore, SearchDeps, ResumeSource,
+│  │  │                         #   SourceProvider, AiProvider
+│  │  ├─ resume-block.ts / actualize.ts / adapt-resume.ts
+│  │  ├─ resume-markdown.ts / grade-resume.ts
+│  │  ├─ search/                # VO (SearchQuery, SearchBucket, PageKey) и порт VacancySource
+│  │  ├─ digest/                # политика, кандидат, вердикты, matcher, фабрика записи,
+│  │  │                         #   Domain Service DigestFilter и порты
+│  │  └─ judge/ cover-letter/   # ИИ-судья и генерация писем
+│  ├─ infrastructure/           # адаптеры внешнего мира
+│  │  ├─ hh/                    # client, resume, vacancy-source, resume-source, source-provider
+│  │  ├─ ai/client.ts           # единый OpenAI-совместимый клиент
+│  │  ├─ mongo/                 # db, cache-store, digest-store, history-store, resume-store,
+│  │  │                         #   digest-repository, judgement-cache, cover-letter-cache, resume-registry
+│  │  ├─ files/                 # resume-loader, search-output, digest-files, digest-file-source, resume-file-source
+│  │  ├─ playwright/            # browser, apply-steps (действия на странице)
+│  │  └─ config/                # config, env, paths, apply-config
+│  ├─ shared/                   # logger, concurrency, retry, text-utils, time, cron, path-utils, format
+│  └─ composition.ts            # сборка зависимостей: источники hh.ru, ИИ, хранилища
 ├─ scripts/                    # вспомогательные скрипты (judge-only, fill-cover-letters, …)
 ├─ migrations/                 # миграции MongoDB
 ├─ migrate-mongo-config.js     # настройки migrate-mongo (берёт MONGODB_URI из .env)
 └─ docker-compose.yml          # MongoDB + mongo-express
 ```
 
+Шаг `digest` собран как конвейер стадий (`application/digest/`): политика прогона → кэш → фильтр → ИИ-судья → отбор → запись; тексты консоли — в `presentation/cli/format/digest-report.ts`. Подробнее — `docs/architecture.md`, раздел «Паттерны дайджеста (этап 7)».
+
 ---
 
 ## Замечания и отладка
 
-- **Селекторы hh.ru меняются** — если автоотклик перестал работать, смотрите `data/app.log` и обновите массивы `respondSelectors`, `submitSelectors` и т.п. в `src/cli/cmd-apply.ts`.
+- **Селекторы hh.ru меняются** — если автоотклик перестал работать, смотрите `data/app.log` и обновите массивы `RESPONSE_BUTTON_SELECTORS` и прочие селекторы в `src/infrastructure/playwright/apply-steps.ts`.
 - **Тесты в вакансии.** По умолчанию (`PW_TEST_MODE=manual`) скрипт ставит окно браузера на передний план и ждёт ENTER в консоли — проходите тест вручную, отправляете отклик, затем ENTER → следующая вакансия. Режим `skip` пропускает такие вакансии. Ручной режим работает только при `PW_HEADLESS=false`.
 - **Ручное подтверждение отклика.** `apply` заполняет письмо, но не жмёт кнопку сам — вы нажимаете «Откликнуться» в браузере (защита от случайного). Таймаут ожидания — `PW_MANUAL_TIMEOUT_MS`.
 - **Лимит hh.ru** — ~200 откликов в день, не превышайте (задаётся `maxPerRun`).
 - **Порядок шагов.** Пункт «🧠 Собрать дайджест» без предварительного поиска скажет «Кэш поиска пуст»; «✉️ Письма для дайджеста» без дайджеста — «Дайджест пуст»; «🚀 Отклики из дайджеста» пропускает вакансии, для которых нет письма (сгенерируйте: пункт меню «✉️ Письма для дайджеста»).
 - **dry-run** в пункте «🧠 Собрать дайджест» ничего не записывает: ни дайджест, ни историю просмотров — удобно проверять фильтр и лимит.
+- **Актуализация старых дайджестов** (пункт «♻️ Актуализировать старые дайджесты» / `digest actualize`) сверяет записи дайджестов и rejected за прошлые даты с **последним поиском**: вакансии, которых больше нет в выдаче (удалены/скрыты), помечаются как `archived` и не берутся в отклики (`apply`). Ничего не удаляется, только пометка. Записи старше окна `search.search_period` не помечаются архивом — они могли законно выпасть из периода поиска. Дополнительно формируется **сводный снимок** `data/digests/<дата>/actual.md` и `data/rejected/<дата>/actual.md`: все записи за прошедшие даты (кроме сегодня, дедуп по id — живые сверху, затем архивные). В `.md` статус виден строкой «Статус: больше не в поиске».
 - **Свой путь к конфигу.** Флага `-c, --config` больше нет: путь к `config.json` задаётся переменной `CONFIG_PATH` в `.env` (по умолчанию `./config.json`).
 - **ИИ без ключа.** Без `api.apiKey` / `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` судья и письма отключаются — работает только локальный фильтр.
 - **Модель и провайдер живут вместе**: `api.baseUrl` и `api.model` в `config.json` (перебить модель можно через `CLAUDE_MODEL`). Для Z.ai — `https://api.z.ai/api/paas/v4/` + `glm-4.7-flash`, для DeepSeek — `https://api.deepseek.com` + `deepseek-chat`.

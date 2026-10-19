@@ -1,12 +1,10 @@
-import log from "../../logger.js";
-import { retryOnTransient } from "../../retry.js";
-import { loadConfig } from "../../config.js";
-import { getClient, buildResumeBlock, getModel, getMaxTokens, getConcurrency } from "../../clients/ai-client";
-import { stripHtml, parseJSON } from "../../text-utils.js";
+import log from "../../shared/logger.js";
+import { buildResumeBlock } from "../resume-block.js";
+import type { AiProvider } from "../ports.js";
+import { stripHtml, parseJSON } from "../../shared/text-utils.js";
 import { adaptResumeForVacancy } from "../adapt-resume.js";
 import { buildBatchSystemText, coverSignature } from "./system-text.js";
-
-const apiConfig = loadConfig().api || {};
+import { chunk, runBatches, aiConcurrencyFromEnv } from "../../shared/concurrency.js";
 
 function buildFromTemplate(template, vacancy) {
   const ctx = {
@@ -18,12 +16,10 @@ function buildFromTemplate(template, vacancy) {
   return template.replace(/\{(\w+)\}/g, (_, k) => ctx[k] ?? '');
 }
 
-async function buildWithClaude(vacancy, resume = null, adaptResume = false) {
-  const client = getClient(apiConfig);
-  if (!client) return null;
+async function buildWithClaude(vacancy, resume = null, adaptResume = false, ai: AiProvider | null = null) {
+  if (!ai) return null;
 
   const profile = process.env.APPLICANT_PROFILE || 'опытный разработчик';
-  const model = getModel(apiConfig);
 
   const description = stripHtml(vacancy.description).slice(0, 1000);
   const skills = (vacancy.key_skills || []).map(s => s.name).join(', ');
@@ -60,8 +56,7 @@ ${coverSignature()}
 - Начинай основную часть с указания, что стек и задачи полностью подходят под твой профиль (например: "стек и задачи полностью совпадают с моим опытом", "профиль вакансии полностью соответствует моему стеку").`;
 
   try {
-    const resp = await retryOnTransient(() => client.chat.completions.create({
-      model,
+    const resp = await ai.chat({
       messages: [
         {
           role: 'system',
@@ -69,10 +64,11 @@ ${coverSignature()}
         },
         { role: 'user', content: userMsg },
       ],
-    }), { label: 'письмо' }) as any;
-    const text = resp.choices?.[0]?.message?.content?.trim();
+      label: 'письмо',
+    });
+    const text = resp.text?.trim();
     if (text) {
-      log.debug(`Claude usage: in=${resp.usage?.prompt_tokens} out=${resp.usage?.completion_tokens}`);
+      log.debug(`Claude usage: in=${resp.usage.prompt} out=${resp.usage.completion}`);
     }
     return text || null;
   } catch (err) {
@@ -81,10 +77,9 @@ ${coverSignature()}
   }
 }
 
-async function buildCoverLetter(template, vacancy, resume = null) {
-  const cfg = loadConfig();
-  const adaptResume = cfg.adaptResume !== false;
-  const claudeText = await buildWithClaude(vacancy, resume, adaptResume);
+// adaptResume приходит параметром (из config.json, см. cmd-cover): домен не читает файлы.
+async function buildCoverLetter(ai: AiProvider | null, template, vacancy, resume = null, adaptResume = true) {
+  const claudeText = await buildWithClaude(vacancy, resume, adaptResume, ai);
   if (claudeText) return claudeText;
   return buildFromTemplate(template, vacancy);
 }
@@ -104,42 +99,33 @@ ${description}`;
 // Генерирует сопроводительные пачками по batchSize вакансий за один запрос.
 // items: [{ vacancy }]. Возвращает Map<vacancyId, text>.
 // onBatch(partialResult) — вызывается после каждой пачки с накопленным результатом.
-async function buildCoverLettersBatch(resume, items, batchSize = 20, onBatch = null) {
-  const client = getClient(apiConfig);
+// adaptResume приходит параметром (из config.json, см. cmd-cover): домен не читает файлы.
+async function buildCoverLettersBatch(ai: AiProvider | null, resume, items, batchSize = 20, onBatch = null, adaptResume = true) {
   const result = new Map();
-  if (!client || !items.length) return result;
+  if (!ai || !items.length) return result;
 
-  const model = getModel(apiConfig);
   const profile = process.env.APPLICANT_PROFILE || 'опытный разработчик';
-  const cfg = loadConfig();
-  const adapt = cfg.adaptResume !== false;
-  const resumeBlock = !adapt ? buildResumeBlock(resume) : null;
+  const resumeBlock = !adaptResume ? buildResumeBlock(resume) : null;
 
   const systemText = buildBatchSystemText(profile) +
-    (adapt ? '\n\nДля каждой вакансии передано адаптированное под неё резюме — учитывай его при составлении письма, указывая релевантный опыт.' : '');
+    (adaptResume ? '\n\nДля каждой вакансии передано адаптированное под неё резюме — учитывай его при составлении письма, указывая релевантный опыт.' : '');
 
-  const batchTexts = [];
-  for (let i = 0; i < items.length; i += batchSize) {
-    const batch = items.slice(i, i + batchSize);
-    batchTexts.push({
-      idx: batchTexts.length + 1,
-      batch,
-      text: batch.map((it, idx) => {
-        let block = '';
-        if (adapt) {
-          const adapted = adaptResumeForVacancy(resume, it.vacancy);
-          if (adapted) {
-            block += `=== РЕЗЮМЕ (релевантное для вакансии #${idx + 1}) ===\n${adapted}\n\n`;
-          }
+  const batchTexts = chunk<any>(items, batchSize).map((batch, i) => ({
+    idx: i + 1,
+    batch,
+    text: batch.map((it, idx) => {
+      let block = '';
+      if (adaptResume) {
+        const adapted = adaptResumeForVacancy(resume, it.vacancy);
+        if (adapted) {
+          block += `=== РЕЗЮМЕ (релевантное для вакансии #${idx + 1}) ===\n${adapted}\n\n`;
         }
-        block += `=== ВАКАНСИЯ #${idx + 1} ===\n${formatVacancyShort(it.vacancy)}`;
-        return block;
-      }).join('\n\n'),
-    });
-  }
-
-  let nextBatchIdx = 0;
-  const CONCURRENCY = getConcurrency();
+      }
+      block += `=== ВАКАНСИЯ #${idx + 1} ===\n${formatVacancyShort(it.vacancy)}`;
+      return block;
+    }).join('\n\n'),
+  }));
+  const CONCURRENCY = aiConcurrencyFromEnv();
 
   async function runBatch(ii) {
     const { idx, batch, text } = batchTexts[ii];
@@ -154,15 +140,9 @@ async function buildCoverLettersBatch(resume, items, batchSize = 20, onBatch = n
       },
     ] as any;
     try {
-      const resp = await retryOnTransient(() => client.chat.completions.create({
-        model,
-        max_tokens: getMaxTokens(),
-        messages,
-        response_format: { type: 'json_object' },
-      }), { label: `письма батч ${batch.length}` });
+      const resp = await ai.chat({ messages, json: true, label: `письма батч ${batch.length}` });
 
-      const r = resp as any;
-      const content = r.choices?.[0]?.message?.content;
+      const content = resp.text;
       if (!content) {
         log.warn(`cover batch ${idx}: empty response`);
         return;
@@ -173,7 +153,7 @@ async function buildCoverLettersBatch(resume, items, batchSize = 20, onBatch = n
       for (const l of list) {
         if (l.vacancyId && l.coverLetter) result.set(String(l.vacancyId), l.coverLetter);
       }
-      log.debug(`cover batch ${idx}: ${batch.length} letters, in=${r.usage?.prompt_tokens || 0} out=${r.usage?.completion_tokens || 0}`);
+      log.debug(`cover batch ${idx}: ${batch.length} letters, in=${resp.usage.prompt || 0} out=${resp.usage.completion || 0}`);
       if (onBatch) {
         try { await onBatch(result); } catch (e) { log.warn(`cover onBatch callback failed: ${e.message}`); }
       }
@@ -182,15 +162,7 @@ async function buildCoverLettersBatch(resume, items, batchSize = 20, onBatch = n
     }
   }
 
-  async function worker() {
-    while (nextBatchIdx < batchTexts.length) {
-      const ii = nextBatchIdx;
-      nextBatchIdx++;
-      await runBatch(ii);
-    }
-  }
-
-  await Promise.all(Array.from({ length: Math.min(CONCURRENCY, batchTexts.length) }, () => worker()));
+  await runBatches(batchTexts.map(b => b.batch), CONCURRENCY, (_, ii) => runBatch(ii));
 
   return result;
 }
