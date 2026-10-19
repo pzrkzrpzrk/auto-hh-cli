@@ -5,9 +5,10 @@ import {
   registerResumeByName,
   loadResumeForShow,
 } from "../../../application/resume.js";
+import { resumeDeps } from "../../../composition.js";
 
 async function cmdResumeList() {
-  const outcome = await listResumesForCli();
+  const outcome = await listResumesForCli(resumeDeps);
   if (outcome.kind === 'empty') {
     console.log("No resumes found. Set RESUMES_DIR or RESUME_PATH.");
     return;
@@ -23,7 +24,7 @@ async function cmdResumeList() {
 }
 
 async function cmdResumeRegister(name: string) {
-  const outcome = await registerResumeByName(name);
+  const outcome = await registerResumeByName(name, resumeDeps);
   if (outcome.kind === 'missing-name') {
     console.error('Укажите имя резюме: пункт меню «🧾 Резюме» → register <name>');
     process.exit(1);
@@ -35,7 +36,7 @@ async function cmdResumeRegister(name: string) {
 }
 
 async function cmdResumeShow(name?: string) {
-  const outcome = loadResumeForShow(name);
+  const outcome = loadResumeForShow(name, resumeDeps);
   if (outcome.kind === 'error') {
     console.error(outcome.message);
     process.exit(1);

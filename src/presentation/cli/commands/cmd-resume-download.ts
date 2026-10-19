@@ -1,6 +1,6 @@
 // Команда resume-download: тонкая оболочка — печать фаз скачивания
 // (сценарий — application/resume-download.ts, там же типы опций и результата).
-import { resumeSource } from "../../../composition.js";
+import { resumeDownloadDeps } from "../../../composition.js";
 import {
   downloadResumes,
   type ResumeDownloadEvent,
@@ -41,5 +41,5 @@ function printEvent(e: ResumeDownloadEvent) {
 export default async function cmdResumeDownload(
   opts: ResumeDownloadOptions = {},
 ): Promise<ResumeDownloadResult[]> {
-  return downloadResumes(opts, { source: resumeSource }, printEvent);
+  return downloadResumes(opts, resumeDownloadDeps, printEvent);
 }

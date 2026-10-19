@@ -1,6 +1,5 @@
 // Фазы поиска (Chain of Responsibility): страницы выдачи → файл → полные карточки.
 // Ошибки файла и карточек не валят поиск — данные уже в кэше; страницы валят (как раньше).
-import { writeSearchResults } from "../../infrastructure/files/search-output.js";
 import type { SearchEntry } from "../../domain/models.js";
 import { fmtSalary } from "../collect.js";
 import { SkipSeenPolicy } from "./FullCardPolicy.js";
@@ -49,7 +48,7 @@ export class ExportSearchFileStage extends SearchStage {
 
   protected async execute(ctx: SearchContext): Promise<StageResult> {
     const rows = ctx.cache.flatten().map(toSearchEntry);
-    const results = writeSearchResults(rows, { query: ctx.cfg.search.text });
+    const results = await ctx.writer.write(rows, { query: ctx.cfg.search.text });
     const added = results.reduce((n, r) => n + r.added, 0);
     const total = results.reduce((n, r) => n + r.total, 0);
     if (added > 0) {

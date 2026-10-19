@@ -18,13 +18,14 @@
 `composition.ts` собирает `searchDeps`, `digestDeps`, `digestShowDeps`, `actualizeDeps`, `coverDeps`
 (после T-17 — ещё `applyDeps`). Но:
 
-- `application/history.ts:3`, `resume.ts:3-7`, `resume-download.ts:10-11`, `grade.ts:3`, `schedule.ts:4`
-  импортируют адаптеры сами;
+- `application/grade.ts:3`, `schedule.ts:4` импортируют адаптеры сами (`grade` — чтение резюме,
+  `schedule` — конфиг; `history`/`resume`/`resume-download` закрыты T-20);
 - `presentation/cli/index.ts:7` импортирует `closeDb` из `infrastructure/mongo/db`;
 - `presentation/cli/commands/cmd-config.ts:2` — `loadConfig`;
 - `presentation/cli/menu/resume.ts:4`, `menu/resume-download.ts:7` — `resume-loader`.
 
-Итого: 26 модульных импортов инфраструктуры в `application` + 4 в `presentation` обходят точку сборки.
+Итого: оставшиеся модульные импорты инфраструктуры в `application` (`grade`, `schedule`, чтение
+конфига в сценариях) + 4 в `presentation` обходят точку сборки.
 
 ## Что сделать
 

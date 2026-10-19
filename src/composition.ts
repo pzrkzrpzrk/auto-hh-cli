@@ -11,7 +11,9 @@ import MongoDigestRepository from "./infrastructure/mongo/digest-repository.js";
 import MongoCoverLetterCache from "./infrastructure/mongo/cover-letter-cache.js";
 import MongoResumeRegistry from "./infrastructure/mongo/resume-registry.js";
 import FileDigestSource from "./infrastructure/files/digest-file-source.js";
-import FileResumeProvider from "./infrastructure/files/resume-file-source.js";
+import FileDataJanitor from "./infrastructure/files/data-janitor.js";
+import FileResumeFiles from "./infrastructure/files/resume-files.js";
+import FileSearchReportWriter from "./infrastructure/files/search-report-writer.js";
 import { createAiProvider } from "./infrastructure/ai/client.js";
 import { loadConfig } from "./infrastructure/config/config.js";
 import { intFromEnv } from "./infrastructure/config/env.js";
@@ -21,17 +23,34 @@ import HHClient from "./infrastructure/hh/client.js";
 import HHVacancySource from "./infrastructure/hh/vacancy-source.js";
 import HHResumeSource from "./infrastructure/hh/resume-source.js";
 import HHSourceProvider from "./infrastructure/hh/source-provider.js";
-import type { AiProvider, CollectDeps, ResumeSource, SearchDeps, SourceProvider } from "./domain/ports.js";
+import type {
+  AiProvider,
+  CollectDeps,
+  ResumeSource,
+  SearchDeps,
+  SourceProvider,
+} from "./domain/ports.js";
 import type { DigestCacheStore } from "./domain/digest/ports.js";
 import type { VacancySource } from "./domain/search/VacancySource.js";
 import type { ApplyDeps } from "./application/apply.js";
 import type { CoverConfig, CoverDeps } from "./application/cover.js";
 import type { DigestDeps } from "./application/digest.js";
 import type { ActualizeDeps, DigestShowDeps } from "./application/digest.js";
+import type { HistoryDeps } from "./application/history.js";
+import type { ResetDeps } from "./application/reset.js";
+import type { ResumeDeps } from "./application/resume.js";
+import type { ResumeDownloadDeps } from "./application/resume-download.js";
 
 // Зависимости шагов сбора вакансий: search, digest, cover.
 // cacheStore типизирован портом дайджеста (нужен loadLatest), search он тоже удовлетворяет.
 export const collectDeps: CollectDeps & { cacheStore: DigestCacheStore } = { cacheStore, history };
+
+/** Сброс данных: файлы data/ и коллекции MongoDB (адаптер знает раскладку и список коллекций). */
+const dataJanitor = new FileDataJanitor();
+/** Файлы резюме: один адаптер для resume, resume-download, digest и cover. */
+const resumeFiles = new FileResumeFiles();
+/** Запись выдачи поиска в data/search/. */
+const searchReportWriter = new FileSearchReportWriter();
 
 /**
  * Источник вакансий с жизненным циклом: браузер открывается лениво при первом запросе
@@ -40,8 +59,19 @@ export const collectDeps: CollectDeps & { cacheStore: DigestCacheStore } = { cac
 export const vacancySource: SourceProvider<VacancySource> =
   new HHSourceProvider(client => new HHVacancySource(client));
 
-/** Зависимости сценария поиска: хранилища + источник вакансий. */
-export const searchDeps: SearchDeps = { ...collectDeps, source: vacancySource };
+/** Зависимости сценария поиска: хранилища + источник вакансий + файловые артефакты. */
+export const searchDeps: SearchDeps = {
+  ...collectDeps,
+  source: vacancySource,
+  janitor: dataJanitor,
+  reportWriter: searchReportWriter,
+};
+
+/** Зависимости истории откликов: только порт HistoryStore. */
+export const historyDeps: HistoryDeps = { history };
+
+/** Зависимости сброса данных: только порт DataJanitor. */
+export const resetDeps: ResetDeps = { janitor: dataJanitor };
 
 /** Кэш вердиктов судьи: один адаптер на все сценарии, где судья сохраняет ответы. */
 const judgementCache = new MongoJudgementCache();
@@ -50,8 +80,10 @@ const judgementCache = new MongoJudgementCache();
 const digestRepository = new MongoDigestRepository();
 const coverLetterCache = new MongoCoverLetterCache();
 const resumeRegistry = new MongoResumeRegistry();
-const resumeFileProvider = new FileResumeProvider();
 const digestFileSource = new FileDigestSource();
+
+/** Зависимости сценария резюме: файлы на диске + регистрация в MongoDB. */
+export const resumeDeps: ResumeDeps = { files: resumeFiles, registry: resumeRegistry };
 
 /** Зависимости сценария сборки дайджеста. */
 export const digestDeps: DigestDeps = {
@@ -61,7 +93,7 @@ export const digestDeps: DigestDeps = {
   judgements: judgementCache,
   digest: digestRepository,
   resumes: resumeRegistry,
-  resumeFiles: resumeFileProvider,
+  resumeFiles,
   digestFiles: digestFileSource,
   coverLetters: coverLetterCache,
 };
@@ -91,7 +123,7 @@ export const coverDeps: CoverDeps = {
   config: coverConfig,
   collect: collectDeps,
   source: vacancySource,
-  resumeFiles: resumeFileProvider,
+  resumeFiles,
   digests: digestRepository,
   letters: coverLetterCache,
 };
@@ -124,6 +156,13 @@ export function openResumeSource(): ResumeSession {
 /** Источник резюме с жизненным циклом: команда скачивания без внешней сессии. */
 export const resumeSource: SourceProvider<ResumeSource> =
   new HHSourceProvider(client => new HHResumeSource(client));
+
+/** Зависимости скачивания резюме: источник, файлы на диске и регистрация в MongoDB. */
+export const resumeDownloadDeps: ResumeDownloadDeps = {
+  source: resumeSource,
+  files: resumeFiles,
+  registry: resumeRegistry,
+};
 
 /**
  * Провайдер ИИ для текущей конфигурации. null — ключ не задан: шаги работают без ИИ

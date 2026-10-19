@@ -1,6 +1,10 @@
-// Сценарий истории откликов: чтение состояния из MongoDB и выборки для показа.
+// Сценарий истории откликов: чтение состояния через порт HistoryStore и выборки для показа.
 // Печать (включая --json) — в команде: здесь только данные и ошибка чтения.
-import history from "../infrastructure/mongo/history-store.js";
+import type { HistoryStore } from "../domain/ports.js";
+
+export interface HistoryDeps {
+  history: HistoryStore;
+}
 
 // Последние n записей по времени: Mongo не гарантирует порядок документов,
 // а slice(-n) должен отдавать самые свежие.
@@ -30,10 +34,10 @@ export type HistoryOutcome =
   | { kind: 'empty' }
   | { kind: 'ok'; snapshot: HistorySnapshot };
 
-export async function loadHistoryView(): Promise<HistoryOutcome> {
+export async function loadHistoryView(deps: HistoryDeps): Promise<HistoryOutcome> {
   let state;
   try {
-    state = await history.load();
+    state = await deps.history.load();
   } catch (err: any) {
     return { kind: 'error', message: err.message };
   }

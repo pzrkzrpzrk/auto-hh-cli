@@ -1,7 +1,7 @@
 // Фасад сценария поиска: сброс → открытие источника → конвейер стадий.
 // Стадии ничего не знают друг о друге, порядок и «стоп» задаёт конвейер.
 import { loadConfig } from "../../infrastructure/config/config.js";
-import resetData, { formatResetSummary } from "../reset.js";
+import { formatResetSummary } from "../reset.js";
 import type { SearchDeps } from "../../domain/ports.js";
 import { SearchQuery } from "../../domain/search/SearchQuery.js";
 import SearchCache from "./SearchCache.js";
@@ -32,7 +32,7 @@ export class SearchScenario {
     // Сброс — до открытия источника, как и раньше (resetData вызывался до new HHClient).
     let didReset = false;
     if (opts.reset) {
-      const summary = await resetData();
+      const summary = await this.deps.janitor.clearAll();
       this.report({ type: 'reset', text: formatResetSummary(summary) });
       didReset = true;
     }
@@ -50,6 +50,7 @@ export class SearchScenario {
           cache,
           collector: new VacancyCollector(source, cache, this.deps.history),
           report: this.report,
+          writer: this.deps.reportWriter,
           items: [],
           stopped: false,
         };

@@ -55,9 +55,17 @@ export interface CoverLetterCache {
   save(vacancyId: string | number, letter: string): Promise<void>;
 }
 
+/** Зарегистрированное резюме из коллекции resumes — для пометки файлов на диске. */
+export interface RegisteredResume {
+  resumeId: string;
+  createdAt: Date;
+}
+
 /** Регистрация резюме в коллекции resumes (без неё не связать вердикты с резюме). */
 export interface ResumeRegistry {
   register(resume: Resume): Promise<void>;
+  /** Уже зарегистрированные резюме: дата регистрации нужна списку в CLI. */
+  listRegistered(): Promise<RegisteredResume[]>;
 }
 
 /** Чтение резюме с диска: файл по имени или путь из .env. */

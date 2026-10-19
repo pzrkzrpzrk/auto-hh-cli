@@ -1,9 +1,9 @@
 # Архитектура auto-hh-cli
 
-- **Статус:** этапы 1–8 выполнены — структура приведена к целевой (раздел 4), домен не зависит от инфраструктуры, все сценарии в `application/`; поиск (этап 6) и дайджест (этап 7) переведены на ООП (порты, конвейер, репортёр), этап 8 закрыл `apply`/`cover` портами (T-17/T-18); документация обновлена.
+- **Статус:** этапы 1–9 выполнены — структура приведена к целевой (раздел 4), домен не зависит от инфраструктуры, все сценарии в `application/`; поиск (этап 6) и дайджест (этап 7) переведены на ООП (порты, конвейер, репортёр), этап 8 закрыл `apply`/`cover` портами (T-17/T-18), этап 9 — файловый I/O сценариев (T-20); документация обновлена.
 - **Дата:** 2026-10-19.
 - **Ветка:** `refactoring/digest-oop`.
-- **Состояние кода:** `src/` — 118 файлов, ≈7,1 тыс. строк; `npx tsc --noEmit` → exit 0.
+- **Состояние кода:** `src/` — 121 файл, ≈7,45 тыс. строк; `npx tsc --noEmit` → exit 0.
 
 ---
 
@@ -65,16 +65,16 @@ presentation ──▶ application ──▶ domain
 
 ## 3. Текущее состояние
 
-Структура совпадает с целевой (раздел 4): `src/` — 118 файлов, ≈7,1 тыс. строк, `npx tsc --noEmit` → exit 0.
+Структура совпадает с целевой (раздел 4): `src/` — 121 файл, ≈7,45 тыс. строк, `npx tsc --noEmit` → exit 0.
 
 ```
-src/                              # 118 файлов
-├── application/                  # 35 файлов, ≈1,8 тыс. строк — сценарии (use cases)
-├── domain/                       # 28 файлов, ≈1,6 тыс. строк — модели, правила, порты
-├── infrastructure/               # 26 файлов, ≈2,2 тыс. строк — адаптеры hh.ru, ИИ, Mongo,
+src/                              # 121 файл
+├── application/                  # 35 файлов, ≈1,78 тыс. строк — сценарии (use cases)
+├── domain/                       # 28 файлов, ≈1,76 тыс. строк — модели, правила, порты
+├── infrastructure/               # 29 файлов, ≈2,33 тыс. строк — адаптеры hh.ru, ИИ, Mongo,
 │                                 #   Playwright, файлы, конфигурация
-├── presentation/                 # 20 файлов, ≈1,2 тыс. строк — CLI: команды, меню, форматтеры
-├── shared/                       #  8 файлов, ≈0,3 тыс. строк — логгер, время, ретраи,
+├── presentation/                 # 20 файлов, ≈1,17 тыс. строк — CLI: команды, меню, форматтеры
+├── shared/                       #  8 файлов, ≈0,26 тыс. строк — логгер, время, ретраи,
 │                                 #   текст, конкурентность
 └── composition.ts                # точка сборки зависимостей
 ```
@@ -179,11 +179,11 @@ src/
 │   │   ├── ActualizeTarget.ts       # цели актуализации (digest/rejected)
 │   │   └── index.ts
 │   ├── grade.ts                # загрузка резюме + оценка
-│   ├── resume.ts               # резюме: list / register / show
-│   ├── resume-download.ts      # скачивание резюме (порт ResumeSource)
+│   ├── resume.ts               # резюме: list / register / show (порт ResumeFiles)
+│   ├── resume-download.ts      # скачивание резюме (порты ResumeSource, ResumeFiles)
 │   ├── schedule.ts             # прогон пайплайна по cron
-│   ├── history.ts              # история откликов (выборки)
-│   └── reset.ts                # сброс файлов и коллекций
+│   ├── history.ts              # история откликов (порт HistoryStore)
+│   └── reset.ts                # сброс данных (порт DataJanitor)
 │
 ├── infrastructure/
 │   ├── hh/{client.ts, resume.ts, vacancy-source.ts, resume-source.ts,
@@ -192,8 +192,9 @@ src/
 │   ├── mongo/{db.ts, cache-store.ts, digest-store.ts, history-store.ts,
 │   │          resume-store.ts, digest-repository.ts, judgement-cache.ts,
 │   │          cover-letter-cache.ts, resume-registry.ts}
-│   ├── files/{resume-loader.ts, search-output.ts, digest-files.ts,
-│   │          digest-file-source.ts, resume-file-source.ts}
+│   ├── files/{resume-loader.ts, resume-files.ts, data-janitor.ts,
+│   │          search-output.ts, search-report-writer.ts, digest-files.ts,
+│   │          digest-file-source.ts}
 │   ├── playwright/{browser.ts, apply-steps.ts}
 │   └── config/{config.ts, env.ts, paths.ts, apply-config.ts}
 │
@@ -390,7 +391,7 @@ sequenceDiagram
 
 1. VO и порты: `domain/digest/{DigestPolicy,DigestCandidate,JudgementSet,ports,types}.ts`; `fmtSalary` вынесен в `shared/format.ts` (домен больше не тянет `application/collect.ts`).
 2. Domain Services: `DigestMatcher` (правило отбора) и `DigestEntryFactory` (запись + история).
-3. Адаптеры: `MongoDigestRepository`, `MongoJudgementCache`, `MongoCoverLetterCache`, `MongoResumeRegistry`, `FileDigestSource`, `FileResumeProvider`; `cache-store` получил `saveJudgementsMap`.
+3. Адаптеры: `MongoDigestRepository`, `MongoJudgementCache`, `MongoCoverLetterCache`, `MongoResumeRegistry`, `FileDigestSource`, `FileResumeFiles`; `cache-store` получил `saveJudgementsMap`.
 4. `JudgementService` + `JudgeStrategy`: пачки, кэш вердиктов, частичное сохранение и поштучный фолбэк.
 5. Конвейер: `DigestScenario` + `DigestStage` (Template Method) + `DigestPipeline` (Chain) + 7 стадий с прежним порядком логов.
 6. `DigestShowScenario` и `ActualizeScenario` (+ `ActualizeTarget`); `application/digest.ts` стал фасадом из трёх обёрток.
@@ -419,9 +420,30 @@ E2E с живыми hh.ru, Mongo и ИИ не запускался — пров�
 `letters.save`/`digests.save`, нет резюме, пустой дайджест, письма уже есть; apply: архивные
 отброшены, `type=all`, `not-logged-in`, ручной вход).
 
-Ограничения: `reset.ts`, `resume*.ts`, `history.ts`, `grade.ts`, `schedule.ts`, `search/stages.ts`
-и чтение конфига в `DigestScenario`/`ActualizeScenario`/`SearchScenario` по-прежнему импортируют
-инфраструктуру — это тикеты T-19/T-20/T-22 в [`docs/review/`](review/README.md).
+### Этап 9 — файловый I/O за портами (выполнено 2026-10-19, T-20)
+
+1. Порты в `domain/ports.ts`: `DataJanitor { clearAll(): Promise<ResetSummary> }`,
+   `ResumeFiles { ensureDir, list, load, pathFor, exists, save }`,
+   `SearchReportWriter { write(entries, opts) }`; `SearchDeps` получил `janitor` и `reportWriter`.
+   `ResumeRegistry` расширен `listRegistered()` — список резюме помечает файлы датой регистрации.
+2. Адаптеры `infrastructure/files/`: `data-janitor.ts` (перенос очистки `reset.ts` без изменения
+   поведения), `resume-files.ts` (list/load/ensureDir/save/пути `.md` и pdf), `search-report-writer.ts`
+   (обёртка над `search-output.ts`). `FileResumeProvider` слит с `FileResumeFiles` — один адаптер
+   на все сценарии.
+3. `application/{reset,resume,resume-download,history}.ts` и `search/{stages,SearchScenario}.ts`
+   работают только с портами; сброс приходит в `SearchScenario` через `deps.janitor` и выполняется
+   до открытия источника, как и раньше.
+4. `composition.ts`: `resetDeps`, `historyDeps`, `resumeDeps`, `resumeDownloadDeps`;
+   `searchDeps` собирается с `janitor` и `reportWriter`. Команды передают deps, не собирая адаптеры.
+
+Проверка: `Get-ChildItem -Recurse -File src\application -Filter *.ts | Select-String -Pattern 'from "fs"|from "path"|mongo/'` → пусто;
+`npx tsc --noEmit` → 0; `node bin/auto-hh --version` → 1.0.0; смоук на фейковых портах —
+файлы резюме (save/overwrite/list/load/путь PDF), скачивание с событиями, reset/history/search
+через порты, стадия выдачи через `SearchReportWriter` и её ошибка без падения поиска.
+
+Ограничения: `grade.ts` (чтение резюме), `schedule.ts` (cron + конфиг), `DigestScenario`/
+`ActualizeScenario`/`SearchScenario` (чтение конфига) по-прежнему импортируют инфраструктуру —
+это тикеты T-19/T-22 в [`docs/review/`](review/README.md).
 
 ---
 

@@ -22,30 +22,40 @@
 
 ## Что сделать
 
-- [ ] `domain/ports.ts`: `DataJanitor { clearAll(): Promise<ResetSummary> }`,
-      `ResumeFiles { list(): ResumeListItem[]; load(name?): Resume | null; ensureDir(): string;
-      save(name, markdown, pdf?): Resume }`.
-- [ ] `domain/ports.ts` (или `domain/search`): `SearchReportWriter { write(entries, date): Promise<SearchFileResult> }`.
-- [ ] `infrastructure/files/data-janitor.ts`: текущая логика из `reset.ts` (`removeFlat`, `removeRecursive`,
+- [x] `domain/ports.ts`: `DataJanitor { clearAll(): Promise<ResetSummary> }`,
+      `ResumeFiles { ensureDir(); list(); load(name?); pathFor(name, kind); exists(file);
+      save(name, markdown, { overwrite? }) }` — пути `.md`/`pdf`, проверка существования и флаг
+      «пропущено» остались в адаптере: сценарий не должен знать раскладку каталога.
+- [x] `domain/ports.ts` (или `domain/search`): `SearchReportWriter { write(entries, opts): Promise<SearchFileResult[]> }`.
+- [x] `infrastructure/files/data-janitor.ts`: текущая логика из `reset.ts` (`removeFlat`, `removeRecursive`,
       `clearMongoCollection`) переезжает сюда без изменения поведения.
-- [ ] `infrastructure/files/resume-files.ts`: `list/load/ensureDir/save` поверх `resume-loader`.
-- [ ] `application/reset.ts`, `resume-download.ts`, `resume.ts`, `history.ts` — только оркестрация
+- [x] `infrastructure/files/resume-files.ts`: `list/load/ensureDir/save/pathFor/exists` поверх `resume-loader`;
+      заодно реализует `ResumeProvider`, поэтому `resume-file-source.ts` удалён (один адаптер на все сценарии).
+- [x] `infrastructure/files/search-report-writer.ts`: обёртка над `writeSearchResults` (формат файла не менялся).
+- [x] `application/reset.ts`, `resume-download.ts`, `resume.ts`, `history.ts` — только оркестрация
       и тексты исходов; `fs`/`path`/`mongo/*` из `application` уходят.
-- [ ] `SearchScenario` перестаёт импортировать `reset.ts` — сброс приходит через `deps.janitor`.
+- [x] `SearchScenario` перестаёт импортировать `reset.ts` — сброс приходит через `deps.janitor`.
+
+**Выполнено (2026-10-19).** В `SearchDeps` добавлены `janitor` и `reportWriter` (стадия выдачи получает
+писателя через `SearchContext.writer`). `ResumeRegistry` расширен `listRegistered()` — список резюме
+по-прежнему показывает дату регистрации, но Mongo-запрос идёт через порт. `composition.ts` собирает
+`resetDeps`, `historyDeps`, `resumeDeps`, `resumeDownloadDeps`; команды `reset`/`history`/`resume`/
+`resume-download` только передают их. Поведение сохранено: те же регулярки и коллекции при сбросе,
+тот же порядок «сброс → открытие источника», те же события и тексты скачивания резюме.
 
 ## Definition of Done
 
-- [ ] `Select-String -Path src\application -Pattern 'from \"fs\"|from \"path\"|mongo/'` → пусто
+- [x] `Get-ChildItem -Recurse -File src\application -Filter *.ts | Select-String -Pattern 'from \"fs\"|from \"path\"|mongo/'` → пусто
       (кроме type-only импортов, которых быть не должно).
-- [ ] `npx tsc --noEmit` → exit 0.
-- [ ] Поведение не изменилось: `reset` удаляет те же файлы и те же коллекции, печатает ту же сводку
+- [x] `npx tsc --noEmit` → exit 0.
+- [x] Поведение не изменилось: `reset` удаляет те же файлы и те же коллекции, печатает ту же сводку
       (`formatResetSummary`), `search --reset` по-прежнему сбрасывает данные **до** открытия браузера.
 
 ## Проверка
 
 ```powershell
 npx tsc --noEmit
-Select-String -Path src\application -Pattern 'from "fs"|from "path"'
+Get-ChildItem -Recurse -File src\application -Filter *.ts | Select-String -Pattern 'from "fs"|from "path"|mongo/'
 npx tsx bin/auto-hh ui   # «Сброс данных» → отказ (confirm=false) ничего не меняет
 ```
 

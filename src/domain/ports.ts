@@ -1,8 +1,16 @@
-// Порты хранилищ для доменного слоя (DIP).
-// Домен зависит от этих узких интерфейсов, а не от конкретных модулей store/ (MongoDB).
-// Реализации подставляет вызывающий код (CLI — временный composition root), поэтому
-// доменные шаги можно прогонять с подставными хранилищами, без базы.
-import type { DigestEntry, HhResumeData, HhResumeSummary, Vacancy } from "./models.js";
+// Порты доменного слоя (DIP): хранилища, источники данных и файловый I/O.
+// Домен зависит от этих узких интерфейсов, а не от конкретных модулей store/ (MongoDB) или fs.
+// Реализации подставляет composition root, поэтому сценарии можно прогонять с подставными
+// портами — без базы, браузера и файловой системы.
+import type {
+  DigestEntry,
+  HhResumeData,
+  HhResumeSummary,
+  Resume,
+  SearchEntry,
+  SearchFileResult,
+  Vacancy,
+} from "./models.js";
 import type { SearchCacheSnapshot } from "./search/types.js";
 import type { VacancySource } from "./search/VacancySource.js";
 
@@ -33,9 +41,57 @@ export interface CollectDeps {
   history: HistoryStore;
 }
 
-/** Зависимости сценария поиска: хранилища + источник вакансий с жизненным циклом. */
+// --- Файловый I/O сценариев ------------------------------------------------
+
+/** Итог сброса данных: очищенные коллекции, файлы артефактов и кэш-файлы. */
+export interface ResetSummary {
+  mongo: { collection: string; deleted: number }[];
+  files: string[];
+  cache: string[];
+}
+
+/**
+ * Очистка данных CLI: файлы в data/ и коллекции MongoDB.
+ * Раскладка каталогов и список коллекций — детали адаптера, а не сценария.
+ */
+export interface DataJanitor {
+  clearAll(): Promise<ResetSummary>;
+}
+
+/** Файл резюме на диске: имя без расширения и имя файла с расширением. */
+export interface ResumeFile {
+  name: string;
+  filename: string;
+}
+
+/** Файлы резюме: список, чтение и запись скачанного с hh.ru. */
+export interface ResumeFiles {
+  /** Каталог резюме, созданный при необходимости (для отчёта о сохранении). */
+  ensureDir(): string;
+  /** Доступные файлы резюме. */
+  list(): ResumeFile[];
+  /** Резюме по имени (без расширения) либо резюме по умолчанию. */
+  load(name?: string): Resume | null;
+  /** Путь файла резюме: `md` — Markdown, `pdf` — копия в подкаталоге pdf/. */
+  pathFor(name: string, kind?: 'md' | 'pdf'): string;
+  /** true, если файл уже существует. */
+  exists(file: string): boolean;
+  /** Записать .md; saved=false — файл уже был и overwrite выключен. */
+  save(name: string, markdown: string, opts?: { overwrite?: boolean }): { file: string; saved: boolean };
+}
+
+/** Запись выдачи поиска в .md: путь, формат и дедупликация — в адаптере. */
+export interface SearchReportWriter {
+  write(entries: SearchEntry[], opts?: { date?: string; query?: string }): Promise<SearchFileResult[]>;
+}
+
+/** Зависимости сценария поиска: хранилища, источник и файловые артефакты. */
 export interface SearchDeps extends CollectDeps {
   source: SourceProvider<VacancySource>;
+  /** Сброс данных перед поиском (`search --reset`). */
+  janitor: DataJanitor;
+  /** Куда стадия поиска пишет выдачу за день. */
+  reportWriter: SearchReportWriter;
 }
 
 // --- Источники hh.ru ------------------------------------------------------

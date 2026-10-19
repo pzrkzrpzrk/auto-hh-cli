@@ -19,7 +19,7 @@ composition root, тестируемость. Факты сверены с ко�
 | [T-17](T-17-apply-ports.md) | `apply.ts` за порты: Playwright/Mongo → адаптеры | P0 | Dependency Rule, I/O в use case | — | ✅ |
 | [T-18](T-18-cover-ports.md) | `cover.ts` на существующие порты | P0 | Dependency Rule, порты протекают | — | ✅ |
 | [T-19](T-19-config-provider.md) | `ConfigProvider` вместо `loadConfig()` и мутации env | P0 | скрытые зависимости, глобальное состояние | T-18 (✅) | ☐ |
-| [T-20](T-20-file-ports.md) | Файловый I/O из `application` в адаптеры | P0 | `reset`, `resume-download`, `search/stages` | — | ☐ |
+| [T-20](T-20-file-ports.md) | Файловый I/O из `application` в адаптеры | P0 | `reset`, `resume-download`, `search/stages` | — | ✅ |
 | [T-21](T-21-shared-decoupling.md) | `shared` без инфраструктуры, домен без `process.env` | P1 | транзитивная утечка в домен | T-17 (✅), T-18 (✅) | ☐ |
 | [T-22](T-22-composition-scheduler.md) | Единый composition root + порт `Scheduler` | P1 | `node-cron` в use case, 4 импорта в CLI | T-17, T-18, T-20 | ☐ |
 | [T-23](T-23-boundary-guard.md) | `dependency-cruiser` + `strict: true` | P1 | защита правил от дрейфа | T-17…T-22 | ☐ |
