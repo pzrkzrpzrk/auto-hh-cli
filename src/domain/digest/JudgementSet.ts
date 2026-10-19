@@ -9,7 +9,6 @@ export interface Judgement {
   fit: boolean;
   reason: string | null;
   comment: string | null;
-  [key: string]: any;
 }
 
 export class JudgementSet {

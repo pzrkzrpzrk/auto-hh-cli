@@ -2,13 +2,12 @@
 // Оркестрация: кэш поиска → локальный фильтр → ИИ-судья → digest/rejected (файлы + Mongo).
 // Вывод в консоль остаётся в команде: сценарий отдаёт данные и колбэк onMatched.
 import { readFileSync } from "fs";
-import { chunk, runBatches, aiConcurrencyFromEnv } from "../shared/concurrency.js";
+import { aiConcurrencyFromEnv } from "../shared/concurrency.js";
 import { loadConfig } from "../infrastructure/config/config.js";
 import history from "../infrastructure/mongo/history-store.js";
 import * as collectCache from "../infrastructure/mongo/cache-store.js";
 import { selectCandidates } from "../domain/filter.js";
 import { loadResume } from "../infrastructure/files/resume-loader.js";
-import { judgeVacancy, judgeVacanciesBatch } from "../domain/judge/index.js";
 import {
   writeDigest,
   writeRejected,
@@ -32,6 +31,8 @@ import { DigestPolicy } from "../domain/digest/DigestPolicy.js";
 import { DigestMatcher } from "../domain/digest/DigestMatcher.js";
 import { DigestEntryFactory } from "../domain/digest/DigestEntryFactory.js";
 import { JudgementSet } from "../domain/digest/JudgementSet.js";
+import type { JudgementCache } from "../domain/digest/ports.js";
+import { JudgementService } from "./digest/JudgementService.js";
 import { intFromEnv } from "../infrastructure/config/env.js";
 import log from "../shared/logger.js";
 
@@ -42,6 +43,8 @@ export interface DigestDeps {
   collect: CollectDeps;
   /** Источник вакансий с жизненным циклом (браузер открывается только при догрузке). */
   source: SourceProvider<VacancySource>;
+  /** Кэш вердиктов судьи: сервис сохраняет их после каждой пачки. */
+  judgements: JudgementCache;
 }
 
 // Дата кэша поиска: тем же ключом пишутся полные вакансии и вердикты ИИ.
@@ -67,52 +70,6 @@ async function filterLocally(source: VacancySource, items, cache, cfg, deps: Col
     log.info(`Skip ${id} (${name}): ${reason}`);
   }
   return candidates;
-}
-
-async function judgeWithClaude(ai, resume, candidates, cache, minScore, adaptResume = false, resumeId?: string) {
-  const judgements = new Map();
-  for (const [id, j] of Object.entries(cache.judgements)) judgements.set(id, j);
-  let judgedCount = 0;
-
-  const pending = candidates.filter(c => !judgements.has(String(c.full.id)));
-  if (pending.length < candidates.length) {
-    log.info(`Judgements from cache: ${candidates.length - pending.length}/${candidates.length}`);
-  }
-
-  const batchSize = intFromEnv('JUDGE_BATCH_SIZE', 10);
-  const date = sessionDate(cache);
-  const batches = chunk<any>(pending, batchSize).map(group => group.map(c => c.full));
-  const CONCURRENCY = aiConcurrencyFromEnv();
-
-  async function runBatch(idx, batch) {
-    log.info(`Judging batch ${idx}: ${batch.length} vacancies`);
-    const result = await judgeVacanciesBatch(ai, resume, batch, { minScore, adaptResume });
-    if (!result) {
-      log.warn(`Batch ${idx} failed, falling back to per-item judge`);
-      for (const v of batch) {
-        const j = await judgeVacancy(ai, resume, v, { minScore, adaptResume });
-        if (j) {
-          judgements.set(String(v.id), j);
-          cache.judgements[String(v.id)] = j;
-          await collectCache.saveJudgements(cache, resumeId, date);
-        }
-        judgedCount++;
-      }
-    } else {
-      for (const [id, j] of result.entries()) {
-        judgements.set(id, j);
-        cache.judgements[id] = j;
-      }
-      await collectCache.saveJudgements(cache, resumeId, date);
-      judgedCount += batch.length;
-    }
-  }
-
-  // Ошибка пачки пробрасывается наверх (как и раньше), а не глушится пулом.
-  await runBatches(batches, CONCURRENCY, (batch, index) => runBatch(index + 1, batch), {
-    onError: (err) => { throw err; },
-  });
-  return { judgements, judgedCount };
 }
 
 /**
@@ -162,13 +119,17 @@ export async function buildDigest(
     const candidates = await filterLocally(source, items, cache, cfg, deps.collect, policy.tracksHistory);
     log.info(`Local filter passed: ${candidates.length}/${items.length}`);
 
+    // Вердикты: уже известные — из кэша, остальные спрашивает сервис судейства.
+    const judgementSet = JudgementSet.fromSnapshot(cache.judgements);
     const ai = deps.ai();
-    const { judgements, judgedCount } = policy.useJudge
-      ? await judgeWithClaude(ai, resume, candidates, cache, policy.minScore, policy.adaptResume, resumeId)
-      : { judgements: new Map(), judgedCount: 0 };
+    const { judgedCount } = policy.useJudge
+      ? await new JudgementService(deps.judgements).judge(ai, resume, candidates, judgementSet, policy, {
+          resumeId,
+          date: sessionDate(cache),
+        })
+      : { judgedCount: 0 };
 
     // Отбор и сборка записей — доменные сервисы: сценарий только связывает их с I/O.
-    const judgementSet = JudgementSet.fromSnapshot(Object.fromEntries(judgements));
     const { accepted, rejected } = new DigestMatcher(policy).select(candidates, judgementSet);
     const matched = await new DigestEntryFactory(deps.collect.history).create(accepted, policy.tracksHistory);
 

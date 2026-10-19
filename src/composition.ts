@@ -6,6 +6,7 @@
 // домен о них не знает, знает только этот файл.
 import * as cacheStore from "./infrastructure/mongo/cache-store.js";
 import history from "./infrastructure/mongo/history-store.js";
+import MongoJudgementCache from "./infrastructure/mongo/judgement-cache.js";
 import { createAiProvider } from "./infrastructure/ai/client.js";
 import { loadConfig } from "./infrastructure/config/config.js";
 import HHClient from "./infrastructure/hh/client.js";
@@ -30,8 +31,16 @@ export const vacancySource: SourceProvider<VacancySource> =
 /** Зависимости сценария поиска: хранилища + источник вакансий. */
 export const searchDeps: SearchDeps = { ...collectDeps, source: vacancySource };
 
+/** Кэш вердиктов судьи: один адаптер на все сценарии, где судья сохраняет ответы. */
+const judgementCache = new MongoJudgementCache();
+
 /** Зависимости сценариев digest и cover: ИИ + хранилища + источник вакансий. */
-export const digestDeps: DigestDeps = { ai: aiProvider, collect: collectDeps, source: vacancySource };
+export const digestDeps: DigestDeps = {
+  ai: aiProvider,
+  collect: collectDeps,
+  source: vacancySource,
+  judgements: judgementCache,
+};
 export const coverDeps: CoverDeps = { ai: aiProvider, collect: collectDeps, source: vacancySource };
 
 /** Открытая сессия резюме: меню держит её между списком и скачиванием и закрывает само. */
