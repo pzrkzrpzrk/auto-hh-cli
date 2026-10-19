@@ -1,4 +1,3 @@
-// @ts-nocheck
 // Клиент к hh.ru через Playwright-скрейпинг.
 // API api.hh.ru заблокирован ddos-guard для нашего IP, поэтому ходим на основной
 // сайт hh.ru как обычный браузер и забираем JSON из <template id="HH-Lux-InitialState">,
@@ -12,6 +11,7 @@
 import path from "path";
 import fs from "fs";
 import { openBrowser, assertProfileExists } from "../browser.js";
+import type { BrowserContext, Page } from "playwright";
 import { env } from "../config.js";
 import log from "../logger.js";
 import { sleep } from "../time.js";
@@ -137,7 +137,14 @@ function isArchived(v) {
 // opts.links — vacancyView.vacancyFull.links (в нём ссылка desktop);
 // opts.translations — vacancyView.translations (в нём расшифровка workExperience);
 // opts.fields — справочник кодов из vacancyFieldsDictionary (buildFieldsDictionary).
-function mapVacancyView(v, opts = {}) {
+interface MapVacancyOpts {
+  idHint?: string | null;
+  links?: { desktop?: string } | null;
+  translations?: Record<string, any> | null;
+  fields?: Record<string, Map<string, string>> | null;
+}
+
+function mapVacancyView(v, opts: MapVacancyOpts = {}) {
   if (!v) return null;
   const rawId = v.vacancyId ?? v.id ?? opts.idHint ?? null;
   const fields = opts.fields || {};
@@ -189,6 +196,12 @@ class LoginRequiredError extends Error {
 }
 
 class HHClient {
+  userAgent: string;
+  delay: number;
+  ctx: BrowserContext | null;
+  page: Page | null;
+  headless: boolean;
+
   constructor() {
     const e = env();
     this.userAgent = e.userAgent;
@@ -230,7 +243,7 @@ class HHClient {
     log.warn('Captcha detected — reopening browser in headful mode. Solve it in the window, then press Enter here.');
     await this.init(false);
     await this.page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 }).catch(() => {});
-    await new Promise(resolve => {
+    await new Promise<void>(resolve => {
       process.stdout.write('Press Enter after solving captcha... ');
       process.stdin.once('data', () => resolve());
     });
@@ -395,7 +408,7 @@ class HHClient {
         const match = href.match(/\/resume\/([0-9a-f]{16,})/i);
         if (!match) continue;
         const hash = match[1];
-        const title = (link.innerText || link.textContent || '').replace(/\s+/g, ' ').trim();
+        const title = ((link as HTMLElement).innerText || link.textContent || '').replace(/\s+/g, ' ').trim();
         const prev = out.get(hash);
         if (!prev) {
           out.set(hash, { hash, title, status: null, updatedAt: null, url: `https://hh.ru/resume/${hash}` });
@@ -465,7 +478,7 @@ class HHClient {
         }
         return '';
       };
-      const unique = (list) => Array.from(new Set(list.filter(Boolean)));
+      const unique = (list): string[] => Array.from(new Set(list.filter(Boolean)));
 
       const title = firstText(document, [
         '[data-qa="resume-block-title-position"]',
@@ -573,7 +586,7 @@ class HHClient {
     const href = await this.page.evaluate(() => {
       const links = Array.from(document.querySelectorAll('a[href]')).map(link => ({
         href: link.getAttribute('href') || '',
-        text: (link.innerText || link.textContent || '').toLowerCase(),
+        text: ((link as HTMLElement).innerText || link.textContent || '').toLowerCase(),
       }));
       const found = links.find(link => /resume_converter|resume[_-]?download/i.test(link.href))
         || links.find(link => /pdf/i.test(link.href) && /скачать|download/.test(link.text));
