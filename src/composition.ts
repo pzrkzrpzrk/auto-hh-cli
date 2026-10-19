@@ -23,6 +23,7 @@ import type { DigestCacheStore } from "./domain/digest/ports.js";
 import type { VacancySource } from "./domain/search/VacancySource.js";
 import type { CoverDeps } from "./application/cover.js";
 import type { DigestDeps } from "./application/digest.js";
+import type { ActualizeDeps, DigestShowDeps } from "./application/digest.js";
 
 // Зависимости шагов сбора вакансий: search, digest, cover.
 // cacheStore типизирован портом дайджеста (нужен loadLatest), search он тоже удовлетворяет.
@@ -60,6 +61,16 @@ export const digestDeps: DigestDeps = {
   digestFiles: digestFileSource,
   coverLetters: coverLetterCache,
 };
+/** Зависимости показа дайджеста: Mongo-репозиторий, письма и .md-fallback. */
+export const digestShowDeps: DigestShowDeps = {
+  digest: digestRepository,
+  coverLetters: coverLetterCache,
+  files: digestFileSource,
+};
+
+/** Зависимости актуализации: кэш поиска и репозиторий дайджестов. */
+export const actualizeDeps: ActualizeDeps = { cacheStore, digest: digestRepository };
+
 export const coverDeps: CoverDeps = { ai: aiProvider, collect: collectDeps, source: vacancySource };
 
 /** Открытая сессия резюме: меню держит её между списком и скачиванием и закрывает само. */

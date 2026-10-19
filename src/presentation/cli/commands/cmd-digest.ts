@@ -1,6 +1,6 @@
 // Команда digest: тонкая оболочка над сценарием application/digest.ts.
 // Здесь только выбор действия и печать; фильтр, ИИ-судья и запись — в сценарии.
-import { digestDeps } from "../../../composition.js";
+import { digestDeps, digestShowDeps, actualizeDeps } from "../../../composition.js";
 import { buildDigest, actualizeDigests, showDigest } from "../../../application/digest.js";
 import type { DigestEntry } from "../../../domain/models.js";
 import log from "../../../shared/logger.js";
@@ -25,7 +25,7 @@ async function build(opts: Record<string, any> = {}) {
 
 // Шаг показа: последний дайджест + письма из кэша (fallback — .md файл).
 async function show(opts: Record<string, any> = {}) {
-  const outcome = await showDigest(opts);
+  const outcome = await showDigest(digestShowDeps);
   if (outcome.kind === 'none') {
     log.info('No digest found. Сначала соберите дайджест: пункт меню «🧠 Собрать дайджест»');
     return;
@@ -54,7 +54,7 @@ async function show(opts: Record<string, any> = {}) {
 
 // Шаг актуализации: сценарий обновляет записи, команда печатает итоги.
 async function actualize(opts: Record<string, any> = {}) {
-  const result = await actualizeDigests(opts);
+  const result = await actualizeDigests(opts, actualizeDeps);
   if (!result) return;
 
   console.log(`\nАктуализация (поиск от ${result.today}): проверено ${result.checkedTotal} вакансий, помечено недоступными ${result.markedTotal}${result.dryRun ? ' [dry-run]' : ''}`);
