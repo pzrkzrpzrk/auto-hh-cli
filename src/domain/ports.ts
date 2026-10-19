@@ -2,6 +2,9 @@
 // Домен зависит от этих узких интерфейсов, а не от конкретных модулей store/ (MongoDB).
 // Реализации подставляет вызывающий код (CLI — временный composition root), поэтому
 // доменные шаги можно прогонять с подставными хранилищами, без базы.
+import type { HhResumeData, HhResumeSummary } from "./models.js";
+import type { SearchCacheSnapshot } from "./search/types.js";
+import type { VacancySource } from "./search/VacancySource.js";
 
 /**
  * История откликов и просмотров — домену нужны только эти две операции:
@@ -12,8 +15,10 @@ export interface HistoryStore {
   markSeen(vacancyId: string | number): Promise<void>;
 }
 
-/** Кэш поиска: запись страниц выдачи (cachePages) и полных карточек (cacheFull). */
+/** Кэш поиска: чтение снимка (cachePages/cacheFull) и запись страниц и карточек. */
 export interface CacheStore {
+  /** Снимок кэша за дату (по умолчанию — сегодня) и, при необходимости, по резюме. */
+  load(date?: Date, resumeId?: string): Promise<SearchCacheSnapshot>;
   savePage(state: any, pageNum: number | string, date?: Date): Promise<void>;
   saveFullVacancy(vacancy: any, date?: Date): Promise<void>;
 }
@@ -22,6 +27,31 @@ export interface CacheStore {
 export interface CollectDeps {
   cacheStore: CacheStore;
   history: HistoryStore;
+}
+
+/** Зависимости сценария поиска: хранилища + источник вакансий с жизненным циклом. */
+export interface SearchDeps extends CollectDeps {
+  source: SourceProvider<VacancySource>;
+}
+
+// --- Источники hh.ru ------------------------------------------------------
+
+/** Порт источника резюме соискателя: открыть сессию, список, карточка, PDF-копия. */
+export interface ResumeSource {
+  /** Открыть браузер заранее (идемпотентно: повторный вызов ничего не делает). */
+  open(): Promise<void>;
+  listMyResumes(): Promise<HhResumeSummary[]>;
+  getMyResume(hash: string): Promise<HhResumeData | null>;
+  downloadResumePdf(hash: string, destPath: string): Promise<string | null>;
+}
+
+/**
+ * Фабрика с жизненным циклом (RAII): открыть источник → работа → закрыть.
+ * Заменяет копии `const client = new HHClient(); try { ... } finally { client.close(); }`,
+ * поэтому сценарии не знают ни про Playwright, ни про порядок закрытия браузера.
+ */
+export interface SourceProvider<T> {
+  withSource<R>(fn: (source: T) => Promise<R>): Promise<R>;
 }
 
 // --- ИИ-провайдер ---------------------------------------------------------

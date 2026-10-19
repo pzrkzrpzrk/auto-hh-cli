@@ -2,7 +2,6 @@
 // Оркестрация: кэш поиска → локальный фильтр → ИИ-судья → digest/rejected (файлы + Mongo).
 // Вывод в консоль остаётся в команде: сценарий отдаёт данные и колбэк onMatched.
 import { readFileSync } from "fs";
-import HHClient from "../infrastructure/hh/client.js";
 import { chunk, runBatches, aiConcurrencyFromEnv } from "../shared/concurrency.js";
 import { loadConfig } from "../infrastructure/config/config.js";
 import history from "../infrastructure/mongo/history-store.js";
@@ -23,8 +22,12 @@ import { registerResume } from "../infrastructure/mongo/resume-store.js";
 import { listDigestFiles } from "../infrastructure/files/digest-files.js";
 import { DIGEST_DIR } from "../infrastructure/config/paths.js";
 import type { DigestEntry } from "../domain/models.js";
-import { flattenCollected, fmtSalary, ensureFullVacancies } from "./collect.js";
-import type { AiProvider, CollectDeps } from "../domain/ports.js";
+import { flattenCollected, fmtSalary } from "./collect.js";
+import type { AiProvider, CollectDeps, SourceProvider } from "../domain/ports.js";
+import type { VacancySource } from "../domain/search/VacancySource.js";
+import SearchCache from "./search/SearchCache.js";
+import { VacancyCollector } from "./search/VacancyCollector.js";
+import { SkipSeenPolicy } from "./search/FullCardPolicy.js";
 import { intFromEnv } from "../infrastructure/config/env.js";
 import log from "../shared/logger.js";
 
@@ -33,6 +36,8 @@ export interface DigestDeps {
   /** Провайдер ИИ создаётся лениво — ровно там, где он нужен (как раньше). */
   ai: () => AiProvider | null;
   collect: CollectDeps;
+  /** Источник вакансий с жизненным циклом (браузер открывается только при догрузке). */
+  source: SourceProvider<VacancySource>;
 }
 
 // Дата кэша поиска: тем же ключом пишутся полные вакансии и вердикты ИИ.
@@ -40,9 +45,10 @@ function sessionDate(cache) {
   return cache.date ? new Date(`${cache.date}T00:00:00.000Z`) : undefined;
 }
 
-async function filterLocally(client, items, cache, cfg, deps: CollectDeps, markSeen = true) {
+async function filterLocally(source: VacancySource, items, cache, cfg, deps: CollectDeps, markSeen = true) {
   // Догрузка карточек — общая с шагами search и cover. Просмотренные не качаем: ниже они всё равно пропускаются.
-  const { failedIds } = await ensureFullVacancies(client, items, cache, deps, { skipSeen: true });
+  const collector = new VacancyCollector(source, new SearchCache(cache, deps.cacheStore), deps.history);
+  const { failedIds } = await collector.ensureFullCards(items, SkipSeenPolicy);
   // Карточки, которые не удалось скачать, помечаем просмотренными, чтобы не перебирать их при каждом запуске.
   if (markSeen) for (const id of failedIds) await deps.history.markSeen(id);
 
@@ -217,10 +223,9 @@ export async function buildDigest(
     log.warn('RESUME_PATH not set — Claude judge disabled, fall back to local filter only');
   }
 
-  const client = new HHClient();
-  try {
+  return await deps.source.withSource(async source => {
     log.info(`Building digest from search cache ${cache.date}: ${items.length} vacancies`);
-    const candidates = await filterLocally(client, items, cache, cfg, deps.collect, !dryRun);
+    const candidates = await filterLocally(source, items, cache, cfg, deps.collect, !dryRun);
     log.info(`Local filter passed: ${candidates.length}/${items.length}`);
 
     const adaptResume = cfg.adaptResume !== false;
@@ -253,9 +258,7 @@ export async function buildDigest(
     const files = await writeDigest(matched);
     log.info(`Digest saved: ${files.length} regions, ${matched.length} vacancies -> ${files.join(', ')}`);
     return { matched, rejected, dryRun };
-  } finally {
-    await client.close?.();
-  }
+  });
 }
 
 // Шаг актуализации: помечает в старых дайджестах/rejected вакансии, которых нет в последнем

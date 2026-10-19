@@ -1,14 +1,16 @@
 // Сценарий сопроводительных писем: одна вакансия или весь последний дайджест.
 // Печать остаётся в команде: сценарий возвращает результат, а карточку вакансии
 // отдаёт в колбэк onVacancy — так порядок вывода в консоли не меняется.
-import HHClient from "../infrastructure/hh/client.js";
 import { buildCoverLetter, buildCoverLettersBatch } from "../domain/cover-letter/index.js";
 import { loadResume } from "../infrastructure/files/resume-loader.js";
 import { loadConfig } from "../infrastructure/config/config.js";
 import { intFromEnv } from "../infrastructure/config/env.js";
 import * as collectCache from "../infrastructure/mongo/cache-store.js";
-import type { AiProvider, CollectDeps } from "../domain/ports.js";
-import { ensureFullVacancies } from "./collect.js";
+import type { AiProvider, CollectDeps, SourceProvider } from "../domain/ports.js";
+import type { VacancySource } from "../domain/search/VacancySource.js";
+import SearchCache from "./search/SearchCache.js";
+import { VacancyCollector } from "./search/VacancyCollector.js";
+import { AllVacanciesPolicy } from "./search/FullCardPolicy.js";
 import { getLatestDigest, writeDigest } from "../infrastructure/mongo/digest-store.js";
 import log from "../shared/logger.js";
 
@@ -17,6 +19,8 @@ export interface CoverDeps {
   /** Провайдер ИИ создаётся лениво — ровно там, где он нужен (как раньше). */
   ai: () => AiProvider | null;
   collect: CollectDeps;
+  /** Источник вакансий с жизненным циклом (браузер открывается только при догрузке). */
+  source: SourceProvider<VacancySource>;
 }
 
 /** Итог сценария: команда превращает его в печать (и код возврата для ошибок). */
@@ -37,13 +41,13 @@ async function coverOne(
   vacancyId: string,
   opts: Record<string, any>,
   resume,
+  deps: CoverDeps,
   onVacancy?: OnVacancy,
 ): Promise<CoverOutcome> {
   const cfg = loadConfig();
-  const client = new HHClient();
-  try {
+  return deps.source.withSource(async source => {
     log.info(`Fetching vacancy ${vacancyId}...`);
-    const full = await client.getVacancy(vacancyId);
+    const full = await source.getVacancy(vacancyId);
     if (!full) {
       log.error(`Vacancy ${vacancyId} not found`);
       return { kind: 'not-found', vacancyId };
@@ -55,11 +59,9 @@ async function coverOne(
     const letter = await buildCoverLetter(ai, cfg.apply.coverLetterTemplate, full, resume, cfg.adaptResume !== false);
     if (!letter) return { kind: 'no-letter' };
 
-    await collectCache.saveLetter(full.id, letter).catch(err => log.warn(`saveLetter ${full.id}: ${err.message}`));
+    await collectCache.saveLetter(String(full.id), letter).catch(err => log.warn(`saveLetter ${full.id}: ${err.message}`));
     return { kind: 'one', letter };
-  } finally {
-    await client.close?.();
-  }
+  });
 }
 
 // Весь последний дайджест: письма генерируются батчами и сохраняются в кэш + дайджест.
@@ -94,13 +96,12 @@ async function coverDigest(
   const missing = pending.filter(e => !fullById[String(e.id)]).map(e => String(e.id));
   if (missing.length) {
     log.info(`Подгружаю описания вакансий: ${missing.length}`);
-    const client = new HHClient();
-    try {
-      // Общая догрузка карточек (та же, что в search/digest): skipSeen не нужен — письма пишем всем.
-      await ensureFullVacancies(client, missing, { fullById }, deps.collect);
-    } finally {
-      await client.close?.();
-    }
+    // Общая догрузка карточек (та же, что в search/digest): письма пишем всем.
+    await deps.source.withSource(async source => {
+      const cache = new SearchCache({ date: '', pages: {}, fullById }, deps.collect.cacheStore);
+      await new VacancyCollector(source, cache, deps.collect.history)
+        .ensureFullCards(missing, AllVacanciesPolicy);
+    });
   }
 
   const items = pending.filter(e => fullById[String(e.id)]).map(e => ({ vacancy: fullById[String(e.id)] }));
@@ -155,6 +156,6 @@ export async function runCover(
 
   const id = vacancyId ? String(vacancyId).trim() : '';
   const ai = deps.ai();
-  return id ? coverOne(ai, id, opts, resume, onVacancy) : coverDigest(ai, opts, resume, deps);
+  return id ? coverOne(ai, id, opts, resume, deps, onVacancy) : coverDigest(ai, opts, resume, deps);
 }
 

@@ -2,17 +2,17 @@
 // Браузер открывается здесь один раз: список передаётся в команду, чтобы не
 // навигация по /applicant/resumes не повторялась.
 import { checkbox, confirm } from "@inquirer/prompts";
-import HHClient from "../../../infrastructure/hh/client.js";
+import { openResumeSource } from "../../../composition.js";
 import cmdResumeDownload from "../commands/cmd-resume-download.js";
 import { loadResume } from "../../../infrastructure/files/resume-loader.js";
 import type { UiContext } from "./resume.js";
 
 export async function runResumeDownload(ctx: UiContext) {
-  const client = new HHClient();
+  const session = openResumeSource();
 
   try {
-    await client.init();
-    const items = await client.listMyResumes();
+    await session.open();
+    const items = await session.listMyResumes();
     if (!items.length) {
       console.log("На hh.ru не найдено резюме (или страница не распознана).");
       return;
@@ -33,7 +33,7 @@ export async function runResumeDownload(ctx: UiContext) {
     const overwrite = await confirm({ message: "Перезаписывать уже существующие файлы?", default: false });
 
     console.log();
-    const results = await cmdResumeDownload({ client, resumes: items, hashes: chosen, pdf, overwrite });
+    const results = await cmdResumeDownload({ source: session, resumes: items, hashes: chosen, pdf, overwrite });
 
     // Файлы могли появиться впервые — сбрасываем закэшированную подпись .env,
     // иначе в шапке меню останется «не найдено» до перезапуска.
@@ -56,6 +56,6 @@ export async function runResumeDownload(ctx: UiContext) {
     ctx.activeResume = { name: resume.name, filename: resume.filename };
     console.log(`Активное резюме: ${resume.name} (${resume.filename})`);
   } finally {
-    await client.close();
+    await session.close();
   }
 }

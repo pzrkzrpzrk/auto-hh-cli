@@ -1,6 +1,6 @@
 # Архитектура auto-hh-cli
 
-- **Статус:** этапы 1–5 выполнены — структура приведена к целевой (раздел 4), домен не зависит от инфраструктуры, все сценарии вынесены в `application/`, команды только печатают; документация обновлена.
+- **Статус:** этапы 1–6 выполнены — структура приведена к целевой (раздел 4), домен не зависит от инфраструктуры, все сценарии в `application/`, поиск переведён на ООП (порты, коллектор, конвейер, репортёр); документация обновлена.
 - **Дата:** 2026-10-19.
 - **Ветка:** `refactoring/add-solid`.
 - **Состояние кода:** `src/` — 56 файлов, ≈5,9 тыс. строк; `npx tsc --noEmit` → exit 0.
@@ -110,7 +110,8 @@ src/
 src/
 ├── domain/
 │   ├── models.ts               # Vacancy, Resume, Verdict, DigestEntry, HhResume*
-│   ├── ports.ts                # CacheStore, HistoryStore, CollectDeps, AiProvider
+│   ├── ports.ts                # CacheStore, HistoryStore, SearchDeps, ResumeSource,
+│   │                           #   SourceProvider, AiProvider
 │   ├── filter.ts
 │   ├── resume-block.ts
 │   ├── actualize.ts
@@ -118,23 +119,42 @@ src/
 │   ├── resume-markdown.ts
 │   ├── judge/{judge.ts, system-text.ts}
 │   ├── cover-letter/{cover-letter.ts, system-text.ts}
-│   └── grade-resume.ts
+│   ├── grade-resume.ts
+│   └── search/                 # VO и порт источника вакансий
+│       ├── SearchQuery.ts      # config.search → проходы и страницы
+│       ├── SearchBucket.ts     # проход: префикс, подпись, регион, график
+│       ├── PageKey.ts          # ключ страницы в кэше + «страница 0 всегда свежая»
+│       ├── VacancySource.ts    # порт: searchVacancies / getVacancy
+│       └── types.ts            # VacancyListItem, SearchParams, SearchCacheSnapshot
 │
 ├── application/
-│   ├── collect.ts              # из domain/collect.ts
-│   ├── digest.ts               # из cmd-digest (+ показ и файловый fallback)
-│   ├── cover.ts                # из cmd-cover
-│   ├── apply.ts                # из cmd-apply
-│   ├── search.ts               # из cmd-search
-│   ├── grade.ts                # из cmd-grade-resume + loadResume
-│   ├── resume.ts               # из cmd-resume (list/register/show)
-│   ├── resume-download.ts      # из cmd-resume-download
-│   ├── schedule.ts             # из cmd-schedule (шаги приходят из presentation)
-│   ├── history.ts              # из cmd-history (выборки, а не печать)
-│   └── reset.ts                # из store/reset.ts
+│   ├── collect.ts              # flattenCollected, fmtSalary (чистые утилиты)
+│   ├── digest.ts               # сборка/актуализация/показ дайджеста
+│   ├── cover.ts                # сопроводительные
+│   ├── apply.ts                # цикл откликов
+│   ├── search.ts               # runSearch() — обёртка над SearchScenario
+│   ├── search/                 # ООП-реализация поиска
+│   │   ├── SearchScenario.ts   # фасад: сброс → источник → конвейер
+│   │   ├── SearchPipeline.ts   # цепочка стадий
+│   │   ├── SearchStage.ts      # Template Method: включена → execute → onError
+│   │   ├── stages.ts           # страницы, файл, полные карточки
+│   │   ├── SearchContext.ts    # состояние прогона для стадий
+│   │   ├── SearchEvent.ts      # события фаз + порт SearchReporter
+│   │   ├── VacancyCollector.ts # Domain Service: страницы и карточки
+│   │   ├── SearchCache.ts      # Repository кэша (cachePages/cacheFull)
+│   │   ├── PageIterator.ts     # Iterator страниц прохода
+│   │   ├── SearchRequestBuilder.ts # Builder параметров запроса
+│   │   └── FullCardPolicy.ts   # Strategy: skipSeen для search/digest/cover
+│   ├── grade.ts                # загрузка резюме + оценка
+│   ├── resume.ts               # резюме: list / register / show
+│   ├── resume-download.ts      # скачивание резюме (порт ResumeSource)
+│   ├── schedule.ts             # прогон пайплайна по cron
+│   ├── history.ts              # история откликов (выборки)
+│   └── reset.ts                # сброс файлов и коллекций
 │
 ├── infrastructure/
-│   ├── hh/{client.ts, resume.ts}
+│   ├── hh/{client.ts, resume.ts, vacancy-source.ts, resume-source.ts,
+│   │       source-provider.ts}  # адаптеры портов + жизненный цикл браузера
 │   ├── ai/client.ts
 │   ├── mongo/{db.ts, cache-store.ts, digest-store.ts, history-store.ts,
 │   │          resume-store.ts}
@@ -145,11 +165,11 @@ src/
 ├── presentation/cli/
 │   ├── index.ts
 │   ├── commands/cmd-*.ts       # только выбор действия и печать
-│   ├── format/grade-report.ts  # консоль + Markdown отчёта об оценке
+│   ├── format/{grade-report.ts, search-report.ts}  # консольные представления
 │   └── menu/{menu,options,resume,resume-download,steps}.ts
 │
 ├── shared/{logger,concurrency,retry,text-utils,time,cron,path-utils}.ts
-└── composition.ts
+└── composition.ts              # единая точка new HHClient(): vacancySource/resumeSource
 ```
 
 Отличия от as-is:
@@ -157,6 +177,24 @@ src/
 - Появились явные `application/`, `infrastructure/`, `presentation/`, `shared/`.
 - `domain/` содержит только модели, правила и порты.
 - Команды в `presentation` становятся тонкими: парсинг аргументов → вызов сценария → вывод.
+
+### Паттерны поиска (этап 6)
+
+| Паттерн | Где | Что решает |
+|---|---|---|
+| Adapter + DIP | `infrastructure/hh/{vacancy-source,resume-source}.ts` | сценарии не знают про Playwright |
+| Factory + RAII | `HHSourceProvider` | открытие/закрытие браузера в одном месте |
+| Repository | `application/search/SearchCache.ts` | сценарий не мутирует `cache.pages` руками |
+| Domain Service | `VacancyCollector` | общая догрузка карточек для search/digest/cover |
+| Strategy | `FullCardPolicy` | именованные политики вместо флага `skipSeen` |
+| Template Method | `SearchStage` | политика ошибок фазы в одном месте |
+| Chain of Responsibility | `SearchPipeline` + `stages.ts` | порядок фаз и «стоп» заданы явно |
+| Observer | `SearchReporter` / `ConsoleSearchReporter` | печать фаз вынесена в presentation |
+| Builder | `SearchRequestBuilder` | параметры запроса hh.ru |
+| Iterator | `PageIterator` | кэш/источник и break по страницам |
+| Value Object | `SearchQuery`, `SearchBucket`, `PageKey` | правила проходов и ключей кэша |
+
+Инвариант: тексты `log.*`/`console.*` и порядок фаз не изменились — после каждого шага сверялись с HEAD.
 
 ---
 
@@ -234,6 +272,19 @@ src/
 Все команды без бизнес-логики: `cmd-resume-download` → `application/resume-download.ts`, `cmd-resume` → `application/resume.ts`, `cmd-schedule` → `application/schedule.ts` + `shared/cron.ts`, `cmd-history` → `application/history.ts`, `cmd-grade-resume` → формат в `presentation/cli/format/grade-report.ts`, показ дайджеста и файловый fallback → `application/digest.ts` + `infrastructure/files/digest-files.ts`.
 
 Приём тот же, что на этапе 3: сценарий возвращает исход (`kind`) и события фаз, команда печатает и выставляет код возврата — порядок вывода в консоли сохраняется. Проверка после каждого шага: `tsc --noEmit` → 0, `node bin/auto-hh --version` → 1.0.0, сверка всех сообщений `console.*`/`log.*` со старым файлом.
+
+### Этап 6 — поиск на ООП (выполнено 2026-10-19)
+
+1. VO и порт источника: `domain/search/{SearchQuery,SearchBucket,PageKey,VacancySource,types}.ts`.
+2. Адаптеры `HHVacancySource`/`HHResumeSource` и `HHSourceProvider` (открыть → работа → закрыть).
+3. `SearchCache` — репозиторий `cachePages`/`cacheFull`; `flatten()` проверен на идентичность прежнему `flattenCollected`.
+4. `VacancyCollector` + `SearchRequestBuilder` + `PageIterator` + `FullCardPolicy`.
+5. `SearchScenario` + `SearchPipeline` + стадии (`CollectPages`, `ExportSearchFile`, `CollectFullCards`), `runSearch()` остался обёрткой.
+6. `ConsoleSearchReporter` в `presentation/cli/format/`; `cmd-search.ts` — 10 строк.
+7. digest/cover получают `SourceProvider` и используют тот же коллектор; 8. resume-download — порт `ResumeSource`.
+9. Удалён процедурный код `collect.ts` (`collectVacancies`, `ensureFullVacancies`, `searchBuckets`), остались `flattenCollected` и `fmtSalary`.
+
+Проверка: `new HHClient()` и импорты `infrastructure/hh` остались только в `composition.ts`; `tsc` → 0; порядок событий и тексты сверены на фейковом источнике (`found → files-saved → full-start → full-progress → full-cards → done`, ветка `nothing-found` без `done`).
 
 ---
 

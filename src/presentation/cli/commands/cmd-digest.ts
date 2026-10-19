@@ -1,6 +1,6 @@
 // Команда digest: тонкая оболочка над сценарием application/digest.ts.
 // Здесь только выбор действия и печать; фильтр, ИИ-судья и запись — в сценарии.
-import { aiProvider, collectDeps } from "../../../composition.js";
+import { digestDeps } from "../../../composition.js";
 import { buildDigest, actualizeDigests, showDigest } from "../../../application/digest.js";
 import type { DigestEntry } from "../../../domain/models.js";
 import log from "../../../shared/logger.js";
@@ -16,7 +16,7 @@ function printTop(matched: DigestEntry[]) {
 
 // Шаг digest: сценарий собирает дайджест, команда печатает топ и подсказку про письма.
 async function build(opts: Record<string, any> = {}) {
-  const result = await buildDigest(opts, { ai: () => aiProvider(), collect: collectDeps }, printTop);
+  const result = await buildDigest(opts, digestDeps, printTop);
   if (!result) return;
   if (!result.dryRun && result.matched.length) {
     console.log('\nДальше: пункт меню «✉️ Письма для дайджеста» — сгенерировать сопроводительные');

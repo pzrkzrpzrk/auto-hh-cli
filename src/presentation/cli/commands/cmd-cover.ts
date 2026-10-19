@@ -1,7 +1,7 @@
 // Команда cover: сопроводительные письма — отдельный шаг пайплайна.
 // Без id: письма для всех вакансий последнего дайджеста. С id: одно письмо для вакансии.
 // Сценарий — в application/cover.ts, здесь только печать результата и код возврата.
-import { aiProvider, collectDeps } from "../../../composition.js";
+import { coverDeps } from "../../../composition.js";
 import { runCover } from "../../../application/cover.js";
 import { fmtSalary } from "../../../application/collect.js";
 import log from "../../../shared/logger.js";
@@ -28,7 +28,7 @@ export default async function cover(vacancyId?: string, opts: Record<string, any
   const outcome = await runCover(
     vacancyId,
     opts,
-    { ai: () => aiProvider(), collect: collectDeps },
+    coverDeps,
     printVacancy,
   );
 
