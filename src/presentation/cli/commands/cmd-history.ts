@@ -1,46 +1,32 @@
 // Команда history: история откликов из MongoDB (коллекция history).
-import history from "../../../infrastructure/mongo/history-store.js";
+// Чтение и выборки — application/history.ts, здесь только печать.
+import { loadHistoryView } from "../../../application/history.js";
 import log from "../../../shared/logger.js";
 
-// Последние n записей по времени: Mongo не гарантирует порядок документов,
-// а slice(-n) должен отдавать самые свежие.
-function lastByAt<T>(items: [string, T][], n: number, at: (item: T) => string): [string, T][] {
-  return [...items]
-    .sort((a, b) => String(at(a[1])).localeCompare(String(at(b[1]))))
-    .slice(-n);
-}
-
 async function cmdHistory(opts: Record<string, any> = {}) {
-  const state = await history.load().catch(err => {
-    log.error(`Не удалось прочитать историю откликов из MongoDB: ${err.message}`);
-    return null;
-  });
-  if (!state) {
+  const outcome = await loadHistoryView();
+
+  if (outcome.kind === 'error') {
+    log.error(`Не удалось прочитать историю откликов из MongoDB: ${outcome.message}`);
     process.exitCode = 1;
     return;
   }
-
-  const appliedAll = Object.entries(state.applied);
-  const seenOnlyAll = Object.entries(state.seen).filter(([id]) => !state.applied[id]);
-  const total = Object.keys(state.seen).length;
-
-  if (!total) {
+  if (outcome.kind === 'empty') {
     log.info('No history yet.');
     return;
   }
 
+  const { appliedMap, appliedTotal, applied, seen, seenOnlyAll, total } = outcome.snapshot;
+
   if (opts.json) {
-    console.log(JSON.stringify({ applied: state.applied, seenOnly: Object.fromEntries(seenOnlyAll) }, null, 2));
+    console.log(JSON.stringify({ applied: appliedMap, seenOnly: Object.fromEntries(seenOnlyAll) }, null, 2));
     return;
   }
 
-  const applied = lastByAt(appliedAll, 20, (m: any) => m.at);
-  const seen = lastByAt(seenOnlyAll, 10, at => String(at));
-
-  console.log(`\n=== История откликов: откликнулся ${appliedAll.length}, просмотрено без отклика ${seenOnlyAll.length}, всего ${total} ===`);
+  console.log(`\n=== История откликов: откликнулся ${appliedTotal}, просмотрено без отклика ${seenOnlyAll.length}, всего ${total} ===`);
 
   if (applied.length) {
-    console.log(`\n=== Откликнулся (${appliedAll.length}) ===`);
+    console.log(`\n=== Откликнулся (${appliedTotal}) ===`);
     for (const [id, meta] of applied) {
       const m = meta as Record<string, any>;
       console.log(`  ${m.title || id} @ ${m.employer || '?'} [${m.score ?? '?'}/10]`);
