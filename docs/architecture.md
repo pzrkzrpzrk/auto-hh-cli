@@ -1,9 +1,9 @@
 # Архитектура auto-hh-cli
 
-- **Статус:** этапы 1–9 выполнены — структура приведена к целевой (раздел 4), домен не зависит от инфраструктуры, все сценарии в `application/`; поиск (этап 6) и дайджест (этап 7) переведены на ООП (порты, конвейер, репортёр), этап 8 закрыл `apply`/`cover` портами (T-17/T-18), этап 9 — файловый I/O сценариев (T-20); документация обновлена.
+- **Статус:** этапы 1–9 выполнены — структура приведена к целевой (раздел 4), домен не зависит от инфраструктуры, все сценарии в `application/`; поиск (этап 6) и дайджест (этап 7) переведены на ООП (порты, конвейер, репортёр), этап 8 закрыл `apply`/`cover` портами (T-17/T-18) и собрал их как ООП-подсистемы (фасады, конвейеры, стратегии), этап 9 — файловый I/O сценариев (T-20); документация обновлена.
 - **Дата:** 2026-10-19.
 - **Ветка:** `refactoring/digest-oop`.
-- **Состояние кода:** `src/` — 121 файл, ≈7,45 тыс. строк; `npx tsc --noEmit` → exit 0.
+- **Состояние кода:** `src/` — 144 файла, ≈8,08 тыс. строк; `npx tsc --noEmit` → exit 0.
 
 ---
 
@@ -65,11 +65,11 @@ presentation ──▶ application ──▶ domain
 
 ## 3. Текущее состояние
 
-Структура совпадает с целевой (раздел 4): `src/` — 121 файл, ≈7,45 тыс. строк, `npx tsc --noEmit` → exit 0.
+Структура совпадает с целевой (раздел 4): `src/` — 144 файла, ≈8,08 тыс. строк, `npx tsc --noEmit` → exit 0.
 
 ```
-src/                              # 121 файл
-├── application/                  # 35 файлов, ≈1,78 тыс. строк — сценарии (use cases)
+src/                              # 144 файла
+├── application/                  # 58 файлов, ≈2,41 тыс. строк — сценарии (use cases)
 ├── domain/                       # 28 файлов, ≈1,76 тыс. строк — модели, правила, порты
 ├── infrastructure/               # 29 файлов, ≈2,33 тыс. строк — адаптеры hh.ru, ИИ, Mongo,
 │                                 #   Playwright, файлы, конфигурация
@@ -149,8 +149,33 @@ src/
 ├── application/
 │   ├── collect.ts              # flattenCollected (+ реэкспорт fmtSalary из shared)
 │   ├── digest.ts               # фасад: buildDigest / showDigest / actualizeDigests
-│   ├── cover.ts                # сопроводительные
-│   ├── apply.ts                # цикл откликов
+│   ├── cover.ts                # runCover() — обёртка над CoverScenario
+│   ├── cover/                  # ООП-реализация писем
+│   │   ├── CoverScenario.ts    # Facade: проверки → стратегия режима → результат
+│   │   ├── CoverMode.ts        # Strategy: одна вакансия или весь дайджест
+│   │   ├── SingleVacancyMode.ts # карточка hh.ru → письмо → cacheCoverLetters
+│   │   ├── DigestCoverMode.ts  # конвейер стадий по последнему дайджесту
+│   │   ├── CoverPipeline.ts    # Chain of Responsibility: стадии и «стоп»
+│   │   ├── CoverStage.ts       # Template Method: enabled → execute → onError
+│   │   ├── stages.ts           # дайджест → лимит → письма → карточки → выбор → генерация → запись
+│   │   ├── CoverContext.ts     # состояние прогона для стадий
+│   │   ├── CoverDeps.ts        # порты сценария, CoverConfig/CoverOutcome/OnVacancy
+│   │   ├── CoverPlan.ts        # Value Object: счётчики плана и готовности
+│   │   └── index.ts
+│   ├── apply.ts                # runApply() — обёртка над ApplyScenario
+│   ├── apply/                  # ООП-реализация отклика
+│   │   ├── ApplyScenario.ts    # Facade: вход → конвейер плана → сессия → цикл
+│   │   ├── ApplyPipeline.ts    # Chain of Responsibility: стадии плана
+│   │   ├── ApplyStage.ts       # Template Method: enabled → execute → onError
+│   │   ├── stages.ts           # дайджест → архив → лимит → письма → история
+│   │   ├── ApplyContext.ts     # план отклика и политики прогона
+│   │   ├── ApplyDeps.ts        # порты сценария, ApplyOutcome, ApplySettings
+│   │   ├── ApplicationRunner.ts # цикл откликов: вход, пропуски, счётчики
+│   │   ├── SkipRules.ts        # Chain of Responsibility: почему пропустить
+│   │   ├── DigestSelection.ts  # Strategy: latest/all
+│   │   ├── Pacing.ts           # Strategy: пауза (+ Null Object для проверок)
+│   │   ├── ApplySummary.ts     # Value Object: ok/fail/skipped
+│   │   └── index.ts
 │   ├── search.ts               # runSearch() — обёртка над SearchScenario
 │   ├── search/                 # ООП-реализация поиска
 │   │   ├── SearchScenario.ts   # фасад: сброс → источник → конвейер
@@ -195,7 +220,7 @@ src/
 │   ├── files/{resume-loader.ts, resume-files.ts, data-janitor.ts,
 │   │          search-output.ts, search-report-writer.ts, digest-files.ts,
 │   │          digest-file-source.ts}
-│   ├── playwright/{browser.ts, apply-steps.ts}
+│   ├── playwright/{browser.ts, apply-steps.ts, application-gateway.ts}
 │   └── config/{config.ts, env.ts, paths.ts, apply-config.ts}
 │
 ├── presentation/cli/
@@ -296,6 +321,57 @@ sequenceDiagram
 ```
 
 Показ и актуализация — отдельные сценарии с теми же портами: `DigestShowScenario` (Mongo → письма → `.md` fallback) и `ActualizeScenario` (документы → `computeActualization` → перезапись и `actual.md`).
+
+### Паттерны отклика (этап 8)
+
+| Паттерн | Где | Что решает |
+|---|---|---|
+| Ports & Adapters + RAII | `domain/ports.ts` + `infrastructure/playwright/application-gateway.ts` | сценарий не знает про Playwright, браузер закрывается в `finally` |
+| Facade | `ApplyScenario` | команда вызывает `run(opts)`, внутри — стратегия, конвейер и сессия |
+| Template Method | `ApplyStage` | каркас стадии «включена → execute → onError» |
+| Chain of Responsibility | `ApplyPipeline` + `stages.ts` | порядок подготовки плана задан явно |
+| Chain of Responsibility | `SkipRules` (`MissingLetterRule` → `AlreadyAppliedRule`) | правила пропуска вакансии — отдельные звенья |
+| Strategy | `DigestSelection` | latest/all — два класса вместо ветки `if` |
+| Strategy | `Pacing` + `RandomPacing` | пауза между откликами не зашита в цикл |
+| Null Object | `NoPacing` | проверки без ожидания |
+| Value Object | `ApplySummary` | ok/fail/skipped и их сводка в одном объекте |
+
+**Ports & Adapters — `ApplyDeps`.** `DigestRepository`, `CoverLetterCache`, `HistoryStore`, `ApplicationGateway` и `LoginGateway` — всё, что нужно сценарию; `application/apply/` не импортирует `infrastructure` (совпадения в `Select-String` — только комментарии и литерал `via: 'playwright'`, поле схемы истории).
+
+**Facade — `ApplyScenario`.** `run(opts)` обрабатывает ручной вход, собирает `ApplyContext`, прогоняет конвейер плана и только затем открывает сессию через `gateway.withSession`: ошибка подготовки плана не поднимает браузер, а `finally` адаптера закрывает его при любом исходе. `application/apply.ts` сохраняет прежнюю точку входа `runApply`.
+
+**Strategy — `DigestSelection`.** `LatestDigestSelection` читает `byDate(dateKey())`, `AllDigestsSelection` — `all()`; `digestSelection(type)` выбирает класс по флагу команды. Новый источник (дайджест за конкретную дату) — ещё одна реализация, сценарий не меняется.
+
+**Chain of Responsibility — `SkipRules`.** `SkipRule.check()` идёт по звеньям: `MissingLetterRule` (warn, считается в `skipped`) → `AlreadyAppliedRule` (info, не считается; `digestOnly` не блокирует отклик). Решение несёт уровень лога и вклад в сводку, поэтому `ApplicationRunner` не знает причин пропуска.
+
+**Template Method + Chain — `ApplyStage`/`ApplyPipeline`.** Пять стадий (`LoadDigest → FilterArchived → Limit → AttachLetters → LoadHistory`) заполняют `ApplyContext`; порядок и тексты логов совпадают с прежним `runApply`. Ошибка любой стадии валит прогон (`onError: throw`), как раньше.
+
+**Strategy + Null Object — `Pacing`.** `RandomPacing` инкапсулирует `sleep(rand(MIN_DELAY, MAX_DELAY))`, `NoPacing` — заглушка для проверок. Пауза вызывается только после реальной попытки отклика — пропуски не растягивают прогон (прежнее поведение сохранено).
+
+**Value Object — `ApplySummary`.** Счётчики `ok/fail/skipped` и строка `ok=N, fail=N, skipped=N` формируются в одном месте; наружу — тот же `ApplyOutcome { kind: 'done', ... }`.
+
+### Паттерны писем (этап 8)
+
+| Паттерн | Где | Что решает |
+|---|---|---|
+| Ports & Adapters | `CoverDeps` + `composition.ts` | `application/cover/` не импортирует `infrastructure`, `files`, `mongo` |
+| Facade | `CoverScenario` | проверки резюме/шаблона и выбор режима в одном входе `run()` |
+| Strategy | `CoverMode` + `SingleVacancyMode`/`DigestCoverMode` | «одна вакансия» и «дайджест» — классы вместо ветки `if` |
+| Template Method | `CoverStage` | каркас стадии «включена → execute → onError» |
+| Chain of Responsibility | `CoverPipeline` + `stages.ts` | порядок подготовки и ранний выход (пусто/всё готово/нет описаний) |
+| Value Object | `CoverPlan`, `CoverProgress` | счётчики и тексты «Вакансий…», «Сопроводительных готово…» |
+| Repository + Domain Service | `SearchCache`, `VacancyCollector`, `AllVacanciesPolicy` | догрузка описаний тем же кодом, что search/digest |
+| Observer (callback) | `OnVacancy` | команда печатает заголовок вакансии в прежнем порядке вывода |
+
+**Facade + Strategy — `CoverScenario`/`CoverMode`.** `run()` читает конфиг и резюме один раз, проверяет шаблон и по наличию id выбирает режим. `SingleVacancyMode` открывает источник через `withSource` (RAII), получает карточку, отдаёт её в `OnVacancy`, генерирует письмо и пишет в `cacheCoverLetters`. `DigestCoverMode` собирает `CoverContext` и запускает конвейер.
+
+**Template Method + Chain — `CoverStage`/`CoverPipeline`.** Семь стадий (`LoadDigest → Limit → AttachLetters → EnsureCards → SelectItems → GenerateLetters → PersistDigest`) заполняют контекст. `stop` возвращается при пустом дайджесте/ошибке Mongo, когда все письма уже есть и когда ни у одной вакансии нет описания; тексты и порядок логов совпадают с прежним `coverDigest`.
+
+**Value Object — `CoverPlan`/`CoverProgress`.** `CoverPlan` считает `existing = total - pending` и печатает «Вакансий: N, письма уже есть: N, генерируем: N»; `CoverProgress` — «Сопроводительных готово: N/N» и решает, писать ли дайджест. Логи не могут разойтись с числами, потому что строка и арифметика в одном объекте.
+
+**Repository + Domain Service — без нового кода.** `EnsureCardsStage` читает `cacheFull` через `CacheStore.getFullByVacancyIds`, догружает недостающее `VacancyCollector` с `AllVacanciesPolicy` (просмотренные не пропускаем) и пишет через `SearchCache.saveFull` — тот же путь, что в search/digest.
+
+`application/cover.ts` остался совместимой обёрткой `runCover(vacancyId, opts, deps, onVacancy)`; `cmd-cover.ts` и `composition.ts` не менялись.
 
 ---
 
@@ -401,7 +477,7 @@ sequenceDiagram
 
 E2E с живыми hh.ru, Mongo и ИИ не запускался — проверка шла на фейковых портах.
 
-### Этап 8 — `apply` и `cover` за порты (выполнено 2026-10-19, T-17/T-18)
+### Этап 8 — `apply` и `cover` за порты и на ООП (выполнено 2026-10-19, T-17/T-18)
 
 1. Порты в `domain/ports.ts`: `ApplicationSession` (`ensureLoggedIn`, `apply`), `ApplicationGateway`
    (`withSession` — RAII по образцу `SourceProvider`), `LoginGateway`, `ApplyResult`;
@@ -409,16 +485,23 @@ E2E с живыми hh.ru, Mongo и ИИ не запускался — пров�
    `save(vacancyId, letter)`.
 2. Адаптер `infrastructure/playwright/application-gateway.ts` — единственное место, где шаг отклика
    касается Playwright (`openBrowser`, `ensureLoggedIn`, `applyToVacancy`, ручной вход).
-3. `application/apply.ts`: `ApplyDeps { digests, letters, history, gateway, login, settings }`,
+3. `application/apply/` — ООП-сценарий: `ApplyScenario` (Facade) + `ApplyPipeline`/`ApplyStage`
+   (Chain + Template Method) + пять стадий плана + `ApplicationRunner`; стратегии `DigestSelection`
+   и `Pacing`, цепочка `SkipRules`, VO `ApplySummary`. `application/apply.ts` оставил
    `runApply(opts, deps)`; браузер закрывается в `finally` адаптера; `history.load()` — один раз на прогон.
-4. `application/cover.ts`: `CoverDeps { ai, config, collect, source, resumeFiles, digests, letters }`;
-   `CoverConfig` (шаблон, `adaptResume`, `COVER_BATCH_SIZE`) собирает `composition.ts`.
+4. `application/cover/` — ООП-сценарий: `CoverScenario` (Facade) + стратегии `CoverMode`
+   (`SingleVacancyMode`/`DigestCoverMode`) + конвейер семи стадий (Template Method + Chain)
+   + VO `CoverPlan`/`CoverProgress`. `application/cover.ts` оставил
+   `runCover(vacancyId, opts, deps, onVacancy)`; `CoverConfig` (шаблон, `adaptResume`,
+   `COVER_BATCH_SIZE`) собирает `composition.ts`.
 5. `composition.ts`: `applyDeps` + `coverDeps`; `cmd-apply`/`cmd-cover` только передают зависимости.
 
 Проверка: `application → infrastructure` — 26 импортов в 12 файлах → **15 в 10**;
-`npx tsc --noEmit` → 0; smoke на фейковых портах — 8 сценариев (cover: генерация через
-`letters.save`/`digests.save`, нет резюме, пустой дайджест, письма уже есть; apply: архивные
-отброшены, `type=all`, `not-logged-in`, ручной вход).
+`npx tsc --noEmit` → 0; smoke на фейковых портах: cover — 9 сценариев (одна вакансия,
+`not-found`, кэш + пачка с обновлением дайджеста, все письма готовы, `force`, `limit`, пустой
+дайджест/ошибка Mongo, нет описаний, нет резюме); apply — 7 сценариев (архивные, `type=all`,
+`limit`, `not-logged-in` с закрытием сессии, ручной вход, `ok=false`/исключение в `fail`,
+пауза только после реальной попытки).
 
 ### Этап 9 — файловый I/O за портами (выполнено 2026-10-19, T-20)
 
@@ -434,7 +517,8 @@ E2E с живыми hh.ru, Mongo и ИИ не запускался — пров�
    работают только с портами; сброс приходит в `SearchScenario` через `deps.janitor` и выполняется
    до открытия источника, как и раньше.
 4. `composition.ts`: `resetDeps`, `historyDeps`, `resumeDeps`, `resumeDownloadDeps`;
-   `searchDeps` собирается с `janitor` и `reportWriter`. Команды передают deps, не собирая адаптеры.
+   `searchDeps` собирается с `janitor` и `reportWriter`; при этом сохранены `applyDeps`/`coverDeps`
+   (ООП-подсистемы этапа 8). Команды передают deps, не собирая адаптеры.
 
 Проверка: `Get-ChildItem -Recurse -File src\application -Filter *.ts | Select-String -Pattern 'from "fs"|from "path"|mongo/'` → пусто;
 `npx tsc --noEmit` → 0; `node bin/auto-hh --version` → 1.0.0; смоук на фейковых портах —
