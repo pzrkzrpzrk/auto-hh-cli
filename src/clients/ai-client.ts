@@ -1,5 +1,6 @@
 import OpenAI from "openai";
 import type { Resume } from "../types.js";
+import { positiveIntFromEnv } from "../env.js";
 
 // Провайдер задаётся парой: config.json → api.baseUrl + api.model.
 // Дефолт — GLM-4.7-Flash (Z.ai): бесплатная, 200K контекста, 128K вывода.
@@ -18,15 +19,13 @@ export function getModel(apiConfig?: any): string {
 // Максимум токенов на один ответ. У thinking-моделей (GLM-4.7) часть лимита уходит
 // на рассуждения, поэтому дефолт заметно выше ожидаемого объёма ответа.
 export function getMaxTokens(): number {
-  const n = parseInt(process.env.AI_MAX_TOKENS || '', 10);
-  return Number.isFinite(n) && n > 0 ? n : DEFAULT_MAX_TOKENS;
+  return positiveIntFromEnv('AI_MAX_TOKENS', DEFAULT_MAX_TOKENS);
 }
 
 // Сколько ИИ-запросов выполнять параллельно: бесплатные тарифы часто ограничивают
 // параллелизм, и при превышении приходят 429.
 export function getConcurrency(): number {
-  const n = parseInt(process.env.AI_CONCURRENCY || '', 10);
-  return Number.isFinite(n) && n > 0 ? n : DEFAULT_CONCURRENCY;
+  return positiveIntFromEnv('AI_CONCURRENCY', DEFAULT_CONCURRENCY);
 }
 
 export function getClient(apiConfig?: any): OpenAI | null {

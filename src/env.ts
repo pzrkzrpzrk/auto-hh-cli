@@ -21,6 +21,15 @@ export function intFromEnv(name: string, def: number, { min, max }: IntBounds = 
   return value;
 }
 
+/**
+ * Читает положительное целое из env. Нечисловое, 0 или отрицательное значение → def.
+ * В отличие от intFromEnv, 0 не поднимается до минимума, а заменяется дефолтом.
+ */
+export function positiveIntFromEnv(name: string, def: number): number {
+  const parsed = parseInt(process.env[name] ?? '', 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : def;
+}
+
 const TRUE_VALUES = ['true', '1', 'yes', 'y', 'on'];
 const FALSE_VALUES = ['false', '0', 'no', 'n', 'off'];
 

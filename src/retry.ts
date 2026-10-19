@@ -1,13 +1,10 @@
 import OpenAI from "openai";
 import log from "./logger.js";
+import { positiveIntFromEnv } from "./env.js";
 
-const ENV_ATTEMPTS = parseInt(process.env.AI_RETRY_ATTEMPTS || '', 10);
-const ENV_BASE = parseInt(process.env.AI_RETRY_BASE_MS || '', 10);
-const ENV_MAX = parseInt(process.env.AI_RETRY_MAX_MS || '', 10);
-
-const DEFAULT_ATTEMPTS = Number.isFinite(ENV_ATTEMPTS) && ENV_ATTEMPTS > 0 ? ENV_ATTEMPTS : 5;
-const BASE_DELAY_MS = Number.isFinite(ENV_BASE) && ENV_BASE > 0 ? ENV_BASE : 1000;
-const MAX_DELAY_MS = Number.isFinite(ENV_MAX) && ENV_MAX > 0 ? ENV_MAX : 30000;
+const DEFAULT_ATTEMPTS = positiveIntFromEnv('AI_RETRY_ATTEMPTS', 5);
+const BASE_DELAY_MS = positiveIntFromEnv('AI_RETRY_BASE_MS', 1000);
+const MAX_DELAY_MS = positiveIntFromEnv('AI_RETRY_MAX_MS', 30000);
 const JITTER_RATIO = 0.25;
 
 interface RetryOpts {

@@ -1,6 +1,7 @@
 // Загрузка конфигурации из JSON и .env.
 import fs from "fs";
 import path from "path";
+import { intFromEnv } from "./env.js";
 
 // Личный список компаний из .env (через запятую). Пустая переменная = null,
 // тогда работает список из config.json → filter.excludedCompanies.
@@ -47,7 +48,7 @@ function env() {
     refreshToken: process.env.HH_REFRESH_TOKEN,
     userAgent: process.env.HH_USER_AGENT || 'AutoHH/1.0',
     resumeId: process.env.HH_RESUME_ID,
-    requestDelayMs: parseInt(process.env.REQUEST_DELAY_MS || '1500', 10),
+    requestDelayMs: intFromEnv('REQUEST_DELAY_MS', 1500),
   };
 }
 
