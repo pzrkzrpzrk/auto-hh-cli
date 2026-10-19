@@ -373,14 +373,16 @@ npm start           # или: npm run ui, npx auto-hh, npx auto-hh ui (алиа�
 │  ├─ presentation/cli/         # ввод-вывод: команды и меню
 │  │  ├─ index.ts               # точка входа run(): регистрирует только меню
 │  │  ├─ commands/cmd-*.ts      # тонкие оболочки: печать результата + код возврата
-│  │  ├─ format/                # grade-report (оценка резюме), search-report (фазы поиска)
+│  │  ├─ format/                # grade-report, search-report, digest-report (консольные представления)
 │  │  └─ menu/                  # menu, options, resume, resume-download, steps
 │  ├─ application/              # сценарии (use cases)
-│  │  ├─ collect.ts             # утилиты выдачи: flattenCollected, fmtSalary
+│  │  ├─ collect.ts             # утилиты выдачи: flattenCollected (fmtSalary — в shared/format.ts)
 │  │  ├─ search.ts              # runSearch() — обёртка над SearchScenario
 │  │  ├─ search/                # ООП-поиск: фасад, конвейер стадий, коллектор,
 │  │  │                         #   репозиторий кэша, итератор страниц, политики
-│  │  ├─ digest.ts              # фильтр + ИИ-судья + актуализация; показ дайджеста
+│  │  ├─ digest.ts              # фасад: buildDigest / showDigest / actualizeDigests
+│  │  ├─ digest/                # ООП-дайджест: политика, конвейер 7 стадий, сервис судейства,
+│  │  │                         #   сценарии показа и актуализации, стратегии ИИ
 │  │  ├─ cover.ts               # сопроводительные (весь дайджест или один id)
 │  │  ├─ apply.ts               # цикл откликов через Playwright
 │  │  ├─ grade.ts               # загрузка резюме + оценка
@@ -393,24 +395,29 @@ npm start           # или: npm run ui, npx auto-hh, npx auto-hh ui (алиа�
 │  │  ├─ models.ts              # Vacancy, Resume, Verdict, DigestEntry, HhResume*
 │  │  ├─ ports.ts               # CacheStore, HistoryStore, SearchDeps, ResumeSource,
 │  │  │                         #   SourceProvider, AiProvider
-│  │  ├─ filter.ts / resume-block.ts / actualize.ts / adapt-resume.ts
+│  │  ├─ resume-block.ts / actualize.ts / adapt-resume.ts
 │  │  ├─ resume-markdown.ts / grade-resume.ts
 │  │  ├─ search/                # VO (SearchQuery, SearchBucket, PageKey) и порт VacancySource
+│  │  ├─ digest/                # политика, кандидат, вердикты, matcher, фабрика записи,
+│  │  │                         #   Domain Service DigestFilter и порты
 │  │  └─ judge/ cover-letter/   # ИИ-судья и генерация писем
 │  ├─ infrastructure/           # адаптеры внешнего мира
 │  │  ├─ hh/                    # client, resume, vacancy-source, resume-source, source-provider
 │  │  ├─ ai/client.ts           # единый OpenAI-совместимый клиент
-│  │  ├─ mongo/                 # db, cache-store, digest-store, history-store, resume-store
-│  │  ├─ files/                 # resume-loader, search-output, digest-files
+│  │  ├─ mongo/                 # db, cache-store, digest-store, history-store, resume-store,
+│  │  │                         #   digest-repository, judgement-cache, cover-letter-cache, resume-registry
+│  │  ├─ files/                 # resume-loader, search-output, digest-files, digest-file-source, resume-file-source
 │  │  ├─ playwright/            # browser, apply-steps (действия на странице)
 │  │  └─ config/                # config, env, paths, apply-config
-│  ├─ shared/                   # logger, concurrency, retry, text-utils, time, cron, path-utils
+│  ├─ shared/                   # logger, concurrency, retry, text-utils, time, cron, path-utils, format
 │  └─ composition.ts            # сборка зависимостей: источники hh.ru, ИИ, хранилища
 ├─ scripts/                    # вспомогательные скрипты (judge-only, fill-cover-letters, …)
 ├─ migrations/                 # миграции MongoDB
 ├─ migrate-mongo-config.js     # настройки migrate-mongo (берёт MONGODB_URI из .env)
 └─ docker-compose.yml          # MongoDB + mongo-express
 ```
+
+Шаг `digest` собран как конвейер стадий (`application/digest/`): политика прогона → кэш → фильтр → ИИ-судья → отбор → запись; тексты консоли — в `presentation/cli/format/digest-report.ts`. Подробнее — `docs/architecture.md`, раздел «Паттерны дайджеста (этап 7)».
 
 ---
 

@@ -1,69 +1,27 @@
-// Команда digest: тонкая оболочка над сценарием application/digest.ts.
-// Здесь только выбор действия и печать; фильтр, ИИ-судья и запись — в сценарии.
-import { digestDeps } from "../../../composition.js";
-import { buildDigest, actualizeDigests, showDigest } from "../../../application/digest.js";
-import type { DigestEntry } from "../../../domain/models.js";
-import log from "../../../shared/logger.js";
+// Команда digest: выбор действия и подключение репортера.
+// Оркестрация — в сценариях application/digest, тексты — в format/digest-report.
+import { digestDeps, digestShowDeps, actualizeDeps } from "../../../composition.js";
+import { DigestScenario } from "../../../application/digest/DigestScenario.js";
+import { DigestShowScenario } from "../../../application/digest/DigestShowScenario.js";
+import { ActualizeScenario } from "../../../application/digest/ActualizeScenario.js";
+import { ConsoleDigestReporter, printActualize, printDigestShow } from "../format/digest-report.js";
 
-function printTop(matched: DigestEntry[]) {
-  if (!matched.length) return;
-  console.log('\n=== TOP MATCHES ===');
-  for (const e of matched.slice(0, 10)) {
-    const when = e.publishedAt ? ` | опубликована ${String(e.publishedAt).slice(0, 10)}` : '';
-    console.log(`- [${e.score ?? '?'}/10] ${e.title} @ ${e.employer} | ${e.salary}${when}\n  ${e.url}`);
-  }
-}
+const reporter = new ConsoleDigestReporter();
 
-// Шаг digest: сценарий собирает дайджест, команда печатает топ и подсказку про письма.
+// Шаг digest: сценарий собирает дайджест, репортер печатает топ и подсказку про письма.
 async function build(opts: Record<string, any> = {}) {
-  const result = await buildDigest(opts, digestDeps, printTop);
-  if (!result) return;
-  if (!result.dryRun && result.matched.length) {
-    console.log('\nДальше: пункт меню «✉️ Письма для дайджеста» — сгенерировать сопроводительные');
-  }
+  await new DigestScenario(digestDeps, reporter).build(opts);
 }
 
 // Шаг показа: последний дайджест + письма из кэша (fallback — .md файл).
 async function show(opts: Record<string, any> = {}) {
-  const outcome = await showDigest(opts);
-  if (outcome.kind === 'none') {
-    log.info('No digest found. Сначала соберите дайджест: пункт меню «🧠 Собрать дайджест»');
-    return;
-  }
-  if (outcome.kind === 'files') {
-    for (const content of outcome.contents) console.log(content);
-    return;
-  }
-
-  const { entries } = outcome;
-  if (opts.json) {
-    console.log(JSON.stringify(entries, null, 2));
-    return;
-  }
-
-  console.log(`\n=== Дайджест ${outcome.date} (${entries.length} вакансий) ===\n`);
-  for (const e of entries) {
-    console.log(`[${e.score ?? '?'}/10] ${e.title} @ ${e.employer}`);
-    console.log(`      ${e.salary || '—'} | ${e.area || '—'}`);
-    if (e.publishedAt) console.log(`      Опубликована: ${String(e.publishedAt).slice(0, 10)}`);
-    console.log(`      ${e.url}`);
-    if (e.coverLetter) console.log(`      -> письмо: ${e.coverLetter.slice(0, 80)}...`);
-    console.log();
-  }
+  printDigestShow(await new DigestShowScenario(digestShowDeps).run(), opts);
 }
 
-// Шаг актуализации: сценарий обновляет записи, команда печатает итоги.
+// Шаг актуализации: сценарий обновляет записи, печать итогов — в репорте.
 async function actualize(opts: Record<string, any> = {}) {
-  const result = await actualizeDigests(opts);
-  if (!result) return;
-
-  console.log(`\nАктуализация (поиск от ${result.today}): проверено ${result.checkedTotal} вакансий, помечено недоступными ${result.markedTotal}${result.dryRun ? ' [dry-run]' : ''}`);
-  if (result.snapshots.length && !result.dryRun) {
-    console.log(`Сводные снимки актуальных вакансий: ${result.snapshots.join(', ')}`);
-  }
-  if (result.markedTotal && !result.dryRun) {
-    console.log('Недоступные вакансии не берутся в отклики (пункт «🚀 Отклики из дайджеста»).');
-  }
+  const result = await new ActualizeScenario(actualizeDeps).run(opts);
+  if (result) printActualize(result);
 }
 
 const SHOW_ACTIONS = new Set(['show', 'last', 'latest', 'view']);

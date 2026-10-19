@@ -101,7 +101,13 @@ export function getFullByVacancyIds(vacancyIds: (string | number)[]): Promise<Re
   return findByIds('cacheFull', vacancyIds, 'full');
 }
 
-export async function saveJudgements(state: CacheDoc, resumeId?: string, date?: Date): Promise<void> {
+// Запись вердиктов по карте vacancyId → judgement. Отдельная функция нужна адаптеру
+// JudgementCache: сценарию дайджеста не обязательно держать весь CacheDoc.
+export async function saveJudgementsMap(
+  judgements: Record<string, any>,
+  resumeId?: string,
+  date?: Date,
+): Promise<void> {
   await connect();
   const db = dbInstance();
   const key = dateKey(date);
@@ -109,11 +115,15 @@ export async function saveJudgements(state: CacheDoc, resumeId?: string, date?: 
   const filter: any = { date: key };
   if (resumeId) filter.resumeId = resumeId;
   await coll.deleteMany(filter);
-  const docs = Object.entries(state.judgements || {}).map(([vid, j]) => ({
+  const docs = Object.entries(judgements || {}).map(([vid, j]) => ({
     date: key, resumeId: resumeId || null, vacancyId: vid, score: j.score, fit: j.fit,
     reason: j.reason, comment: j.comment,
   }));
   if (docs.length) await coll.insertMany(docs);
+}
+
+export async function saveJudgements(state: CacheDoc, resumeId?: string, date?: Date): Promise<void> {
+  return saveJudgementsMap(state.judgements, resumeId, date);
 }
 
 // Одно письмо: пишется шагом cover, читается `digest show` и `apply`.

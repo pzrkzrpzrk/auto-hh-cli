@@ -1,6 +1,9 @@
 // Утилиты собранной выдачи: плоский список вакансий и формат зарплаты.
 // Сам сбор (страницы, карточки, кэш) — в application/search/VacancyCollector.ts;
 // здесь только чистые функции, которыми пользуются digest, cover и печать.
+// fmtSalary переехал в shared/format.ts (им пользуется и домен), здесь — реэкспорт
+// для существующих импортов.
+import { fmtSalary } from "../shared/format.js";
 
 // Плоский список собранных вакансий без дублей — вход для шага digest.
 function flattenCollected(cache): any[] {
@@ -14,12 +17,5 @@ function flattenCollected(cache): any[] {
   return [...byId.values()];
 }
 
-function fmtSalary(s) {
-  if (!s) return '—';
-  const parts = [];
-  if (s.from) parts.push(`от ${s.from}`);
-  if (s.to) parts.push(`до ${s.to}`);
-  return `${parts.join(' ') || '?'} ${s.currency || ''}`.trim();
-}
-
 export { flattenCollected, fmtSalary };
+
