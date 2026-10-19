@@ -133,7 +133,7 @@ src/
 │   ├── hh/{client.ts, resume.ts}
 │   ├── ai/client.ts
 │   ├── mongo/{db.ts, cache-store.ts, digest-store.ts, history-store.ts,
-│   │          resume-store.ts, search-store.ts}
+│   │          resume-store.ts}
 │   ├── files/{resume-loader.ts, search-output.ts}
 │   ├── playwright/{browser.ts, apply-steps.ts}
 │   └── config/{config.ts, env.ts, paths.ts, apply-config.ts}
