@@ -22,4 +22,3 @@ export async function gradeResumeFromFile(
   if (!ai) return gradeResume(ai, null, deps.logger);
   return gradeResume(ai, deps.resumeFiles.load(opts.resume), deps.logger);
 }
-

@@ -81,4 +81,3 @@ npx tsx bin/auto-hh ui   # «Планировщик» → проводка та 
   `Select-String -Path src\presentation -Pattern 'infrastructure/'` → пусто;
   `npx tsc --noEmit` → 0; смоук `runSchedule` (scheduled/invalid/no-cron, шаги, события),
   `gradeDeps` и `showConfig` → exit 0.
-
