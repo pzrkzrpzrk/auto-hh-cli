@@ -212,7 +212,7 @@ src/
 4. `cmd-search.ts` → `application/search.ts`.
 5. `cmd-grade-resume.ts` + `loadResume` → `application/grade.ts`.
 
-**Сделано:** шаг 1 — `application/digest.ts` (сборка и актуализация целиком; команда только выбирает действие и печатает), шаг 5 — `application/grade.ts` (загрузка резюме вынесена ещё на этапе 2).
+**Сделано:** шаги 1, 2, 4 — `application/digest.ts`, `application/cover.ts`, `application/search.ts` (команды только выбирают действие и печатают; порядок вывода сохранён колбэками/событиями), шаг 5 — `application/grade.ts` (загрузка резюме вынесена ещё на этапе 2).
 
 После каждого шага: `tsc --noEmit` и ручная проверка соответствующего пункта меню, если доступна база.
 
