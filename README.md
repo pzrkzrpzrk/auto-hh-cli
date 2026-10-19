@@ -383,8 +383,13 @@ npm start           # или: npm run ui, npx auto-hh, npx auto-hh ui (алиа�
 │  │  ├─ digest.ts              # фасад: buildDigest / showDigest / actualizeDigests
 │  │  ├─ digest/                # ООП-дайджест: политика, конвейер 7 стадий, сервис судейства,
 │  │  │                         #   сценарии показа и актуализации, стратегии ИИ
-│  │  ├─ cover.ts               # сопроводительные (весь дайджест или один id)
-│  │  ├─ apply.ts               # цикл откликов через Playwright
+│  │  ├─ cover.ts               # runCover() — обёртка над CoverScenario
+│  │  ├─ cover/                 # ООП-письма: фасад, режимы «одна вакансия»/«дайджест»,
+│  │  │                         #   конвейер 7 стадий, Value Object со счётчиками
+│  │  ├─ apply.ts               # runApply() — обёртка над ApplyScenario
+│  │  ├─ apply/                 # ООП-отклик: фасад, конвейер 5 стадий плана, исполнитель цикла,
+│  │  │                         #   стратегии latest/all и паузы, цепочка правил пропуска,
+│  │  │                         #   Value Object со счётчиками ok/fail/skipped
 │  │  ├─ grade.ts               # загрузка резюме + оценка
 │  │  ├─ resume.ts              # резюме: list / register / show
 │  │  ├─ resume-download.ts     # скачивание резюме с hh.ru (+PDF)
@@ -407,7 +412,7 @@ npm start           # или: npm run ui, npx auto-hh, npx auto-hh ui (алиа�
 │  │  ├─ mongo/                 # db, cache-store, digest-store, history-store, resume-store,
 │  │  │                         #   digest-repository, judgement-cache, cover-letter-cache, resume-registry
 │  │  ├─ files/                 # resume-loader, search-output, digest-files, digest-file-source, resume-file-source
-│  │  ├─ playwright/            # browser, apply-steps (действия на странице)
+│  │  ├─ playwright/            # browser, apply-steps, application-gateway (порты отклика)
 │  │  └─ config/                # config, env, paths, apply-config
 │  ├─ shared/                   # logger, concurrency, retry, text-utils, time, cron, path-utils, format
 │  └─ composition.ts            # сборка зависимостей: источники hh.ru, ИИ, хранилища
@@ -418,6 +423,10 @@ npm start           # или: npm run ui, npx auto-hh, npx auto-hh ui (алиа�
 ```
 
 Шаг `digest` собран как конвейер стадий (`application/digest/`): политика прогона → кэш → фильтр → ИИ-судья → отбор → запись; тексты консоли — в `presentation/cli/format/digest-report.ts`. Подробнее — `docs/architecture.md`, раздел «Паттерны дайджеста (этап 7)».
+
+Шаг `apply` устроен так же (`application/apply/`): `ApplyScenario` (фасад) собирает план стадиями «дайджест → архив → лимит → письма → история», затем `ApplicationRunner` ведёт цикл откликов внутри сессии браузера. Выбор дайджеста (`latest`/`all`), паузы и правила пропуска вынесены в стратегии и цепочку правил. Подробнее — `docs/architecture.md`, раздел «Паттерны отклика (этап 8)».
+
+Шаг `cover` (`application/cover/`) выбирает стратегию режима: одна вакансия или весь последний дайджест. В режиме дайджеста конвейер стадий проходит «дайджест → лимит → кэш писем → описания вакансий → выбор → генерация пачками → запись», а `CoverPlan`/`CoverProgress` отвечают за счётчики и тексты логов. Подробнее — `docs/architecture.md`, раздел «Паттерны писем (этап 8)».
 
 ---
 
