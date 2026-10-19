@@ -4,6 +4,7 @@
 //
 // Здесь же — точка, где позже подключаются другие адаптеры (ИИ-провайдер, уведомления):
 // домен о них не знает, знает только этот файл.
+import "./infrastructure/logging/logger.js";
 import * as cacheStore from "./infrastructure/mongo/cache-store.js";
 import history from "./infrastructure/mongo/history-store.js";
 import MongoJudgementCache from "./infrastructure/mongo/judgement-cache.js";
@@ -17,6 +18,7 @@ import FileSearchReportWriter from "./infrastructure/files/search-report-writer.
 import { createAiProvider } from "./infrastructure/ai/client.js";
 import { configProvider } from "./infrastructure/config/config.js";
 import { intFromEnv } from "./infrastructure/config/env.js";
+import { DEFAULT_COVER_SIGNATURE } from "./domain/cover-letter/system-text.js";
 import { MIN_DELAY, MAX_DELAY } from "./infrastructure/config/apply-config.js";
 import PlaywrightApplicationGateway from "./infrastructure/playwright/application-gateway.js";
 import HHClient from "./infrastructure/hh/client.js";
@@ -92,6 +94,10 @@ export const resumeDeps: ResumeDeps = { files: resumeFiles, registry: resumeRegi
 /** Зависимости сценария сборки дайджеста. */
 export const digestDeps: DigestDeps = {
   config: configProvider,
+  settings: {
+    judgeBatchSize: intFromEnv('JUDGE_BATCH_SIZE', 10, { min: 1 }),
+    aiConcurrency: intFromEnv('AI_CONCURRENCY', 10, { min: 1 }),
+  },
   ai: aiProvider,
   collect: collectDeps,
   source: vacancySource,
@@ -123,6 +129,9 @@ function coverConfig(path?: string): CoverConfig {
     coverLetterTemplate: cfg.apply?.coverLetterTemplate,
     adaptResume: cfg.adaptResume !== false,
     batchSize: intFromEnv('COVER_BATCH_SIZE', 20, { min: 1 }),
+    profile: process.env.APPLICANT_PROFILE || 'опытный разработчик',
+    signature: process.env.COVER_SIGNATURE || DEFAULT_COVER_SIGNATURE,
+    concurrency: intFromEnv('AI_CONCURRENCY', 10, { min: 1 }),
   };
 }
 

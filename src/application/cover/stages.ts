@@ -115,6 +115,12 @@ export class GenerateLettersStage extends CoverStage {
         }
       },
       ctx.cfg.adaptResume,
+      {
+        profile: ctx.cfg.profile,
+        signature: ctx.cfg.signature,
+        concurrency: ctx.cfg.concurrency,
+        logger: log,
+      },
     );
     for (const [id, letter] of generated.entries()) ctx.letters.set(id, letter);
     return 'continue';

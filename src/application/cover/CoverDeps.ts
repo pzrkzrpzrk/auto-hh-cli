@@ -12,6 +12,12 @@ export interface CoverConfig {
   adaptResume: boolean;
   /** Сколько вакансий уходит в один запрос к ИИ (COVER_BATCH_SIZE). */
   batchSize: number;
+  /** Профиль соискателя (APPLICANT_PROFILE). */
+  profile: string;
+  /** Подпись письма (COVER_SIGNATURE, иначе плейсхолдер). */
+  signature: string;
+  /** Параллелизм пачек писем (AI_CONCURRENCY). */
+  concurrency: number;
 }
 
 /** Зависимости сценария писем — только порты. */

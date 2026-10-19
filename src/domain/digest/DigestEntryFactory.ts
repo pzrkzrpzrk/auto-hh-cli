@@ -1,14 +1,17 @@
 // Domain Service сборки записей дайджеста (Factory): кандидат + вердикт → DigestEntry.
 // Заменяет функцию buildResults из application/digest.ts: маппинг и отметка истории
 // в одном месте, формат полей остаётся прежним.
-import log from "../../shared/logger.js";
+import type { Logger } from "../logging.js";
 import { fmtSalary } from "../../shared/format.js";
 import type { DigestEntry } from "../models.js";
 import type { HistoryStore } from "../ports.js";
 import type { AcceptedCandidate } from "./DigestCandidate.js";
 
 export class DigestEntryFactory {
-  constructor(private readonly history: HistoryStore) {}
+  constructor(
+    private readonly history: HistoryStore,
+    private readonly logger?: Logger,
+  ) {}
 
   /**
    * Собирает записи для digest.md. `track=false` (dry-run) не трогает историю откликов.
@@ -42,7 +45,7 @@ export class DigestEntryFactory {
           digestOnly: true,
         });
       }
-      log.info(`Match: ${full.name} @ ${full.employer?.name} -> ${full.alternate_url}`);
+      this.logger?.info(`Match: ${full.name} @ ${full.employer?.name} -> ${full.alternate_url}`);
     }
 
     return matched;

@@ -1,25 +1,39 @@
-import log from "../../shared/logger.js";
+import type { Logger } from "../logging.js";
 import { buildResumeBlock } from "../resume-block.js";
 import type { AiProvider } from "../ports.js";
 import { stripHtml, parseJSON } from "../../shared/text-utils.js";
 import { adaptResumeForVacancy } from "../adapt-resume.js";
 import { buildBatchSystemText, coverSignature } from "./system-text.js";
-import { chunk, runBatches, aiConcurrencyFromEnv } from "../../shared/concurrency.js";
+import { chunk, runBatches } from "../../shared/batches.js";
 
-function buildFromTemplate(template, vacancy) {
+/** Настройки генерации писем: env читает composition root, домен получает значения. */
+export interface CoverLetterOptions {
+  /** Профиль соискателя (env APPLICANT_PROFILE). */
+  profile?: string;
+  /** Подпись письма (env COVER_SIGNATURE). */
+  signature?: string;
+  /** Сколько пачек писем выполняется одновременно (env AI_CONCURRENCY). */
+  concurrency?: number;
+  logger?: Logger;
+}
+
+const DEFAULT_PROFILE = 'опытный разработчик';
+const DEFAULT_CONCURRENCY = 10;
+
+function buildFromTemplate(template, vacancy, signature?: string) {
   const ctx = {
     title: vacancy.name || '',
     employer: vacancy.employer?.name || '',
     area: vacancy.area?.name || '',
-    signature: coverSignature(),
+    signature: coverSignature(signature),
   };
   return template.replace(/\{(\w+)\}/g, (_, k) => ctx[k] ?? '');
 }
 
-async function buildWithClaude(vacancy, resume = null, adaptResume = false, ai: AiProvider | null = null) {
+async function buildWithClaude(vacancy, resume = null, adaptResume = false, ai: AiProvider | null = null, options: CoverLetterOptions = {}) {
   if (!ai) return null;
 
-  const profile = process.env.APPLICANT_PROFILE || 'опытный разработчик';
+  const profile = options.profile || DEFAULT_PROFILE;
 
   const description = stripHtml(vacancy.description).slice(0, 1000);
   const skills = (vacancy.key_skills || []).map(s => s.name).join(', ');
@@ -39,7 +53,7 @@ ${description}
 Образец:
 """
 Здравствуйте! Заинтересовала вакансия в вашей компании — профиль полностью совпадает с моим опытом. Последние несколько лет работаю с React и NestJS, уверенно владею SQL/ORM, есть опыт с Next.js и SSR. Буду рад обсудить детали на созвоне.
-${coverSignature()}
+${coverSignature(options.signature)}
 """
 
 Правила:
@@ -49,7 +63,7 @@ ${coverSignature()}
 - Начни с "Здравствуйте!".
 - 1–2 конкретных совпадения из описания вакансии.
 - Без markdown, без "С уважением", без имени в подписи.
-- Заверши строкой "${coverSignature()}".
+- Заверши строкой "${coverSignature(options.signature)}".
 - Не упоминай зарплату, вилку, ожидания по доходу — ни конкретных цифр, ни общих формулировок ("по рынку", "обсуждаемо" и т.п.).
 - Не пиши "Заинтересовала вакансия <название компании>", а пиши "заинтересовала ваша вакансия" или "вакансия в вашей компании".
 - Не используй длинные тире.
@@ -68,20 +82,20 @@ ${coverSignature()}
     });
     const text = resp.text?.trim();
     if (text) {
-      log.debug(`Claude usage: in=${resp.usage.prompt} out=${resp.usage.completion}`);
+      options.logger?.debug(`Claude usage: in=${resp.usage.prompt} out=${resp.usage.completion}`);
     }
     return text || null;
   } catch (err) {
-    log.warn(`Claude generation failed: ${err.message}`);
+    options.logger?.warn(`Claude generation failed: ${err.message}`);
     return null;
   }
 }
 
 // adaptResume приходит параметром (из config.json, см. cmd-cover): домен не читает файлы.
-async function buildCoverLetter(ai: AiProvider | null, template, vacancy, resume = null, adaptResume = true) {
-  const claudeText = await buildWithClaude(vacancy, resume, adaptResume, ai);
+async function buildCoverLetter(ai: AiProvider | null, template, vacancy, resume = null, adaptResume = true, options: CoverLetterOptions = {}) {
+  const claudeText = await buildWithClaude(vacancy, resume, adaptResume, ai, options);
   if (claudeText) return claudeText;
-  return buildFromTemplate(template, vacancy);
+  return buildFromTemplate(template, vacancy, options.signature);
 }
 
 function formatVacancyShort(vacancy) {
@@ -100,14 +114,23 @@ ${description}`;
 // items: [{ vacancy }]. Возвращает Map<vacancyId, text>.
 // onBatch(partialResult) — вызывается после каждой пачки с накопленным результатом.
 // adaptResume приходит параметром (из config.json, см. cmd-cover): домен не читает файлы.
-async function buildCoverLettersBatch(ai: AiProvider | null, resume, items, batchSize = 20, onBatch = null, adaptResume = true) {
+async function buildCoverLettersBatch(
+  ai: AiProvider | null,
+  resume,
+  items,
+  batchSize = 20,
+  onBatch = null,
+  adaptResume = true,
+  options: CoverLetterOptions = {},
+) {
   const result = new Map();
   if (!ai || !items.length) return result;
 
-  const profile = process.env.APPLICANT_PROFILE || 'опытный разработчик';
+  const profile = options.profile || DEFAULT_PROFILE;
+  const logger = options.logger;
   const resumeBlock = !adaptResume ? buildResumeBlock(resume) : null;
 
-  const systemText = buildBatchSystemText(profile) +
+  const systemText = buildBatchSystemText(profile, options.signature) +
     (adaptResume ? '\n\nДля каждой вакансии передано адаптированное под неё резюме — учитывай его при составлении письма, указывая релевантный опыт.' : '');
 
   const batchTexts = chunk<any>(items, batchSize).map((batch, i) => ({
@@ -125,7 +148,7 @@ async function buildCoverLettersBatch(ai: AiProvider | null, resume, items, batc
       return block;
     }).join('\n\n'),
   }));
-  const CONCURRENCY = aiConcurrencyFromEnv();
+  const CONCURRENCY = options.concurrency ?? DEFAULT_CONCURRENCY;
 
   async function runBatch(ii) {
     const { idx, batch, text } = batchTexts[ii];
@@ -144,7 +167,7 @@ async function buildCoverLettersBatch(ai: AiProvider | null, resume, items, batc
 
       const content = resp.text;
       if (!content) {
-        log.warn(`cover batch ${idx}: empty response`);
+        logger?.warn(`cover batch ${idx}: empty response`);
         return;
       }
       const parsed = parseJSON(content);
@@ -153,16 +176,16 @@ async function buildCoverLettersBatch(ai: AiProvider | null, resume, items, batc
       for (const l of list) {
         if (l.vacancyId && l.coverLetter) result.set(String(l.vacancyId), l.coverLetter);
       }
-      log.debug(`cover batch ${idx}: ${batch.length} letters, in=${resp.usage.prompt || 0} out=${resp.usage.completion || 0}`);
+      logger?.debug(`cover batch ${idx}: ${batch.length} letters, in=${resp.usage.prompt || 0} out=${resp.usage.completion || 0}`);
       if (onBatch) {
-        try { await onBatch(result); } catch (e) { log.warn(`cover onBatch callback failed: ${e.message}`); }
+        try { await onBatch(result); } catch (e) { logger?.warn(`cover onBatch callback failed: ${e.message}`); }
       }
     } catch (err) {
-      log.warn(`cover batch ${idx} failed (${batch.length} items): ${err.message}`);
+      logger?.warn(`cover batch ${idx} failed (${batch.length} items): ${err.message}`);
     }
   }
 
-  await runBatches(batchTexts.map(b => b.batch), CONCURRENCY, (_, ii) => runBatch(ii));
+  await runBatches(batchTexts.map(b => b.batch), CONCURRENCY, (_, ii) => runBatch(ii), { logger });
 
   return result;
 }

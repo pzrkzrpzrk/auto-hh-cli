@@ -29,25 +29,25 @@
 
 ## Что сделать
 
-- [ ] `domain/ports.ts`: узкий порт `Logger { info; warn; error; debug }` (или `LogSink`).
-- [ ] `infrastructure/logging/logger.ts`: текущая реализация (`fs.appendFileSync` + `LOG_FILE`).
+- [x] `domain/ports.ts`: узкий порт `Logger { info; warn; error; debug }` (или `LogSink`).
+- [x] `infrastructure/logging/logger.ts`: текущая реализация (`fs.appendFileSync` + `LOG_FILE`).
       `shared/logger.ts` удалить; импорты в слоях перевести на порт (в `application` — через deps,
       в `domain` — параметром или через событие).
-- [ ] `shared/concurrency.ts`, `shared/retry.ts`: убрать чтение env — числа приходят параметрами
+- [x] `shared/concurrency.ts`, `shared/retry.ts`: убрать чтение env — числа приходят параметрами
       (`concurrency`, `attempts`, `baseDelayMs`); значения по умолчанию остаются в адаптере.
-- [ ] `shared/retry.ts:25`: убрать `import OpenAI` — проверять `err?.name === 'APIConnectionError'`
+- [x] `shared/retry.ts:25`: убрать `import OpenAI` — проверять `err?.name === 'APIConnectionError'`
       или `err?.status`, как уже делается ниже.
-- [ ] Домен: `coverSignature()` и `APPLICANT_PROFILE` → поля `CoverOptions { signature, profile }`,
+- [x] Домен: `coverSignature()` и `APPLICANT_PROFILE` → поля `CoverOptions { signature, profile }`,
       заполняет сценарий из `CoverConfig`.
-- [ ] Логи домена (`DigestMatcher`, `DigestEntryFactory`) — вернуть данные, логи оставить стадии
+- [x] Логи домена (`DigestMatcher`, `DigestEntryFactory`) — вернуть данные, логи оставить стадии
       (см. T-24/идею «домен без побочек»).
 
 ## Definition of Done
 
-- [ ] `Select-String -Path src\shared -Pattern '../infrastructure|from \"openai\"'` → пусто.
-- [ ] `Select-String -Path src\domain -Pattern 'process\.env|shared/logger|shared/concurrency'` → пусто.
-- [ ] `npx tsc --noEmit` → exit 0.
-- [ ] Логи в `data/app.log` пишутся как раньше (уровни, отметка времени Europe/Moscow).
+- [x] `Select-String -Path src\shared -Pattern '../infrastructure|from \"openai\"'` → пусто.
+- [x] `Select-String -Path src\domain -Pattern 'process\.env|shared/logger|shared/concurrency'` → пусто.
+- [x] `npx tsc --noEmit` → exit 0.
+- [x] Логи в `data/app.log` пишутся как раньше (уровни, отметка времени Europe/Moscow).
 
 ## Проверка
 
@@ -64,3 +64,25 @@ Get-Content data\app.log -Tail 5
   а `shared/logger.ts` остаётся фасадом **до** T-22. Полный уход от глобального логгера — отдельный коммит.
 - Подпись письма (`COVER_SIGNATURE`) — часть формата `.md` и писем; при передаче параметром
   значение по умолчанию должно остаться тем же плейсхолдером.
+
+## Выполнено (2026-10-19)
+
+- `shared/logger.ts` — чистый фасад `LogSink`: без `fs`, env и `config/paths`.
+  Реализация файла/`DEBUG` — в `infrastructure/logging/logger.ts`; composition root
+  регистрирует sink при старте.
+- `shared/batches.ts` — `chunk`/`runBatches` без env и глобального логгера: прогресс/ошибки
+  идут через необязательный `logger`, параллелизм приходит параметром. `shared/concurrency.ts`
+  удалён; env-настройки читает composition root.
+- `shared/retry.ts` — без `openai` и env: transient-ошибки по `err.name`/`err.status`,
+  `attempts`/`baseDelayMs`/`maxDelayMs` передаёт адаптер `infrastructure/ai/client.ts`.
+- `domain/ports.ts` — `Logger` (файл `domain/logging.ts`); домен получает логгер параметром:
+  `gradeResume`, `judge*` (`JudgeOpts.logger`), `DigestMatcher`, `DigestEntryFactory`,
+  `buildCoverLetter`/`buildCoverLettersBatch`.
+- Env-настройки писем (`APPLICANT_PROFILE`, `COVER_SIGNATURE`, `AI_CONCURRENCY`) читает
+  `composition.coverConfig`; `JUDGE_BATCH_SIZE`/`AI_CONCURRENCY` для дайджеста —
+  в `DigestDeps.settings`.
+- `application → infrastructure` сократился до одного импорта (`grade` — загрузка резюме,
+  закрывается T-22); `shared` и `domain` больше не тянут инфраструктуру.
+- Проверка: `Select-String -Path src\shared -Pattern '../infrastructure|from "openai"'` → пусто;
+  `Select-String -Path src\domain -Pattern 'process.env|shared/logger|shared/concurrency'` → пусто;
+  `npx tsc --noEmit` → 0; смоук логов и `retryOnTransient` → ok.

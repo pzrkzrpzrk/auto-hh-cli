@@ -1,7 +1,5 @@
 // Сценарий сборки дайджеста (Facade): один вход для команды, внутри — конвейер стадий.
 // Команда больше не собирает политику, коллектор и сервисы руками.
-import { aiConcurrencyFromEnv } from "../../shared/concurrency.js";
-import { intFromEnv } from "../../infrastructure/config/env.js";
 import { DigestPolicy } from "../../domain/digest/DigestPolicy.js";
 import { DigestFilter } from "../../domain/digest/DigestFilter.js";
 import { JudgementSet } from "../../domain/digest/JudgementSet.js";
@@ -71,8 +69,8 @@ export class DigestScenario {
     const policy = DigestPolicy.from(cfg, opts, {
       hasResume: Boolean(resume),
       hasApiKey,
-      judgeBatchSize: intFromEnv('JUDGE_BATCH_SIZE', 10),
-      aiConcurrency: aiConcurrencyFromEnv(),
+      judgeBatchSize: this.deps.settings.judgeBatchSize,
+      aiConcurrency: this.deps.settings.aiConcurrency,
     });
     // Правила локального пре-фильтра собираются один раз (domain/digest/DigestFilter.ts).
     const filter = DigestFilter.from(cfg);

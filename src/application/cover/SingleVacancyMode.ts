@@ -37,6 +37,12 @@ export class SingleVacancyMode implements CoverMode {
         full,
         this.resume,
         this.cfg.adaptResume,
+        {
+          profile: this.cfg.profile,
+          signature: this.cfg.signature,
+          concurrency: this.cfg.concurrency,
+          logger: log,
+        },
       );
       if (!letter) return { kind: 'no-letter' } as CoverOutcome;
 

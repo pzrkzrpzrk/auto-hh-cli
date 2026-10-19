@@ -2,6 +2,7 @@
 // Реализация по умолчанию — реальные вызовы доменного судьи; в проверках подставляется
 // детерминированная стратегия, поэтому JudgementService не знает про сеть.
 import { judgeVacancy, judgeVacanciesBatch } from "../../domain/judge/index.js";
+import type { Logger } from "../../domain/logging.js";
 import type { Judgement } from "../../domain/digest/JudgementSet.js";
 import type { AiProvider } from "../../domain/ports.js";
 import type { Resume, Vacancy } from "../../domain/models.js";
@@ -10,6 +11,8 @@ import type { Resume, Vacancy } from "../../domain/models.js";
 export interface JudgeOptions {
   minScore: number;
   adaptResume: boolean;
+  /** Диагностика домена: передаётся в judge* и пишется адаптером логгера. */
+  logger?: Logger;
   [key: string]: unknown;
 }
 

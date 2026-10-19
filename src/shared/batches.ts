@@ -1,9 +1,6 @@
 // Единый пул воркеров для пачек ИИ-запросов.
-// До этого `chunk` + общий счётчик `nextBatchIdx` + `Promise.all(Array.from({ length:
-// Math.min(CONCURRENCY, …) }))` были скопированы в cli/cmd-digest.ts (judgeWithClaude)
-// и domain/cover-letter/cover-letter.ts (buildCoverLettersBatch), и правки расходились.
-import log from "./logger.js";
-import { intFromEnv } from "../infrastructure/config/env.js";
+// Чистый shared-модуль: без env и инфраструктуры; логгер приходит параметром.
+import type { LogSink } from "./logging.js";
 
 /** Режет список на пачки по `size` элементов. `size < 1` поднимается до 1. */
 export function chunk<T>(items: T[], size: number): T[][] {
@@ -15,21 +12,13 @@ export function chunk<T>(items: T[], size: number): T[][] {
   return out;
 }
 
-/** Параллелизм пула: env `CONCURRENCY` (>= 1), иначе `def` (10). */
-export function concurrencyFromEnv(def = 10): number {
-  return intFromEnv('CONCURRENCY', def, { min: 1 });
-}
-
-/** Параллелизм ИИ-запросов: env `AI_CONCURRENCY` (>= 1), иначе `def` (10). */
-export function aiConcurrencyFromEnv(def = 10): number {
-  return intFromEnv('AI_CONCURRENCY', def, { min: 1 });
-}
-
 export interface RunBatchesOpts<T, R> {
   /** Вызывается после успешной обработки пачки — с её результатом и индексом (0-based). */
   onBatch?: (result: R, batch: T[], index: number) => void | Promise<void>;
-  /** Вызывается при ошибке `fn` или `onBatch`; по умолчанию — `log.warn` и продолжение. */
+  /** Вызывается при ошибке `fn` или `onBatch`; по умолчанию — `logger.warn` и продолжение. */
   onError?: (err: any, batch: T[], index: number) => void | Promise<void>;
+  /** Куда писать прогресс/ошибки; без логгера модуль молчит. */
+  logger?: Pick<LogSink, 'info' | 'warn'>;
 }
 
 /**
@@ -41,13 +30,13 @@ export interface RunBatchesOpts<T, R> {
  * в API. Счётчик инкрементируется синхронно (до `await fn`), поэтому пачки не теряются
  * и не дублируются, а порядок старта пачек остаётся исходным.
  *
- * Ошибка одной пачки не роняет прогон: по умолчанию логируется `log.warn`, обработка
+ * Ошибка одной пачки не роняет прогон: по умолчанию логируется `logger.warn`, обработка
  * остальных пачек продолжается (можно переопределить через `opts.onError`).
  *
  * @param batches пачки для обработки (обычно результат `chunk`).
  * @param concurrency максимум одновременных вызовов `fn` (значения < 1 поднимаются до 1).
  * @param fn обработчик пачки: `(batch, index)`, где `index` — индекс пачки (0-based).
- * @param opts `onBatch` (после успешной пачки) и `onError` (по умолчанию `log.warn`).
+ * @param opts `onBatch`, `onError` и `logger`.
  * @returns результаты в порядке пачек; у упавшей пачки — `undefined`.
  */
 export async function runBatches<T, R>(
@@ -65,7 +54,7 @@ export async function runBatches<T, R>(
       await opts.onError(err, batch, index);
       return;
     }
-    log.warn(`Batch ${index + 1}/${total} failed (${batch.length} items): ${err?.message ?? err}`);
+    opts.logger?.warn(`Batch ${index + 1}/${total} failed (${batch.length} items): ${err?.message ?? err}`);
   };
 
   let nextBatchIdx = 0;
@@ -76,7 +65,7 @@ export async function runBatches<T, R>(
       nextBatchIdx++;
       const batch = batches[index];
       // Единый лог прогресса для всех ИИ-шагов: «пачка X из Y».
-      log.info(`Batch ${index + 1}/${total}: ${batch.length} items`);
+      opts.logger?.info(`Batch ${index + 1}/${total}: ${batch.length} items`);
       let value: R;
       try {
         value = await fn(batch, index);
