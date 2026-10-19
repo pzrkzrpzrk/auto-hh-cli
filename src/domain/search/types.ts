@@ -39,6 +39,13 @@ export interface SearchPageResult {
   pages: number;
 }
 
+/** Снимок кэша поиска: страницы выдачи и полные карточки (cachePages/cacheFull). */
+export interface SearchCacheSnapshot {
+  date: string;
+  pages: Record<string, any[]>;
+  fullById: Record<string, any>;
+}
+
 /** Секция config.search, с которой работает сценарий поиска. */
 export interface SearchConfig {
   text?: string;
