@@ -14,6 +14,9 @@ import FileDigestSource from "./infrastructure/files/digest-file-source.js";
 import FileResumeProvider from "./infrastructure/files/resume-file-source.js";
 import { createAiProvider } from "./infrastructure/ai/client.js";
 import { loadConfig } from "./infrastructure/config/config.js";
+import { intFromEnv } from "./infrastructure/config/env.js";
+import { MIN_DELAY, MAX_DELAY } from "./infrastructure/config/apply-config.js";
+import PlaywrightApplicationGateway from "./infrastructure/playwright/application-gateway.js";
 import HHClient from "./infrastructure/hh/client.js";
 import HHVacancySource from "./infrastructure/hh/vacancy-source.js";
 import HHResumeSource from "./infrastructure/hh/resume-source.js";
@@ -21,7 +24,8 @@ import HHSourceProvider from "./infrastructure/hh/source-provider.js";
 import type { AiProvider, CollectDeps, ResumeSource, SearchDeps, SourceProvider } from "./domain/ports.js";
 import type { DigestCacheStore } from "./domain/digest/ports.js";
 import type { VacancySource } from "./domain/search/VacancySource.js";
-import type { CoverDeps } from "./application/cover.js";
+import type { ApplyDeps } from "./application/apply.js";
+import type { CoverConfig, CoverDeps } from "./application/cover.js";
 import type { DigestDeps } from "./application/digest.js";
 import type { ActualizeDeps, DigestShowDeps } from "./application/digest.js";
 
@@ -71,7 +75,42 @@ export const digestShowDeps: DigestShowDeps = {
 /** Зависимости актуализации: кэш поиска и репозиторий дайджестов. */
 export const actualizeDeps: ActualizeDeps = { cacheStore, digest: digestRepository };
 
-export const coverDeps: CoverDeps = { ai: aiProvider, collect: collectDeps, source: vacancySource };
+/** Настройки писем: config.json + COVER_BATCH_SIZE читаются здесь, а не в сценарии. */
+function coverConfig(): CoverConfig {
+  const cfg = loadConfig();
+  return {
+    coverLetterTemplate: cfg.apply?.coverLetterTemplate,
+    adaptResume: cfg.adaptResume !== false,
+    batchSize: intFromEnv('COVER_BATCH_SIZE', 20, { min: 1 }),
+  };
+}
+
+/** Зависимости сценария писем: резюме, дайджест, кэш писем и источник вакансий. */
+export const coverDeps: CoverDeps = {
+  ai: aiProvider,
+  config: coverConfig,
+  collect: collectDeps,
+  source: vacancySource,
+  resumeFiles: resumeFileProvider,
+  digests: digestRepository,
+  letters: coverLetterCache,
+};
+
+/**
+ * Адаптер отклика: один объект закрывает оба порта — сессию (withSession)
+ * и ручной вход (login). Сценарий про Playwright не знает.
+ */
+const applicationGateway = new PlaywrightApplicationGateway();
+
+/** Зависимости шага отклика: дайджест, письма, история и сессия браузера. */
+export const applyDeps: ApplyDeps = {
+  digests: digestRepository,
+  letters: coverLetterCache,
+  history,
+  gateway: applicationGateway,
+  login: applicationGateway,
+  settings: { minDelayMs: MIN_DELAY, maxDelayMs: MAX_DELAY },
+};
 
 /** Открытая сессия резюме: меню держит её между списком и скачиванием и закрывает само. */
 export interface ResumeSession extends ResumeSource {

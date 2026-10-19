@@ -1,10 +1,17 @@
-// Адаптер порта CoverLetterCache: письма из cacheCoverLetters подклеиваются к записям.
-import { withCoverLetters } from "./cache-store.js";
+// Адаптер порта CoverLetterCache: письма из cacheCoverLetters — чтение (с force) и запись.
+import { saveLetter, withCoverLetters } from "./cache-store.js";
 import type { CoverLetterCache } from "../../domain/digest/ports.js";
 
 class MongoCoverLetterCache implements CoverLetterCache {
-  attach<T extends { id: string | number; coverLetter?: string }>(entries: T[]): Promise<T[]> {
-    return withCoverLetters(entries);
+  attach<T extends { id: string | number; coverLetter?: string }>(
+    entries: T[],
+    opts: { force?: boolean } = {},
+  ): Promise<T[]> {
+    return withCoverLetters(entries, opts);
+  }
+
+  save(vacancyId: string | number, letter: string): Promise<void> {
+    return saveLetter(String(vacancyId), letter);
   }
 }
 
