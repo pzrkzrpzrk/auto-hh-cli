@@ -1,4 +1,4 @@
-// Domain Service «сбор вакансий»: страницы выдачи и полные карточки.
+// Application Service «сбор вакансий»: страницы выдачи и полные карточки.
 // Один класс на три сценария (search/digest/cover) вместо трёх свободных функций;
 // кэш и источник приходят портами, логи — как раньше.
 import { SearchQuery } from "../../domain/search/SearchQuery.js";
@@ -7,7 +7,7 @@ import type { VacancyListItem } from "../../domain/search/types.js";
 import type { HistoryState, HistoryStore } from "../../domain/ports.js";
 import SearchCache from "./SearchCache.js";
 import { PageIterator } from "./PageIterator.js";
-import type { FullCardPolicy } from "./FullCardPolicy.js";
+import type { FullCardPolicy } from "../../domain/search/FullCardPolicy.js";
 import { errorMessage } from "../../shared/errors.js";
 import log from "../../shared/logger.js";
 

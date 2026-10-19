@@ -2,7 +2,7 @@
 // Ошибки файла и карточек не валят поиск — данные уже в кэше; страницы валят (как раньше).
 import type { SearchEntry } from "../../domain/models.js";
 import { fmtSalary } from "../collect.js";
-import { SkipSeenPolicy } from "./FullCardPolicy.js";
+import { SkipSeenPolicy } from "../../domain/search/FullCardPolicy.js";
 import { SearchStage, type StageResult } from "./SearchStage.js";
 import type { SearchContext } from "./SearchContext.js";
 import log from "../../shared/logger.js";

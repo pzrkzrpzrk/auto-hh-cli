@@ -12,6 +12,7 @@ export type {
   DigestCandidate,
   DigestFilterSelection,
   DigestSelection,
+  DigestSelectionEvent,
   RejectedEntry,
   SkippedCandidate,
 } from "./DigestCandidate.js";

@@ -12,6 +12,6 @@ export type { DigestEvent, DigestReporter } from "./DigestEvent.js";
 export { DigestPipeline } from "./DigestPipeline.js";
 export { DigestStage } from "./DigestStage.js";
 export type { StageOutcome } from "./DigestStage.js";
-export { JudgementService } from "./JudgementService.js";
+export { DigestJudgeRunner } from "./DigestJudgeRunner.js";
 export { AiJudgeStrategy } from "./JudgeStrategy.js";
 export type { JudgeOptions, JudgeStrategy } from "./JudgeStrategy.js";
