@@ -2,6 +2,21 @@
 // Живут в домене, чтобы сценарий не зависел от формы config.json и Mongo-документов.
 import type { SearchCacheSnapshot } from "../search/types.js";
 
+/** Секция config.filter — правила локального пре-фильтра вакансий. */
+export interface DigestFilterRules {
+  /** Выкидывать вакансии, помеченные hh.ru как архивные. */
+  excludeArchived?: boolean;
+  /** Компании, которые не рассматриваем (совпадение по подстроке, без регистра). */
+  excludedCompanies?: string[];
+  /** Ключевые слова в названии/описании/навыках, при которых вакансия отбрасывается. */
+  excludedKeywords?: string[];
+  /** Минимальная зарплата в рублях (учитывается, только если валюта RUR). */
+  minSalaryRub?: number;
+  /** Проверять локацию и формат работы; false — правило отключено. */
+  locationRule?: boolean;
+  [key: string]: unknown;
+}
+
 /** Секции config.json, которые читает политика дайджеста. */
 export interface DigestConfig {
   apply?: {
@@ -17,7 +32,7 @@ export interface DigestConfig {
     search_period?: number | string;
     [key: string]: unknown;
   };
-  filter?: Record<string, unknown>;
+  filter?: DigestFilterRules;
   [key: string]: unknown;
 }
 

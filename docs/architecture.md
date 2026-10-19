@@ -63,48 +63,58 @@ presentation ──▶ application ──▶ domain
 
 ---
 
-## 3. Текущее состояние (as-is)
+## 3. Текущее состояние
+
+Структура совпадает с целевой (раздел 4): `src/` — 118 файлов, ≈7,1 тыс. строк, `npx tsc --noEmit` → exit 0.
 
 ```
-src/
-├── browser.ts                  # запуск Playwright (уже вынесен)
-├── cli/                        # 20 файлов
-│   ├── apply/{config,steps}.ts
-│   ├── cmd-*.ts                # 12 команд
-│   ├── index.ts                # точка входа CLI
-│   └── ui/{menu,options,resume,resume-download,steps}.ts
-├── clients/                    # 4 файла
-│   ├── ai-client.ts            # OpenAI-адаптер + порт AiProvider
-│   ├── db.ts                   # MongoDB
-│   ├── hh-client.ts            # скрейпинг hh.ru (619 строк)
-│   └── hh-resume.ts            # разбор резюме
-├── composition.ts              # сборка зависимостей
-├── concurrency.ts              # пул воркеров
-├── config.ts                   # config.json + env
-├── domain/                     # 14 файлов
-│   ├── actualize.ts, adapt-resume.ts, filter.ts,
-│   ├── grade-resume.ts, resume-block.ts, resume-markdown.ts
-│   ├── collect.ts              # ⚠ сценарий с I/O
-│   ├── cover-letter/, judge/, ports.ts
-├── env.ts, logger.ts, paths.ts, resume.ts, retry.ts
-├── store/                      # 6 файлов: cache, digest, history, resume, search, reset
-├── text-utils.ts, time.ts, types.ts
-└── (bin/auto-hh → src/cli/index)
+src/                              # 118 файлов
+├── application/                  # 35 файлов, ≈1,8 тыс. строк — сценарии (use cases)
+├── domain/                       # 28 файлов, ≈1,6 тыс. строк — модели, правила, порты
+├── infrastructure/               # 26 файлов, ≈2,2 тыс. строк — адаптеры hh.ru, ИИ, Mongo,
+│                                 #   Playwright, файлы, конфигурация
+├── presentation/                 # 20 файлов, ≈1,2 тыс. строк — CLI: команды, меню, форматтеры
+├── shared/                       #  8 файлов, ≈0,3 тыс. строк — логгер, время, ретраи,
+│                                 #   текст, конкурентность
+└── composition.ts                # точка сборки зависимостей
 ```
 
-### Проблемы
+Счётчики — `Get-ChildItem -Recurse -File src/<слой> -Filter *.ts` на 2026-10-19.
 
-1. **Слои не видны по каталогам.** В корне `src/` смешаны утилиты (`time`, `retry`), инфраструктура (`browser`, `config`, `env`), доменные модели (`types.ts`).
-2. **`domain/collect.ts` — не домен.** Он выполняет сеть, пишет в кэш, читает историю. Это сценарий (`application`).
-3. **`clients/` и `store/` — один слой**, разнесённый по двум каталогам: оба адаптеры к внешнему миру.
-4. **Бизнес-логика в командах.** `cmd-digest.ts` (380 строк) содержит фильтрацию, судью и сборку дайджеста; `cmd-cover.ts` (146) — цикл генерации писем; `cmd-apply.ts` (97) — цикл откликов.
-5. **`cli/apply/steps.ts` (219 строк)** — Playwright-адаптер, а не слой представления.
-6. **Домен смотрит в инфраструктуру:** `domain/resume-markdown.ts` импортирует типы из `clients/hh-resume.ts`.
-7. **Загрузка резюме из файлов внутри домена:** `domain/grade-resume.ts` вызывает `loadResume()` (fs) вместо получения данных параметром.
+### Раскладка домена
+
+В `domain/` нет I/O: 7 «плоских» файлов (`models`, `ports`, `actualize`, `adapt-resume`,
+`resume-block`, `resume-markdown`, `grade-resume`) и четыре подпакета — `search/` (VO запроса и порт
+источника), `digest/` (политика, кандидат, вердикты, Domain Services и порты), `judge/` и
+`cover-letter/` (правило + промпт).
+
+`filter.ts` перенесён в `domain/digest/` и переписан как Domain Service `DigestFilter`
+(2026-10-19): правила `config.filter` и регионы «любые вакансии» задаются в конструкторе
+(`DigestFilter.from(cfg)`), наружу — `matches(vacancy)` и `select(items, cache)`. Фильтр
+использует только конвейер дайджеста (`application/digest/stages.ts`), поиск его не вызывает.
+
+### Исходные проблемы (as-is до этапов 1–7) — все закрыты
+
+1. **Слои не были видны по каталогам.** В корне `src/` смешивались утилиты (`time`, `retry`),
+   инфраструктура (`browser`, `config`, `env`) и доменные модели (`types.ts`)
+   → разнесены по `shared/`, `infrastructure/`, `domain/`.
+2. **`domain/collect.ts` — не домен.** Он выполнял сеть, писал в кэш, читал историю
+   → `application/collect.ts`.
+3. **`clients/` и `store/` — один слой** в двух каталогах
+   → `infrastructure/{hh,ai,mongo,files,playwright,config}`.
+4. **Бизнес-логика в командах.** `cmd-digest.ts` (380 строк) содержал фильтрацию, судью и сборку
+   дайджеста; `cmd-cover.ts` (146) — цикл генерации писем; `cmd-apply.ts` (97) — цикл откликов
+   → сценарии в `application/`, команды только выбирают действие и печатают.
+5. **`cli/apply/steps.ts` (219 строк)** — Playwright-адаптер, а не слой представления
+   → `infrastructure/playwright/apply-steps.ts`.
+6. **Домен смотрел в инфраструктуру:** `domain/resume-markdown.ts` импортировал типы из
+   `clients/hh-resume.ts` → типы `HhResume*` перенесены в `domain/models.ts`.
+7. **Загрузка резюме из файлов внутри домена:** `domain/grade-resume.ts` вызывал `loadResume()`
+   (fs) → файл читает `application/grade.ts` и передаёт резюме параметром.
 
 ---
 
-## 4. Целевая структура (to-be)
+## 4. Целевая структура (реализована)
 
 ```
 src/
@@ -112,7 +122,6 @@ src/
 │   ├── models.ts               # Vacancy, Resume, Verdict, DigestEntry, HhResume*
 │   ├── ports.ts                # CacheStore, HistoryStore, SearchDeps, ResumeSource,
 │   │                           #   SourceProvider, AiProvider
-│   ├── filter.ts
 │   ├── resume-block.ts
 │   ├── actualize.ts
 │   ├── adapt-resume.ts
@@ -127,6 +136,7 @@ src/
 │   │   ├── VacancySource.ts    # порт: searchVacancies / getVacancy
 │   │   └── types.ts            # VacancyListItem, SearchParams, SearchCacheSnapshot
 │   └── digest/                 # VO и порты дайджеста
+│       ├── DigestFilter.ts     # Domain Service: локальный пре-фильтр (config.filter)
 │       ├── DigestPolicy.ts     # Value Object: minScore/maxRun/dryRun/useJudge
 │       ├── DigestCandidate.ts  # кандидат + вердикт фильтра, AcceptedCandidate
 │       ├── JudgementSet.ts     # вердикты судьи: pending/merge/toSnapshot
@@ -197,7 +207,7 @@ src/
 └── composition.ts              # единая точка new HHClient(): vacancySource/resumeSource
 ```
 
-Отличия от as-is:
+Отличия от исходного состояния:
 
 - Появились явные `application/`, `infrastructure/`, `presentation/`, `shared/`.
 - `domain/` содержит только модели, правила и порты.
@@ -226,7 +236,7 @@ src/
 | Паттерн | Где | Что решает |
 |---|---|---|
 | Value Object | `domain/digest/{DigestPolicy,DigestCandidate,JudgementSet}.ts` | флаги прогона, кандидат и вердикты — явные типы вместо `any` |
-| Domain Service | `DigestMatcher`, `DigestEntryFactory`, `JudgementService` | правила отбора/сборки/судейства без I/O в сценарии |
+| Domain Service | `DigestFilter`, `DigestMatcher`, `DigestEntryFactory`, `JudgementService` | правила пре-фильтра/отбора/сборки/судейства без I/O в сценарии |
 | Ports & Adapters | `domain/digest/ports.ts` + `infrastructure/{mongo,files}` | домен не знает про Mongo и файловую систему |
 | Repository | `MongoDigestRepository`, `DigestCacheStore` | доступ к digest/rejected/кэшу через методы, а не к коллекциям |
 | Strategy | `JudgeStrategy`, `ActualizeTarget` | батч/поштучно у судьи; digest и rejected — одним кодом |
@@ -241,6 +251,8 @@ src/
 **Value Object — `DigestPolicy`.** Собирает `minScore`, `maxRun`, `dryRun`, `useJudge`, `adaptResume`, размер пачки и параллелизм в один неизменяемый объект. Раньше это были отдельные `const` внутри `buildDigest`, и любая ветка могла прочитать не то поле; теперь политика создаётся один раз и передаётся стадиям. `DigestCandidate`/`AcceptedCandidate` фиксируют форму кандидата, а `JudgementSet` инкапсулирует `Map` вердиктов и даёт операции `pending()`, `merge()`, `toSnapshot()`.
 
 **Domain Service — `DigestMatcher`.** Правило «кто в дайджест, кто в rejected» вместе с лимитом `maxRun` и логами вердиктов; I/O здесь нет, поэтому правило проверяется без Mongo. `DigestEntryFactory` превращает принятого кандидата в `DigestEntry` и отмечает историю (`markApplied` с `digestOnly`), поэтому формат записи и побочный эффект живут в одном месте. `JudgementService` оркестрирует пачки и сохранение, но сам вызов ИИ спрятан за стратегией.
+
+**Domain Service — `DigestFilter`.** Локальный пре-фильтр: правила `config.filter` (архив, компании, ключевые слова, зарплата, локация) и регионы «любые вакансии» из `config.search.area` собираются один раз в конструкторе (`DigestFilter.from(cfg)`), наружу — `matches(vacancy)` и `select(items, cache)`. Раньше это были функции с мешком `any` (`vacancyMatchesFilter`/`selectCandidates`); теперь фильтр создаётся в `DigestScenario` и передаётся стадии через контекст, а `LocalFilterStage` только логирует пропуски и отмечает историю.
 
 **Ports & Adapters — `domain/digest/ports.ts`.** `DigestRepository`, `JudgementCache`, `CoverLetterCache`, `ResumeRegistry`, `ResumeProvider`, `DigestFileSource` и `DigestCacheStore` описывают ровно то, что нужно сценарию. Реализации — в `infrastructure/mongo` и `infrastructure/files`; `Select-String 'infrastructure/(mongo|files|hh)' src/application/digest` не находит совпадений (чтение `loadConfig` осталось исключением, как в `SearchScenario`).
 
@@ -271,9 +283,10 @@ sequenceDiagram
 
     CMD->>S: build(opts)
     S->>S: DigestPolicy.from(cfg, opts)
+    S->>S: DigestFilter.from(cfg)
     S->>P: run(ctx)
     P->>C: LoadCacheStage: loadLatest(resumeId)
-    P->>P: RegisterResumeStage → CollectCardsStage → LocalFilterStage
+    P->>P: RegisterResumeStage → CollectCardsStage → LocalFilterStage: DigestFilter.select
     P->>J: JudgeStage: judge(candidates, judgements)
     J-->>P: judgedCount (save после каждой пачки)
     P->>P: SelectStage: DigestMatcher + DigestEntryFactory
@@ -290,7 +303,7 @@ sequenceDiagram
 | Группа | Сейчас | Куда | Причина |
 |---|---|---|---|
 | Модели | `src/types.ts` | `domain/models.ts` | доменные модели, а не утилита |
-| Домен | `domain/{filter,resume-block,actualize,resume-markdown,grade-resume}.ts`, `domain/judge/*`, `domain/cover-letter/*`, `domain/ports.ts` | `domain/` (без перемещения) | уже верный слой |
+| Домен | `domain/{resume-block,actualize,resume-markdown,grade-resume}.ts`, `domain/{judge,cover-letter,digest}/*`, `domain/ports.ts` | `domain/` (внутри слоя `filter.ts` стал `domain/digest/DigestFilter.ts`) | уже верный слой |
 | Сценарий | `domain/collect.ts` | `application/collect.ts` | сеть + кэш + история |
 | hh.ru | `clients/hh-client.ts`, `clients/hh-resume.ts` | `infrastructure/hh/` | адаптер внешнего сайта |
 | ИИ | `clients/ai-client.ts` | `infrastructure/ai/client.ts` | адаптер SDK |
@@ -350,7 +363,7 @@ sequenceDiagram
 
 1. Обновить `README.md`: дерево `src/`, ссылки на файлы.
 2. Обновить `docs/review/*` и `REVIEW.md`: старые пути в тикетах помечать как исторические.
-3. Отметить в этом документе фактическое состояние (as-is → to-be выполнено).
+3. Отметить в этом документе фактическое состояние (исходная структура → целевая структура).
 
 **Выполнено (2026-10-19):** дерево `src/` в `README.md` соответствует слоям, ссылка на селекторы ведёт в `infrastructure/playwright/apply-steps.ts`; в `REVIEW.md` и `docs/review/README.md` добавлена пометка, что пути в отчётах исторические.
 
@@ -446,7 +459,7 @@ bin/auto-hh
 | `83b0b1f` | composition root для зависимостей сбора |
 | `0a858bd` | порт `AiProvider` и адаптер OpenAI (OCP, DIP) |
 
-Что осталось из идей (вне рамок переезда): автотесты (`node:test` + `tsx`) для чистых функций — `selectCandidates`, `filter`, `chunk`, `runBatches`, `parseJSON`, `computeActualization`.
+Что осталось из идей (вне рамок переезда): автотесты (`node:test` + `tsx`) для чистых функций и правил — `DigestFilter.matches/select`, `chunk`, `runBatches`, `parseJSON`, `computeActualization`.
 
 
 

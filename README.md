@@ -395,10 +395,11 @@ npm start           # или: npm run ui, npx auto-hh, npx auto-hh ui (алиа�
 │  │  ├─ models.ts              # Vacancy, Resume, Verdict, DigestEntry, HhResume*
 │  │  ├─ ports.ts               # CacheStore, HistoryStore, SearchDeps, ResumeSource,
 │  │  │                         #   SourceProvider, AiProvider
-│  │  ├─ filter.ts / resume-block.ts / actualize.ts / adapt-resume.ts
+│  │  ├─ resume-block.ts / actualize.ts / adapt-resume.ts
 │  │  ├─ resume-markdown.ts / grade-resume.ts
 │  │  ├─ search/                # VO (SearchQuery, SearchBucket, PageKey) и порт VacancySource
-│  │  ├─ digest/                # политика, кандидат, вердикты, matcher, фабрика записи, порты
+│  │  ├─ digest/                # политика, кандидат, вердикты, matcher, фабрика записи,
+│  │  │                         #   Domain Service DigestFilter и порты
 │  │  └─ judge/ cover-letter/   # ИИ-судья и генерация писем
 │  ├─ infrastructure/           # адаптеры внешнего мира
 │  │  ├─ hh/                    # client, resume, vacancy-source, resume-source, source-provider

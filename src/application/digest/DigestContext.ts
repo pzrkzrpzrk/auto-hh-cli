@@ -7,6 +7,7 @@ import type {
   RejectedEntry,
 } from "../../domain/digest/DigestCandidate.js";
 import type { DigestPolicy } from "../../domain/digest/DigestPolicy.js";
+import type { DigestFilter } from "../../domain/digest/DigestFilter.js";
 import type { JudgementSet } from "../../domain/digest/JudgementSet.js";
 import type {
   DigestCacheSnapshot,
@@ -27,6 +28,8 @@ export interface DigestContext {
   readonly opts: DigestRunOptions;
   readonly cfg: DigestConfig;
   readonly policy: DigestPolicy;
+  /** Локальный пре-фильтр: правила config.filter + регионы «любые вакансии». */
+  readonly filter: DigestFilter;
   readonly resume: Resume | null;
   readonly resumeId?: string;
   readonly source: VacancySource;

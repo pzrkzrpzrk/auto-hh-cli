@@ -1,7 +1,6 @@
 // Стадии конвейера дайджеста. Каждая — один шаг прежнего buildDigest,
 // с тем же порядком логов; I/O идёт через порты, бизнес-правила — в домене.
 import log from "../../shared/logger.js";
-import { selectCandidates } from "../../domain/filter.js";
 import { DigestMatcher } from "../../domain/digest/DigestMatcher.js";
 import { DigestEntryFactory } from "../../domain/digest/DigestEntryFactory.js";
 import { JudgementSet } from "../../domain/digest/JudgementSet.js";
@@ -80,12 +79,12 @@ export class CollectCardsStage extends DigestStage {
   }
 }
 
-/** 4. Локальный фильтр (чистая функция домена) + отметки истории и лог пропусков. */
+/** 4. Локальный фильтр (Domain Service) + отметки истории и лог пропусков. */
 export class LocalFilterStage extends DigestStage {
   readonly name = 'local-filter';
 
   protected async execute(ctx: DigestContext): Promise<StageOutcome> {
-    const { candidates, skipped } = selectCandidates(ctx.items, ctx.cache.raw, ctx.cfg);
+    const { candidates, skipped } = ctx.filter.select(ctx.items, ctx.cache.raw);
 
     // В dry-run историю не трогаем: прогон не должен оставлять следов.
     if (ctx.policy.tracksHistory) {

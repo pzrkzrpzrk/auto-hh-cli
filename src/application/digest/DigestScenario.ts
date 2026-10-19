@@ -4,6 +4,7 @@ import { aiConcurrencyFromEnv } from "../../shared/concurrency.js";
 import { loadConfig } from "../../infrastructure/config/config.js";
 import { intFromEnv } from "../../infrastructure/config/env.js";
 import { DigestPolicy } from "../../domain/digest/DigestPolicy.js";
+import { DigestFilter } from "../../domain/digest/DigestFilter.js";
 import { JudgementSet } from "../../domain/digest/JudgementSet.js";
 import type { DigestEntry, Resume } from "../../domain/models.js";
 import type { RejectedEntry } from "../../domain/digest/DigestCandidate.js";
@@ -38,6 +39,7 @@ interface ScenarioParams {
   source: VacancySource;
   cfg: DigestConfig;
   policy: DigestPolicy;
+  filter: DigestFilter;
   resume: Resume | null;
   opts: DigestRunOptions;
 }
@@ -75,9 +77,11 @@ export class DigestScenario {
       judgeBatchSize: intFromEnv('JUDGE_BATCH_SIZE', 10),
       aiConcurrency: aiConcurrencyFromEnv(),
     });
+    // Правила локального пре-фильтра собираются один раз (domain/digest/DigestFilter.ts).
+    const filter = DigestFilter.from(cfg);
 
     return this.deps.source.withSource(async source => {
-      const ctx = this.createContext({ source, cfg, policy, resume, opts });
+      const ctx = this.createContext({ source, cfg, policy, filter, resume, opts });
       await this.pipeline.run(ctx);
       if (ctx.outcome !== 'ok') return null;
       return { matched: ctx.matched, rejected: ctx.rejected, dryRun: policy.dryRun };
@@ -90,6 +94,7 @@ export class DigestScenario {
       opts: params.opts,
       cfg: params.cfg,
       policy: params.policy,
+      filter: params.filter,
       resume: params.resume,
       resumeId: params.resume?.id,
       source: params.source,
