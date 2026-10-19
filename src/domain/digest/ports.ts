@@ -3,6 +3,7 @@
 // MongoDB, fs и разбор файлов живут в infrastructure, а связывает их composition root.
 import type { CacheStore } from "../ports.js";
 import type { DigestDoc, DigestEntry, Resume } from "../models.js";
+import type { Judgement } from "./JudgementSet.js";
 import type { RejectedEntry } from "./DigestCandidate.js";
 import type { DigestCacheSnapshot } from "./types.js";
 
@@ -38,7 +39,7 @@ export interface DigestRepository {
 
 /** Кэш вердиктов ИИ-судьи (коллекция cacheJudgements). */
 export interface JudgementCache {
-  save(judgements: Record<string, any>, resumeId?: string, date?: Date): Promise<void>;
+  save(judgements: Record<string, Judgement>, resumeId?: string, date?: Date): Promise<void>;
 }
 
 /** Письма из кэша, подклеиваемые к записям дайджеста при показе, генерации и отклике. */
@@ -68,10 +69,8 @@ export interface ResumeRegistry {
   listRegistered(): Promise<RegisteredResume[]>;
 }
 
-/** Чтение резюме с диска: файл по имени или путь из .env. */
-export interface ResumeProvider {
-  load(name?: string): Resume | null;
-}
+/** Чтение резюме с диска (порт объявлен в domain/ports.ts: им пользуются grade, cover, digest). */
+export type { ResumeProvider } from "../ports.js";
 
 /** Fallback-источник дайджеста: последние .md-файлы на диске. */
 export interface DigestFileSource {

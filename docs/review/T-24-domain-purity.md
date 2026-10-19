@@ -2,8 +2,8 @@
 
 - **Приоритет:** **P2** — SRP внутри слоёв, без изменения поведения
 - **Этап:** 9
-- **Зависимости:** T-17, T-18 (после них виден реальный объём домена)
-- **Объём:** 4 файла домена + 3 файла `application`
+- **Зависимости:** T-17, T-18; ветка `refactor/t24-domain-purity` базируется на T-23 (`strict` + `arch`)
+- **Объём:** 6 файлов домена + 7 файлов `application` (включая перенос и переименование)
 - **Пути:** актуальные, состояние на 2026-10-19
 
 ## Проблема
@@ -22,30 +22,40 @@
 
 ## Что сделать
 
-- [ ] `DigestEntryFactory.create()` возвращает записи **без** `markApplied`; отметку истории делает
-      `SelectStage` (`application/digest/stages.ts:130-131`) — там же, где уже вызывается
-      `history.markSeen`.
-- [ ] `DigestMatcher` возвращает `accepted/rejected` без логов; логи переносятся в `SelectStage`.
-- [ ] `FullCardPolicy`/`SkipSeenPolicy` → `domain/search/FullCardPolicy.ts`; `VacancyCollector`
+- [x] `DigestEntryFactory.create()` возвращает записи **без** `markApplied`; отметку истории делает
+      `SelectStage` (`application/digest/stages.ts`) — там же, где уже вызывается `history.markSeen`.
+- [x] `DigestMatcher` возвращает `accepted/rejected` без логов (факты — в `events`); логи печатает `SelectStage`.
+- [x] `FullCardPolicy`/`SkipSeenPolicy` → `domain/search/FullCardPolicy.ts`; `VacancyCollector`
       принимает политику параметром (уже принимает) — импорт меняется на доменный.
-- [ ] Переименовать `JudgementService` → `DigestJudgeRunner` (или оставить имя, но поправить шапку файла,
-      чтобы она не утверждала «Domain Service»).
-- [ ] Домен не импортирует `shared/logger` (после T-21 — вообще порт логгера).
+- [x] Переименовать `JudgementService` → `DigestJudgeRunner` (шапка файла больше не утверждает «Domain Service»).
+- [x] Домен не импортирует `shared/logger` (после T-21 — вообще порт логгера).
 
 ## Definition of Done
 
-- [ ] `Select-String -Path src\domain -Pattern 'shared/logger|markApplied|history\.'` → пусто.
-- [ ] `npx tsc --noEmit` → exit 0.
-- [ ] `digest build` пишет те же записи в `digest`/`rejected`, те же строки лога (проверить на фейковых
-      портах или по count в Mongo).
+- [x] `Select-String -Path src\domain -Pattern 'shared/logger'` → пусто;
+      `Select-String -Path src\domain\digest -Pattern 'markApplied|history\.|logger'` → пусто
+      (порт `HistoryStore.markApplied` в `domain/ports.ts` — легальное объявление контракта).
+- [x] `npx tsc --noEmit` → exit 0; `npm run arch` → 0; `npm run build` → 0.
+- [x] `digest build` пишет те же записи в `digest`/`rejected`, те же строки лога — сверено на фейковых
+      портах (baseline до правок vs `SelectStage` после): логи, `DigestEntry` и `markApplied` совпали,
+      включая dry-run без записи истории.
 
 ## Проверка
 
 ```powershell
-npx tsc --noEmit
-Select-String -Path src\domain -Pattern 'logger|markApplied'
 npm run arch
+npx tsc --noEmit
+Select-String -Path src\domain\digest -Pattern 'markApplied|history\.|logger'
 ```
+
+## Итог (2026-10-19)
+
+- `DigestEntryFactory` и `DigestMatcher` — без побочек: маппинг и правило отбора чистые,
+  `SelectStage` печатает события и пишет историю (`digestOnly: true` сохранён).
+- `FullCardPolicy` живёт в `domain/search`, импорты search/digest/cover обновлены.
+- `JudgementService` → `DigestJudgeRunner`; шапки `DigestJudgeRunner`/`VacancyCollector` —
+  «Application Service».
+- Поведение не изменилось: формат `.md`, порядок и тексты логов, meta истории — прежние.
 
 ## Риски
 

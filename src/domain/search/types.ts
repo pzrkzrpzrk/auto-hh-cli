@@ -42,8 +42,8 @@ export interface SearchPageResult {
 /** Снимок кэша поиска: страницы выдачи и полные карточки (cachePages/cacheFull). */
 export interface SearchCacheSnapshot {
   date: string;
-  pages: Record<string, any[]>;
-  fullById: Record<string, any>;
+  pages: Record<string, VacancyListItem[]>;
+  fullById: Record<string, Vacancy>;
 }
 
 /** Секция config.search, с которой работает сценарий поиска. */

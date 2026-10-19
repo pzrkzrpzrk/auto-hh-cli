@@ -1,6 +1,7 @@
 // Хранилище истории откликов в MongoDB.
 import { connect, dbInstance } from "./db.js";
 import { Collection, Document } from "mongodb";
+import type { HistoryMeta, HistoryState } from "../../domain/ports.js";
 
 const COLLECTION = 'history';
 
@@ -8,7 +9,7 @@ interface HistoryDoc {
   vacancyId: string;
   status: 'seen' | 'applied';
   at: Date;
-  meta?: Record<string, any>;
+  meta?: HistoryMeta;
 }
 
 async function col(): Promise<Collection<HistoryDoc>> {
@@ -16,10 +17,10 @@ async function col(): Promise<Collection<HistoryDoc>> {
   return dbInstance().collection<HistoryDoc>(COLLECTION);
 }
 
-export async function load(): Promise<{ applied: Record<string, any>; seen: Record<string, string> }> {
+export async function load(): Promise<HistoryState> {
   const c = await col();
   const docs = await c.find({}).toArray();
-  const applied: Record<string, any> = {};
+  const applied: Record<string, HistoryMeta> = {};
   const seen: Record<string, string> = {};
   for (const d of docs) {
     // meta несёт title/employer/url/score (пишут cmd-apply и cmd-digest) — без него `history`
@@ -30,7 +31,7 @@ export async function load(): Promise<{ applied: Record<string, any>; seen: Reco
   return { applied, seen };
 }
 
-export async function markApplied(vacancyId: string, meta: Record<string, any>): Promise<void> {
+export async function markApplied(vacancyId: string, meta: HistoryMeta): Promise<void> {
   const c = await col();
   await c.updateOne(
     { vacancyId: String(vacancyId) },

@@ -24,17 +24,17 @@ class SearchCache {
     return this.doc.date;
   }
 
-  page(key: string): any[] | null {
+  page(key: string): VacancyListItem[] | null {
     return this.doc.pages[key] ?? null;
   }
 
   /** Записать страницу и сразу сохранить её в хранилище (как раньше: мутация → savePage). */
-  async savePage(key: string, items: any[]): Promise<void> {
+  async savePage(key: string, items: VacancyListItem[]): Promise<void> {
     this.doc.pages[key] = items;
     await this.store.savePage(this.doc, key);
   }
 
-  full(id: string | number): any | null {
+  full(id: string | number): Vacancy | null {
     return this.doc.fullById[String(id)] ?? null;
   }
 

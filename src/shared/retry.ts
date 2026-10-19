@@ -1,4 +1,5 @@
 import log from "./logger.js";
+import { errorMessage } from "./errors.js";
 
 const DEFAULT_ATTEMPTS = 5;
 const DEFAULT_BASE_DELAY_MS = 1000;
@@ -60,7 +61,7 @@ async function retryOnTransient<T>(fn: () => Promise<T>, opts: RetryOpts = {}): 
       const backoff = Math.min(baseDelayMs * Math.pow(2, attempt), maxDelayMs);
       // Retry-After от сервера уважаем как есть, иначе добавляем разброс.
       const delay = retryAfterMs(err, maxDelayMs) ?? jitter(backoff);
-      log.warn(`AI retry${where} ${attempt + 1}/${attempts - 1} in ${delay}ms: ${err.message}`);
+      log.warn(`AI retry${where} ${attempt + 1}/${attempts - 1} in ${delay}ms: ${errorMessage(err)}`);
       await new Promise((resolve) => setTimeout(resolve, delay));
     }
   }

@@ -29,22 +29,22 @@
 
 ## Что сделать
 
-- [ ] `domain/ports.ts`: `Scheduler { validate(expr): boolean; schedule(expr, fn): void }`.
-- [ ] `infrastructure/scheduling/node-cron.ts`: адаптер (единственный `import cron` в проекте).
-- [ ] `application/schedule.ts`: принимает `scheduler` через `ScheduleDeps`; `getNextDate` остаётся
+- [x] `domain/ports.ts`: `Scheduler { validate(expr): boolean; schedule(expr, fn): void }`.
+- [x] `infrastructure/scheduling/node-cron.ts`: адаптер (единственный `import cron` в проекте).
+- [x] `application/schedule.ts`: принимает `scheduler` через `ScheduleDeps`; `getNextDate` остаётся
       в `shared/cron` (чистая функция).
-- [ ] `composition.ts`: `scheduleDeps`, `historyDeps`, `resumeDeps`, `resetDeps`, `gradeDeps`;
+- [x] `composition.ts`: `scheduleDeps`, `historyDeps`, `resumeDeps`, `resetDeps`, `gradeDeps`;
       экспорт `closeResources()` вместо прямого `closeDb` в CLI (или проброс через `run(argv, { onExit })`).
-- [ ] `cmd-config` → `application/config-view.ts` (сценарий «покажи конфиг»), `menu/resume*` →
+- [x] `cmd-config` → `application/config-view.ts` (сценарий «покажи конфиг»), `menu/resume*` →
       `application/resume.ts`.
-- [ ] `presentation` импортирует только `application/*` и `composition.js`.
+- [x] `presentation` импортирует только `application/*` и `composition.js`.
 
 ## Definition of Done
 
-- [ ] `Select-String -Path src\application -Pattern 'node-cron|infrastructure/'` → пусто.
-- [ ] `Select-String -Path src\presentation -Pattern 'infrastructure/'` → пусто.
-- [ ] `npx tsc --noEmit` → exit 0.
-- [ ] `schedule` ведёт себя как раньше: те же сообщения, тот же порядок шагов,
+- [x] `Select-String -Path src\application -Pattern 'node-cron|infrastructure/'` → пусто.
+- [x] `Select-String -Path src\presentation -Pattern 'infrastructure/'` → пусто.
+- [x] `npx tsc --noEmit` → exit 0.
+- [x] `schedule` ведёт себя как раньше: те же сообщения, тот же порядок шагов,
       `no-cron`/`invalid-cron` → `exitCode = 1`, следующий запуск считается так же.
 
 ## Проверка
@@ -62,3 +62,22 @@ npx tsx bin/auto-hh ui   # «Планировщик» → проводка та 
   сигнатурой (async-колбэк), иначе изменится обработка ошибок шагов.
 - `closeDb` в `finally` — гарантия завершения процесса; при переносе в `composition.closeResources()`
   проверить, что монитор Mongo закрывается и в ветке ошибки.
+
+## Выполнено (2026-10-19)
+
+- `domain/ports.ts` — `Scheduler { validate(expr), schedule(expr, fn) }`;
+  `application/schedule.ts` больше не импортирует `node-cron`.
+- `infrastructure/scheduling/node-cron.ts` — единственный `import cron` в проекте; адаптер
+  оборачивает async-колбэк так, чтобы ошибки шагов не меняли обработку.
+- `composition.ts` — `scheduleDeps` (config + scheduler), `gradeDeps` (ai + resumeFiles + logger)
+  и `closeResources()`; `cmd-schedule` добавляет `steps`, `cmd-grade-resume` получает `gradeDeps`.
+- `application/config-view.ts` — просмотр конфига; `cmd-config` получает `configProvider`
+  из composition.
+- `menu/resume*` — `application/resume` (`listResumeFiles`/`readResumeFile`) + `resumeDeps`.
+- `presentation/cli/index.ts` — `closeResources()` вместо прямого `closeDb`.
+- `application` и `presentation` больше не импортируют инфраструктуру; `node-cron` остался
+  только в адаптере.
+- Проверка: `Select-String -Path src\application -Pattern 'node-cron|infrastructure/'` → пусто;
+  `Select-String -Path src\presentation -Pattern 'infrastructure/'` → пусто;
+  `npx tsc --noEmit` → 0; смоук `runSchedule` (scheduled/invalid/no-cron, шаги, события),
+  `gradeDeps` и `showConfig` → exit 0.

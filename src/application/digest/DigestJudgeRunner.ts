@@ -1,4 +1,4 @@
-// Domain Service судейства: пачки, кэш вердиктов и частичное сохранение.
+// Application Service судейства: пачки, кэш вердиктов и частичное сохранение.
 // Заменяет judgeWithClaude из application/digest.ts: политика пачек и сохранение
 // после каждой пачки — здесь, а как именно спрашивать ИИ — в JudgeStrategy.
 import { chunk, runBatches } from "../../shared/batches.js";
@@ -22,7 +22,7 @@ export interface JudgeContext {
   date?: Date;
 }
 
-export class JudgementService {
+export class DigestJudgeRunner {
   constructor(
     private readonly cache: JudgementCache,
     private readonly strategy: JudgeStrategy = new AiJudgeStrategy(),

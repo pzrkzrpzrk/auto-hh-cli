@@ -1,6 +1,6 @@
 // Стратегия судейства (Strategy): КАК спрашивать ИИ — пачкой или поштучно.
 // Реализация по умолчанию — реальные вызовы доменного судьи; в проверках подставляется
-// детерминированная стратегия, поэтому JudgementService не знает про сеть.
+// детерминированная стратегия, поэтому DigestJudgeRunner не знает про сеть.
 import { judgeVacancy, judgeVacanciesBatch } from "../../domain/judge/index.js";
 import type { Logger } from "../../domain/logging.js";
 import type { Judgement } from "../../domain/digest/JudgementSet.js";

@@ -3,7 +3,7 @@
 import log from "../../shared/logger.js";
 import { buildCoverLettersBatch } from "../../domain/cover-letter/index.js";
 import type { DigestEntry, Vacancy } from "../../domain/models.js";
-import { AllVacanciesPolicy } from "../search/FullCardPolicy.js";
+import { AllVacanciesPolicy } from "../../domain/search/FullCardPolicy.js";
 import SearchCache from "../search/SearchCache.js";
 import { VacancyCollector } from "../search/VacancyCollector.js";
 import { CoverStage, type StageResult } from "./CoverStage.js";

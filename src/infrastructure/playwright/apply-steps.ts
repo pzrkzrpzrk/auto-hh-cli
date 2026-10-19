@@ -3,6 +3,9 @@
 import fs from "fs";
 import path from "path";
 import log from "../../shared/logger.js";
+import { errorMessage } from "../../shared/errors.js";
+import type { Page } from "playwright";
+import type { DigestEntry } from "../../domain/models.js";
 import { intFromEnv } from "../config/env.js";
 import { sleep, rand } from "../../shared/time.js";
 import { DATA_DIR } from "../config/paths.js";
@@ -18,7 +21,7 @@ const RESPONSE_BUTTON_SELECTORS = [
 const LETTER_TEXTAREA_SEL = 'textarea[data-qa="vacancy-response-popup-form-letter-input"], textarea[name="text"], textarea[data-qa*="letter"]';
 
 // Кнопка отклика: первый подходящий селектор. null — кнопки нет.
-async function findResponseButton(page) {
+async function findResponseButton(page: Page) {
   for (const sel of RESPONSE_BUTTON_SELECTORS) {
     const el = await page.$(sel);
     if (el) return el;
@@ -28,15 +31,15 @@ async function findResponseButton(page) {
 
 // Тестовое задание: skip — пропустить вакансию, manual — ждать ENTER в консоли.
 // null — можно продолжать; иначе готовый результат для applyToVacancy.
-async function handleTestRequired(entry) {
+async function handleTestRequired(entry: DigestEntry) {
   log.warn(`Test required for ${entry.id}`);
   if (TEST_MODE === 'skip') return { ok: false, reason: 'test required' };
   if (TEST_MODE === 'manual') {
     try {
       await waitForEnter(`Тест для вакансии "${entry.title || entry.id}" (${entry.url}). Пройдите тест в браузере.`);
     } catch (e) {
-      log.warn(`Manual test timeout for ${entry.id}: ${e.message}`);
-      return { ok: false, reason: e.message };
+      log.warn(`Manual test timeout for ${entry.id}: ${errorMessage(e)}`);
+      return { ok: false, reason: errorMessage(e) };
     }
   }
   return null;
@@ -44,7 +47,7 @@ async function handleTestRequired(entry) {
 
 // Заполняет сопроводительное. ok=false — поля нет, отправлять без письма нельзя.
 // hadTextarea нужен ожиданию подтверждения: попап-форма закрывается вместе с полем.
-async function fillLetter(page, entry) {
+async function fillLetter(page: Page, entry: DigestEntry) {
   const textarea = await page.waitForSelector(LETTER_TEXTAREA_SEL, { timeout: 8000 }).catch(() => null);
   if (textarea && entry.coverLetter) {
     await textarea.fill(entry.coverLetter);
@@ -64,11 +67,11 @@ async function fillLetter(page, entry) {
 }
 
 // Ждёт, пока пользователь сам нажмёт «Откликнуться» в браузере. false — таймаут.
-async function waitForManualSubmit(page, entry, hadTextarea) {
+async function waitForManualSubmit(page: Page, entry: DigestEntry, hadTextarea: boolean) {
   const manualTimeout = intFromEnv('PW_MANUAL_TIMEOUT_MS', 300000);
   try {
     await page.waitForFunction(
-      (args) => {
+      (args: { textareaSel: string; hadTextarea: boolean }) => {
         const url = window.location.href;
         // Полностраничная форма: редирект на negotiations/test
         if (url.includes('/applicant/negotiations/') || url.includes('/applicant/vacancy_response/test')) {
@@ -96,7 +99,7 @@ async function waitForManualSubmit(page, entry, hadTextarea) {
 }
 
 // Проверка авторизации в сохранённой сессии. false — не залогинен.
-async function ensureLoggedIn(page) {
+async function ensureLoggedIn(page: Page) {
   await page.goto('https://hh.ru/applicant/resumes', { waitUntil: 'domcontentloaded' });
   if (/\/account\/login/.test(page.url())) {
     log.error('Not logged in. Run the menu item «🔑 Войти на hh.ru» first.');
@@ -106,7 +109,7 @@ async function ensureLoggedIn(page) {
 }
 
 // Один отклик: навигация → проверки → кнопка → тест → письмо → ручное подтверждение.
-async function applyToVacancy(page, entry) {
+async function applyToVacancy(page: Page, entry: DigestEntry) {
   log.info(`Applying to ${entry.id} (${entry.employer || '?'}: ${entry.title})`);
   await page.goto(entry.url, { waitUntil: 'domcontentloaded' });
   await sleep(rand(MIN_DELAY, MAX_DELAY));
@@ -169,7 +172,7 @@ async function applyToVacancy(page, entry) {
 }
 
 // Состояние страницы после отклика: тестовое задание, уже откликнулись или неизвестно.
-async function detectPostState(page) {
+async function detectPostState(page: Page) {
   const url = page.url();
   if (/\/applicant\/vacancy_response\/test/.test(url)) return 'test';
   if (/\/applicant\/negotiations/.test(url)) return 'applied';
@@ -177,7 +180,7 @@ async function detectPostState(page) {
 }
 
 // Проверяет, не откликались ли уже на эту вакансию, по содержимому страницы.
-async function checkAlreadyResponded(page) {
+async function checkAlreadyResponded(page: Page) {
   // 1. Кнопка отклика — ссылка на negotiations (уже откликнулись)
   const respondedLink = await page.$('a[data-qa="vacancy-response-link-top"][href*="negotiation"], a[data-qa="vacancy-response-link"][href*="negotiation"]');
   if (respondedLink) return true;
@@ -193,10 +196,10 @@ async function checkAlreadyResponded(page) {
 }
 
 // Ожидание ENTER в консоли (ручные тесты и подтверждения).
-function waitForEnter(message) {
+function waitForEnter(message: string) {
   return new Promise<void>((resolve, reject) => {
     process.stdout.write(`\n>>> ${message}\n>>> Нажмите ENTER в этой консоли, когда закончите...\n`);
-    let timer;
+    let timer: ReturnType<typeof setTimeout> | undefined;
     const onData = () => {
       process.stdin.removeListener('data', onData);
       process.stdin.pause();
