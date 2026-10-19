@@ -1,13 +1,9 @@
-// Сценарий сборки и актуализации дайджеста.
-// Оркестрация: кэш поиска → локальный фильтр → ИИ-судья → digest/rejected (файлы + Mongo).
-// Вывод в консоль остаётся в команде: сценарий отдаёт данные и колбэк onMatched.
+// Шаг показа и актуализации дайджеста + совместимая обёртка сборки.
+// Сама сборка живёт в application/digest/DigestScenario.ts (конвейер стадий);
+// здесь остались show/actualize до их перевода в сценарии (этап 7.6).
 import { readFileSync } from "fs";
-import { aiConcurrencyFromEnv } from "../shared/concurrency.js";
 import { loadConfig } from "../infrastructure/config/config.js";
-import history from "../infrastructure/mongo/history-store.js";
 import * as collectCache from "../infrastructure/mongo/cache-store.js";
-import { selectCandidates } from "../domain/filter.js";
-import { loadResume } from "../infrastructure/files/resume-loader.js";
 import {
   writeDigest,
   writeRejected,
@@ -17,144 +13,32 @@ import {
   getLatestDigest,
 } from "../infrastructure/mongo/digest-store.js";
 import { computeActualization, mergeActualized } from "../domain/actualize.js";
-import { registerResume } from "../infrastructure/mongo/resume-store.js";
 import { listDigestFiles } from "../infrastructure/files/digest-files.js";
 import { DIGEST_DIR } from "../infrastructure/config/paths.js";
 import type { DigestEntry } from "../domain/models.js";
 import { flattenCollected } from "./collect.js";
-import type { AiProvider, CollectDeps, SourceProvider } from "../domain/ports.js";
-import type { VacancySource } from "../domain/search/VacancySource.js";
-import SearchCache from "./search/SearchCache.js";
-import { VacancyCollector } from "./search/VacancyCollector.js";
-import { SkipSeenPolicy } from "./search/FullCardPolicy.js";
-import { DigestPolicy } from "../domain/digest/DigestPolicy.js";
-import { DigestMatcher } from "../domain/digest/DigestMatcher.js";
-import { DigestEntryFactory } from "../domain/digest/DigestEntryFactory.js";
-import { JudgementSet } from "../domain/digest/JudgementSet.js";
-import type { JudgementCache } from "../domain/digest/ports.js";
-import { JudgementService } from "./digest/JudgementService.js";
-import { intFromEnv } from "../infrastructure/config/env.js";
 import log from "../shared/logger.js";
+import { DigestScenario } from "./digest/DigestScenario.js";
+import type { DigestBuildResult } from "./digest/DigestScenario.js";
+import type { DigestDeps } from "./digest/DigestDeps.js";
 
-/** Зависимости сценария: конкретные реализации подставляет команда (composition root). */
-export interface DigestDeps {
-  /** Провайдер ИИ создаётся лениво — ровно там, где он нужен (как раньше). */
-  ai: () => AiProvider | null;
-  collect: CollectDeps;
-  /** Источник вакансий с жизненным циклом (браузер открывается только при догрузке). */
-  source: SourceProvider<VacancySource>;
-  /** Кэш вердиктов судьи: сервис сохраняет их после каждой пачки. */
-  judgements: JudgementCache;
-}
-
-// Дата кэша поиска: тем же ключом пишутся полные вакансии и вердикты ИИ.
-function sessionDate(cache) {
-  return cache.date ? new Date(`${cache.date}T00:00:00.000Z`) : undefined;
-}
-
-async function filterLocally(source: VacancySource, items, cache, cfg, deps: CollectDeps, markSeen = true) {
-  // Догрузка карточек — общая с шагами search и cover. Просмотренные не качаем: ниже они всё равно пропускаются.
-  const collector = new VacancyCollector(source, new SearchCache(cache, deps.cacheStore), deps.history);
-  const { failedIds } = await collector.ensureFullCards(items, SkipSeenPolicy);
-  // Карточки, которые не удалось скачать, помечаем просмотренными, чтобы не перебирать их при каждом запуске.
-  if (markSeen) for (const id of failedIds) await deps.history.markSeen(id);
-
-  // Сам отбор — чистая функция домена; здесь остаётся только I/O (история и лог).
-  const { candidates, skipped } = selectCandidates(items, cache, cfg);
-  // В dry-run историю не трогаем: прогон не должен оставлять следов.
-  if (markSeen) {
-    for (const c of candidates) await deps.history.markSeen(c.full.id);
-    for (const s of skipped) await deps.history.markSeen(s.id);
-  }
-  for (const { id, name, reason } of skipped) {
-    log.info(`Skip ${id} (${name}): ${reason}`);
-  }
-  return candidates;
-}
+// Совместимость: команда и composition root импортируют типы из этого модуля.
+export type { DigestDeps } from "./digest/DigestDeps.js";
+export type { DigestBuildResult } from "./digest/DigestScenario.js";
 
 /**
- * Шаг digest: кэш поиска → локальный фильтр → ИИ-судья → digest/rejected (файлы + Mongo).
- * null — собирать нечего (пустой кэш или пустая выдача). onMatched команда использует для печати топа.
+ * Шаг digest: совместимая обёртка над сценарием (application/digest/DigestScenario.ts).
+ * null — собирать нечего (пустой кэш или пустая выдача). onMatched используется для печати топа.
  */
 export async function buildDigest(
   opts: Record<string, any> = {},
   deps: DigestDeps,
   onMatched?: (matched: DigestEntry[]) => void,
-): Promise<{ matched: DigestEntry[]; rejected: any[]; dryRun: boolean } | null> {
-  if (opts.config) process.env.CONFIG_PATH = opts.config;
-
-  const cfg = loadConfig();
-  const resume = loadResume(opts.resume);
-  const resumeId = resume?.id;
-  const hasApiKey = cfg.api?.apiKey || process.env.OPENAI_API_KEY || process.env.ANTHROPIC_API_KEY;
-  // Все флаги прогона — в одном объекте (domain/digest/DigestPolicy.ts).
-  const policy = DigestPolicy.from(cfg, opts, {
-    hasResume: Boolean(resume),
-    hasApiKey: Boolean(hasApiKey),
-    judgeBatchSize: intFromEnv('JUDGE_BATCH_SIZE', 10),
-    aiConcurrency: aiConcurrencyFromEnv(),
+): Promise<DigestBuildResult | null> {
+  const scenario = new DigestScenario(deps, event => {
+    if (event.type === 'matched' && onMatched) onMatched(event.matched);
   });
-
-  const cache = await collectCache.loadLatest(resumeId);
-  if (!cache) {
-    log.warn('Кэш поиска пуст — сначала выполните пункт меню «🔍 Поиск вакансий»');
-    return null;
-  }
-
-  const items = flattenCollected(cache);
-  if (!items.length) {
-    log.info(`Поиск от ${cache.date} не вернул вакансий — проверьте config.search.`);
-    return null;
-  }
-
-  if (resume) {
-    log.info(`Resume loaded: ${resumeId} (${resume.filename}, ${resume.type})`);
-    await registerResume(resume).catch(() => {});
-  } else {
-    log.warn('RESUME_PATH not set — Claude judge disabled, fall back to local filter only');
-  }
-
-  return await deps.source.withSource(async source => {
-    log.info(`Building digest from search cache ${cache.date}: ${items.length} vacancies`);
-    const candidates = await filterLocally(source, items, cache, cfg, deps.collect, policy.tracksHistory);
-    log.info(`Local filter passed: ${candidates.length}/${items.length}`);
-
-    // Вердикты: уже известные — из кэша, остальные спрашивает сервис судейства.
-    const judgementSet = JudgementSet.fromSnapshot(cache.judgements);
-    const ai = deps.ai();
-    const { judgedCount } = policy.useJudge
-      ? await new JudgementService(deps.judgements).judge(ai, resume, candidates, judgementSet, policy, {
-          resumeId,
-          date: sessionDate(cache),
-        })
-      : { judgedCount: 0 };
-
-    // Отбор и сборка записей — доменные сервисы: сценарий только связывает их с I/O.
-    const { accepted, rejected } = new DigestMatcher(policy).select(candidates, judgementSet);
-    const matched = await new DigestEntryFactory(deps.collect.history).create(accepted, policy.tracksHistory);
-
-    log.info(`Judged by Claude: ${judgedCount}, accepted: ${matched.length}, rejected: ${rejected.length}`);
-    if (onMatched) onMatched(matched);
-
-    if (policy.dryRun) {
-      log.warn('Dry-run: история, дайджест и rejected не изменялись');
-      return { matched, rejected, dryRun: policy.dryRun };
-    }
-
-    const rejectedFiles = await writeRejected(rejected);
-    if (rejectedFiles.length) {
-      log.info(`Rejected saved: ${rejectedFiles.length} regions, ${rejected.length} vacancies -> ${rejectedFiles.join(', ')}`);
-    }
-
-    if (!matched.length) {
-      log.info('No matching vacancies.');
-      return { matched, rejected, dryRun: policy.dryRun };
-    }
-
-    const files = await writeDigest(matched);
-    log.info(`Digest saved: ${files.length} regions, ${matched.length} vacancies -> ${files.join(', ')}`);
-    return { matched, rejected, dryRun: policy.dryRun };
-  });
+  return scenario.build(opts);
 }
 
 // Шаг актуализации: помечает в старых дайджестах/rejected вакансии, которых нет в последнем
