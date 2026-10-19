@@ -35,6 +35,16 @@ export type ResumeShowOutcome =
   | { kind: 'not-found' }
   | { kind: 'ok'; resume: Resume };
 
+/** Файлы резюме для меню: список без обращения к Mongo. */
+export function listResumeFiles(deps: ResumeDeps) {
+  return deps.files.list();
+}
+
+/** Резюме по имени (или дефолт из env) для меню. */
+export function readResumeFile(name: string | undefined, deps: ResumeDeps) {
+  return deps.files.load(name);
+}
+
 /** Список резюме на диске с пометкой, зарегистрировано ли каждое в MongoDB. */
 export async function listResumesForCli(deps: ResumeDeps): Promise<ResumeListOutcome> {
   const files = deps.files.list();

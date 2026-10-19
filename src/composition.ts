@@ -19,6 +19,9 @@ import { createAiProvider } from "./infrastructure/ai/client.js";
 import { configProvider } from "./infrastructure/config/config.js";
 import { intFromEnv } from "./infrastructure/config/env.js";
 import { DEFAULT_COVER_SIGNATURE } from "./domain/cover-letter/system-text.js";
+import { close as closeDb } from "./infrastructure/mongo/db.js";
+import NodeCronScheduler from "./infrastructure/scheduling/node-cron.js";
+import log from "./shared/logger.js";
 import { MIN_DELAY, MAX_DELAY } from "./infrastructure/config/apply-config.js";
 import PlaywrightApplicationGateway from "./infrastructure/playwright/application-gateway.js";
 import HHClient from "./infrastructure/hh/client.js";
@@ -38,10 +41,12 @@ import type { ApplyDeps } from "./application/apply.js";
 import type { CoverConfig, CoverDeps } from "./application/cover.js";
 import type { DigestDeps } from "./application/digest.js";
 import type { ActualizeDeps, DigestShowDeps } from "./application/digest.js";
+import type { GradeDeps } from "./application/grade.js";
 import type { HistoryDeps } from "./application/history.js";
 import type { ResetDeps } from "./application/reset.js";
 import type { ResumeDeps } from "./application/resume.js";
 import type { ResumeDownloadDeps } from "./application/resume-download.js";
+import type { ScheduleRuntimeDeps } from "./application/schedule.js";
 
 // Адаптер конфигурации — один на процесс; команды получают его через composition.
 export { configProvider };
@@ -182,10 +187,24 @@ export const resumeDownloadDeps: ResumeDownloadDeps = {
   registry: resumeRegistry,
 };
 
+/** Зависимости оценки резюме: ленивый ИИ и файлы резюме. */
+export const gradeDeps: GradeDeps = { ai: aiProvider, resumeFiles, logger: log };
+
+/** Зависимости планировщика: конфиг и адаптер. Шаги передаёт команда. */
+export const scheduleDeps: ScheduleRuntimeDeps = {
+  config: configProvider,
+  scheduler: new NodeCronScheduler(),
+};
+
 /**
  * Провайдер ИИ для текущей конфигурации. null — ключ не задан: шаги работают без ИИ
  * (штатный режим, а не ошибка). Создаётся один раз на команду и передаётся в домен.
  */
 export function aiProvider(path?: string): AiProvider | null {
   return createAiProvider(configProvider.load(path).api || {});
+}
+
+/** Закрыть общие ресурсы процесса (Mongo-монитор) — вызывается CLI в finally. */
+export async function closeResources(): Promise<void> {
+  await closeDb();
 }

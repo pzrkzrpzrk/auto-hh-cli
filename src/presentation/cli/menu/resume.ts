@@ -1,7 +1,8 @@
 // Резюме в меню: активное резюме сессии, подпись из .env и единый список choices.
 // Состояние сессии живёт в ctx (создаёт его ui/menu.ts) — модульных переменных здесь нет.
 import { input, select } from "@inquirer/prompts";
-import { listResumes, loadResume } from "../../../infrastructure/files/resume-loader.js";
+import { listResumeFiles, readResumeFile } from "../../../application/resume.js";
+import { resumeDeps } from "../../../composition.js";
 
 // Значение «резюме не указано»: команда сама возьмёт RESUME_PATH или первый файл из RESUMES_DIR.
 const DEFAULT_RESUME = "__default__";
@@ -22,7 +23,7 @@ export type UiContext = {
 export function describeEnvResume(ctx: UiContext): string {
   if (ctx.envResumeLabel === undefined) {
     try {
-      const r = loadResume();
+      const r = readResumeFile(undefined, resumeDeps);
       ctx.envResumeLabel = r ? `${r.name} (${r.filename})` : null;
     } catch {
       ctx.envResumeLabel = null;
@@ -74,7 +75,7 @@ export function resumeChoices(
  * Активное резюме сессии предлагается по умолчанию и помечается пометкой.
  */
 export async function pickResume(ctx: UiContext, message: string): Promise<string | undefined> {
-  const { choices, defaultValue } = resumeChoices(listResumes(), {
+  const { choices, defaultValue } = resumeChoices(listResumeFiles(resumeDeps), {
     active: ctx.activeResume,
     envLabel: describeEnvResume(ctx),
     markLabel: "   ← активное",
@@ -89,7 +90,7 @@ export async function pickResume(ctx: UiContext, message: string): Promise<strin
 
 /** Пункт меню «Резюме → выбрать активное»: задаёт резюме для digest/cover/grade/schedule. */
 export async function runPickActiveResume(ctx: UiContext) {
-  const { choices, defaultValue } = resumeChoices(listResumes(), {
+  const { choices, defaultValue } = resumeChoices(listResumeFiles(resumeDeps), {
     active: ctx.activeResume,
     envLabel: describeEnvResume(ctx),
     markLabel: "   ← сейчас",
@@ -110,7 +111,7 @@ export async function runPickActiveResume(ctx: UiContext) {
 
   const name = value === MANUAL_RESUME ? await askResumeName("Имя резюме") : value;
   try {
-    const resume = loadResume(name);
+    const resume = readResumeFile(name, resumeDeps);
     if (!resume) {
       console.error(`Резюме "${name}" не найдено — проверьте RESUMES_DIR.`);
       return;
@@ -124,7 +125,7 @@ export async function runPickActiveResume(ctx: UiContext) {
 
 /** Имя резюме: списком, если RESUMES_DIR заполнен, иначе — ручным вводом. */
 export async function askResumeName(message: string): Promise<string> {
-  const files = listResumes();
+  const files = listResumeFiles(resumeDeps);
   if (files.length) {
     return select({
       message,

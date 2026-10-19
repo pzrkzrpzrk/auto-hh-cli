@@ -17,6 +17,14 @@ import type { VacancySource } from "./search/VacancySource.js";
 
 export type { Logger } from "./logging.js";
 
+/** Планировщик cron: сценарий не зависит от node-cron. */
+export interface Scheduler {
+  /** Проверить cron-выражение. */
+  validate(expression: string): boolean;
+  /** Поставить задачу; колбэк может быть async. */
+  schedule(expression: string, fn: () => void | Promise<void>): void;
+}
+
 /**
  * Конфигурация приложения — DTO из config.json. Описаны только секции, которые читают
  * сценарии; остальные ключи остаются на месте и доступны политикам/адаптерам.
