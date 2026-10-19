@@ -14,8 +14,9 @@ composition root, тестируемость. Исходные факты на 2
 в 12 файлах, `shared → infrastructure` — 3 файла, `presentation → infrastructure` — 4 файла, тестов нет,
 `strict: false`, ~175 токенов `any`.
 
-После T-17…T-22: прямых импортов инфраструктуры в `application`/`presentation` нет;
-`shared` и `domain` тоже не импортируют инфраструктуру.
+После T-17…T-23: прямых импортов инфраструктуры в `application`/`presentation` нет;
+`shared` и `domain` тоже не импортируют инфраструктуру. `npm run arch` (dependency-cruiser) → 0 нарушений;
+`strict: true` и `npx tsc --noEmit` → exit 0.
 
 | ID | Тикет | Приоритет | Покрывает | Зависит от | Статус |
 |---|---|---|---|---|---|
@@ -25,13 +26,12 @@ composition root, тестируемость. Исходные факты на 2
 | [T-20](T-20-file-ports.md) | Файловый I/O из `application` в адаптеры | P0 | `reset`, `resume-download`, `search/stages` | — | ✅ |
 | [T-21](T-21-shared-decoupling.md) | `shared` без инфраструктуры, домен без `process.env` | P1 | транзитивная утечка в домен | T-17 (✅), T-18 (✅) | ✅ |
 | [T-22](T-22-composition-scheduler.md) | Единый composition root + порт `Scheduler` | P1 | `node-cron` в use case, 4 импорта в CLI | T-17, T-18, T-20 | ✅ |
-| [T-23](T-23-boundary-guard.md) | `dependency-cruiser` + `strict: true` | P1 | защита правил от дрейфа | T-17…T-22 | ☐ |
+| [T-23](T-23-boundary-guard.md) | `dependency-cruiser` + `strict: true` | P1 | защита правил от дрейфа | T-17…T-22 | ✅ |
 | [T-24](T-24-domain-purity.md) | Домен без побочек, политики в домен | P2 | SRP, `markApplied` из домена | T-17, T-18 | ☐ |
 | [T-25](T-25-hh-adapters-split.md) | Разбить `hh/client.ts` (619) и `resume.ts` (399) | P2 | SRP адаптеров hh.ru | T-23 | ☐ |
 | [T-26](T-26-fake-port-tests.md) | Тесты на фейковых портах (`node:test` + `tsx`) | P2 | тестируемость | T-17, T-18, T-19 | ☐ |
 
-**Сделано:** T-17, T-18, T-19, T-20, T-21, T-22 (issues #27…#32). **Открыто:** T-23…T-26
-(issues #29, #31–#36).
+**Сделано:** T-17…T-23 (issues #27…#33). **Открыто:** T-24…T-26.
 
 Порядок: **T-17 → T-18 → T-19 → T-20** (P0, восстановить Dependency Rule), затем **T-21 → T-22 → T-23**
 (разорвать транзитивные связи и включить проверку), затем **T-24 → T-26 → T-25** (SRP, тесты, распил адаптеров).

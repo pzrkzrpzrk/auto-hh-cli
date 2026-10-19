@@ -1,9 +1,9 @@
 # Архитектура auto-hh-cli
 
-- **Статус:** этапы 1–9 выполнены — структура приведена к целевой (раздел 4), домен не зависит от инфраструктуры, все сценарии в `application/`; поиск (этап 6) и дайджест (этап 7) переведены на ООП (порты, конвейер, репортёр), этап 8 закрыл `apply`/`cover` портами (T-17/T-18) и собрал их как ООП-подсистемы (фасады, конвейеры, стратегии), этап 9 — файловый I/O (T-20), `ConfigProvider` (T-19), чистые `shared`/домен (T-21) и единый composition root с портом `Scheduler` (T-22); документация обновлена.
+- **Статус:** этапы 1–9 выполнены — структура приведена к целевой (раздел 4), домен не зависит от инфраструктуры, все сценарии в `application/`; поиск (этап 6) и дайджест (этап 7) переведены на ООП (порты, конвейер, репортёр), этап 8 закрыл `apply`/`cover` портами (T-17/T-18) и собрал их как ООП-подсистемы (фасады, конвейеры, стратегии), этап 9 — файловый I/O (T-20), `ConfigProvider` (T-19), чистые `shared`/домен (T-21), единый composition root с портом `Scheduler` (T-22) и защита границ (T-23: `dependency-cruiser` + `strict: true`); документация обновлена.
 - **Дата:** 2026-10-19.
-- **Ветка:** `refactoring/digest-oop`.
-- **Состояние кода:** `src/` — 149 файлов, ≈8,34 тыс. строк; `npx tsc --noEmit` → exit 0.
+- **Ветка:** `refactor/t23-boundary-guard`.
+- **Состояние кода:** `src/` — 150 файлов, ≈8,47 тыс. строк; `npm run arch` → 0 нарушений, `npx tsc --noEmit` → exit 0 при `strict: true`.
 
 ---
 
@@ -39,7 +39,6 @@ flowchart TD
     P["presentation/cli"] --> A["application"]
     P --> C["composition"]
     A --> D["domain"]
-    A --> I["infrastructure"]
     I -. "реализует порты" .-> D
     C --> A
     C --> I
@@ -59,23 +58,28 @@ presentation ──▶ application ──▶ domain
                    shared (без зависимостей от слоёв)
 ```
 
+Правила проверяются автоматически: `.dependency-cruiser.js` + `npm run arch` (входит в `npm run build`).
+Запрещены импорты `domain → infrastructure/application/presentation`, `shared → любой слой`,
+`application → infrastructure/presentation`, `infrastructure → application/presentation`,
+`presentation → infrastructure`; `src/composition.ts` — единственное исключение.
+
 Ключевое правило: **домен не импортирует инфраструктуру**. Всё, что домену нужно снаружи (кэш, история, ИИ), описано портами в `domain/ports.ts` и передаётся параметром.
 
 ---
 
 ## 3. Текущее состояние
 
-Структура совпадает с целевой (раздел 4): `src/` — 149 файлов, ≈8,34 тыс. строк, `npx tsc --noEmit` → exit 0.
+Структура совпадает с целевой (раздел 4): `src/` — 150 файлов, ≈8,47 тыс. строк, `npm run arch` → 0 нарушений, `npx tsc --noEmit` → exit 0 при `strict: true`.
 
 ```
-src/                              # 149 файлов
-├── application/                  # 59 файлов, ≈2,47 тыс. строк — сценарии (use cases)
-├── domain/                       # 29 файлов, ≈1,84 тыс. строк — модели, правила, порты
-├── infrastructure/               # 31 файл, ≈2,39 тыс. строк — адаптеры hh.ru, ИИ, Mongo,
+src/                              # 150 файлов
+├── application/                  # 59 файлов, ≈2,49 тыс. строк — сценарии (use cases)
+├── domain/                       # 29 файлов, ≈1,89 тыс. строк — модели, правила, порты
+├── infrastructure/               # 31 файл, ≈2,44 тыс. строк — адаптеры hh.ru, ИИ, Mongo,
 │                                 #   Playwright, файлы, логирование, планировщик, конфигурация
 ├── presentation/                 # 20 файлов, ≈1,17 тыс. строк — CLI: команды, меню, форматтеры
-├── shared/                       #  9 файлов, ≈0,28 тыс. строк — логгер-фасад, батчи, время,
-│                                 #   ретраи, текст
+├── shared/                       # 10 файлов, ≈0,30 тыс. строк — логгер-фасад, батчи, время,
+│                                 #   ретраи, текст, ошибки
 └── composition.ts                # точка сборки зависимостей
 ```
 
@@ -588,9 +592,25 @@ E2E с живыми hh.ru, Mongo и ИИ не запускался — пров�
 `Select-String -Path src\presentation -Pattern 'infrastructure/'` → пусто; `npx tsc --noEmit` → 0;
 смоук `runSchedule` (scheduled/invalid/no-cron, шаги и события), `gradeDeps`, `showConfig` → exit 0.
 
-Ограничения: прямых импортов инфраструктуры в `application`/`presentation` нет. Остались
-T-23 (`dependency-cruiser` + `strict`), T-24 (домен без побочек), T-25 (разбить адаптеры hh.ru),
-T-26 (тесты на фейковых портах).
+### Этап 9.4 — защита границ (выполнено 2026-10-19, T-23)
+
+1. `dependency-cruiser` (dev) и `.dependency-cruiser.js`: правила из раздела 2, `tsPreCompilationDeps: true`
+   (type-only импорт тоже считается зависимостью). `npm run arch` → `depcruise src`; `npm run build` =
+   `npm run arch && tsc`, поэтому сборка падает на нарушении слоёв.
+2. T-22 убрал реальные импорты инфраструктуры из `application`/`presentation`; T-23 фиксирует это правило,
+   чтобы новые обходы composition root не появлялись. Проверено временным импортом
+   `application/collect.ts → infrastructure/mongo/db.ts` — `npm run arch` падает, строка удалена.
+3. `tsconfig.json`: `"strict": true` (включая `strictNullChecks`); 121 ошибка закрыта без `@ts-ignore`.
+   Для `catch (err: unknown)` добавлен `shared/errors.ts` (`errorMessage`, `errorName`).
+4. Порты без `any`: `CacheStore.savePage(state: SearchCacheSnapshot)`, `saveFullVacancy(vacancy: Vacancy)`,
+   `HistoryStore.load(): HistoryState`, `JudgementCache.save(Record<string, Judgement>)`;
+   `SearchCacheSnapshot.pages/fullById` — `VacancyListItem[]`/`Vacancy`.
+
+Проверка: `npm run arch` → 0; `npx tsc --noEmit` → 0; `npm run build` → 0.
+
+Ограничения: `Vacancy`/`DigestEntry` уточнены под реальные `null` (hh.ru, вердикт без судьи) — это
+типы, не поведение; форматы `.md`, меню и коллекции Mongo не менялись. Открыты T-24 (домен без побочек),
+T-25 (разбить адаптеры hh.ru), T-26 (тесты на фейковых портах).
 
 ---
 
@@ -627,7 +647,7 @@ bin/auto-hh
 ```
 
 - `npm start` → `node bin/auto-hh`; `npm run ui` → `node bin/auto-hh ui`.
-- `npm run build` (`tsc`) собирает `src/` в `dist/` — при переносе файлов `rootDir: src` сохраняется, структура `dist/` повторяет новую.
+- `npm run build` (`npm run arch && tsc`) сначала проверяет границы слоёв, затем собирает `src/` в `dist/` — при переносе файлов `rootDir: src` сохраняется, структура `dist/` повторяет новую.
 - Пути `data/` резолвятся централизованно в `infrastructure/config/paths.ts` (бывший `src/paths.ts`), поэтому глубина каталога файла больше не влияет на путь.
 
 ---

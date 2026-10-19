@@ -6,6 +6,7 @@ import type { HhResumeSummary } from "../domain/models.js";
 import type { ResumeFiles, ResumeSource, SourceProvider } from "../domain/ports.js";
 import type { ResumeRegistry } from "../domain/digest/ports.js";
 import { renderResumeMarkdown, slugifyResumeName } from "../domain/resume-markdown.js";
+import { errorMessage, errorName } from "../shared/errors.js";
 import log from "../shared/logger.js";
 
 export interface ResumeDownloadOptions {
@@ -131,8 +132,8 @@ async function downloadWith(
           }
         } catch (err) {
           // PDF — необязательная копия: .md уже сохранён, поэтому не валим результат.
-          if (err?.name === "LoginRequiredError") throw err;
-          log.warn(`PDF для «${item.title}» не скачан: ${err?.message || err}`);
+          if (errorName(err) === "LoginRequiredError") throw err;
+          log.warn(`PDF для «${item.title}» не скачан: ${errorMessage(err)}`);
         }
       }
 
@@ -143,13 +144,13 @@ async function downloadWith(
         } catch (err) {
           // MongoDB может быть не поднят — скачанное резюме от этого не страдает.
           mongoUnavailable = true;
-          log.warn(`Резюме ${name} скачано, но не зарегистрировано в MongoDB: ${err?.message || err}`);
+          log.warn(`Резюме ${name} скачано, но не зарегистрировано в MongoDB: ${errorMessage(err)}`);
         }
       }
     } catch (err) {
       // Истёкшую сессию не маскируем под ошибку одного резюме — пусть меню покажет причину.
-      if (err?.name === "LoginRequiredError") throw err;
-      result.error = err?.message || String(err);
+      if (errorName(err) === "LoginRequiredError") throw err;
+      result.error = errorMessage(err);
       report?.({ type: 'error', title: item.title, message: result.error });
     }
 

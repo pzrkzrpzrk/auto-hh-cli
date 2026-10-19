@@ -1,6 +1,6 @@
 // Сценарий управления резюме: список файлов + регистрация + чтение для показа.
 // Печать и коды возврата — в команде: здесь только данные и обращения к портам.
-import type { ResumeFiles } from "../domain/ports.js";
+import type { ResumeFile, ResumeFiles } from "../domain/ports.js";
 import type { ResumeRegistry } from "../domain/digest/ports.js";
 import type { Resume } from "../domain/models.js";
 import log from "../shared/logger.js";
@@ -36,12 +36,12 @@ export type ResumeShowOutcome =
   | { kind: 'ok'; resume: Resume };
 
 /** Файлы резюме для меню: список без обращения к Mongo. */
-export function listResumeFiles(deps: ResumeDeps) {
+export function listResumeFiles(deps: ResumeDeps): ResumeFile[] {
   return deps.files.list();
 }
 
 /** Резюме по имени (или дефолт из env) для меню. */
-export function readResumeFile(name: string | undefined, deps: ResumeDeps) {
+export function readResumeFile(name: string | undefined, deps: ResumeDeps): Resume | null {
   return deps.files.load(name);
 }
 

@@ -200,7 +200,8 @@ npm start           # или: npm run ui, npx auto-hh, npx auto-hh ui (алиа�
 | --- | --- |
 | `npm start` | Открыть интерактивное меню (то же, что `npx auto-hh`) |
 | `npm run ui` | То же меню явной командой: `npx auto-hh ui` (алиасы: `menu`, `interactive`) |
-| `npm run build` | Компиляция TS в JS (не обязательна) |
+| `npm run build` | Проверка границ слоёв + компиляция TS в JS (не обязательна для запуска) |
+| `npm run arch` | Проверить правила зависимостей слоёв (`dependency-cruiser`) |
 | `npm run migrate:up` | Применить миграции MongoDB |
 | `npm run migrate:down` | Откатить последнюю миграцию |
 | `npm run migrate:create` | Создать новую миграцию |

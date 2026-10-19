@@ -67,18 +67,37 @@ export interface ConfigProvider {
  * узнать, что уже просмотрено (шаг сбора карточек), и пометить просмотренным.
  */
 export interface HistoryStore {
-  load(): Promise<{ applied: Record<string, any>; seen: Record<string, string> }>;
+  load(): Promise<HistoryState>;
   markSeen(vacancyId: string | number): Promise<void>;
   /** Отметка «взято в дайджест/отклик»: digest пишет digestOnly, apply — via=playwright. */
-  markApplied(vacancyId: string | number, meta: Record<string, any>): Promise<void>;
+  markApplied(vacancyId: string | number, meta: HistoryMeta): Promise<void>;
+}
+
+/** Метаданные отклика: их пишут digest (digestOnly) и apply (via), читает `history`. */
+export interface HistoryMeta {
+  title?: string;
+  employer?: string | null;
+  url?: string | null;
+  score?: number | null;
+  digestOnly?: boolean;
+  via?: string;
+  /** ISO-дата отметки; её добавляет хранилище при чтении. */
+  at?: string;
+  [key: string]: unknown;
+}
+
+/** Состояние истории: отклики по id и время последнего просмотра по id. */
+export interface HistoryState {
+  applied: Record<string, HistoryMeta>;
+  seen: Record<string, string>;
 }
 
 /** Кэш поиска: чтение снимка (cachePages/cacheFull) и запись страниц и карточек. */
 export interface CacheStore {
   /** Снимок кэша за дату (по умолчанию — сегодня) и, при необходимости, по резюме. */
   load(date?: Date, resumeId?: string): Promise<SearchCacheSnapshot>;
-  savePage(state: any, pageNum: number | string, date?: Date): Promise<void>;
-  saveFullVacancy(vacancy: any, date?: Date): Promise<void>;
+  savePage(state: SearchCacheSnapshot, pageNum: number | string, date?: Date): Promise<void>;
+  saveFullVacancy(vacancy: Vacancy, date?: Date): Promise<void>;
   /** Полные карточки по id (cacheFull): карта vacancyId → вакансия. Нужна шагу cover. */
   getFullByVacancyIds(vacancyIds: (string | number)[]): Promise<Record<string, Vacancy>>;
 }
@@ -126,6 +145,14 @@ export interface ResumeFiles {
   exists(file: string): boolean;
   /** Записать .md; saved=false — файл уже был и overwrite выключен. */
   save(name: string, markdown: string, opts?: { overwrite?: boolean }): { file: string; saved: boolean };
+}
+
+/**
+ * Чтение резюме с диска: сценарии (grade, cover, digest) просят файл по имени,
+ * а путь по умолчанию (RESUME_PATH / RESUMES_DIR) выбирает адаптер.
+ */
+export interface ResumeProvider {
+  load(name?: string): Resume | null;
 }
 
 /** Запись выдачи поиска в .md: путь, формат и дедупликация — в адаптере. */
