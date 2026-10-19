@@ -27,8 +27,10 @@ export interface CollectDeps {
 
 // --- Источники hh.ru ------------------------------------------------------
 
-/** Порт источника резюме соискателя: список, карточка, PDF-копия. */
+/** Порт источника резюме соискателя: открыть сессию, список, карточка, PDF-копия. */
 export interface ResumeSource {
+  /** Открыть браузер заранее (идемпотентно: повторный вызов ничего не делает). */
+  open(): Promise<void>;
   listMyResumes(): Promise<HhResumeSummary[]>;
   getMyResume(hash: string): Promise<HhResumeData | null>;
   downloadResumePdf(hash: string, destPath: string): Promise<string | null>;
