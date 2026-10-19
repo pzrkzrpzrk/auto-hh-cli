@@ -5,6 +5,7 @@ import { getClient, buildResumeBlock, getModel, getMaxTokens, getConcurrency } f
 import { stripHtml, parseJSON } from "../../text-utils.js";
 import { adaptResumeForVacancy } from "../adapt-resume.js";
 import { buildBatchSystemText, coverSignature } from "./system-text.js";
+import { chunk, runBatches } from "../../concurrency.js";
 
 const apiConfig = loadConfig().api || {};
 
@@ -118,27 +119,21 @@ async function buildCoverLettersBatch(resume, items, batchSize = 20, onBatch = n
   const systemText = buildBatchSystemText(profile) +
     (adapt ? '\n\nДля каждой вакансии передано адаптированное под неё резюме — учитывай его при составлении письма, указывая релевантный опыт.' : '');
 
-  const batchTexts = [];
-  for (let i = 0; i < items.length; i += batchSize) {
-    const batch = items.slice(i, i + batchSize);
-    batchTexts.push({
-      idx: batchTexts.length + 1,
-      batch,
-      text: batch.map((it, idx) => {
-        let block = '';
-        if (adapt) {
-          const adapted = adaptResumeForVacancy(resume, it.vacancy);
-          if (adapted) {
-            block += `=== РЕЗЮМЕ (релевантное для вакансии #${idx + 1}) ===\n${adapted}\n\n`;
-          }
+  const batchTexts = chunk<any>(items, batchSize).map((batch, i) => ({
+    idx: i + 1,
+    batch,
+    text: batch.map((it, idx) => {
+      let block = '';
+      if (adapt) {
+        const adapted = adaptResumeForVacancy(resume, it.vacancy);
+        if (adapted) {
+          block += `=== РЕЗЮМЕ (релевантное для вакансии #${idx + 1}) ===\n${adapted}\n\n`;
         }
-        block += `=== ВАКАНСИЯ #${idx + 1} ===\n${formatVacancyShort(it.vacancy)}`;
-        return block;
-      }).join('\n\n'),
-    });
-  }
-
-  let nextBatchIdx = 0;
+      }
+      block += `=== ВАКАНСИЯ #${idx + 1} ===\n${formatVacancyShort(it.vacancy)}`;
+      return block;
+    }).join('\n\n'),
+  }));
   const CONCURRENCY = getConcurrency();
 
   async function runBatch(ii) {
@@ -182,15 +177,7 @@ async function buildCoverLettersBatch(resume, items, batchSize = 20, onBatch = n
     }
   }
 
-  async function worker() {
-    while (nextBatchIdx < batchTexts.length) {
-      const ii = nextBatchIdx;
-      nextBatchIdx++;
-      await runBatch(ii);
-    }
-  }
-
-  await Promise.all(Array.from({ length: Math.min(CONCURRENCY, batchTexts.length) }, () => worker()));
+  await runBatches(batchTexts.map(b => b.batch), CONCURRENCY, (_, ii) => runBatch(ii));
 
   return result;
 }

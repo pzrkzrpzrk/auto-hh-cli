@@ -15,6 +15,8 @@ import { computeActualization, mergeActualized } from "../domain/actualize.js";
 import { registerResume } from "../store/resume-store.js";
 import { flattenCollected, fmtSalary } from "../domain/collect.js";
 import { DIGEST_DIR } from "../paths.js";
+import { chunk, runBatches } from "../concurrency.js";
+import { intFromEnv } from "../env.js";
 import log from "../logger.js";
 
 // Дата кэша поиска: тем же ключом пишутся полные вакансии и вердикты ИИ.
@@ -68,14 +70,9 @@ async function judgeWithClaude(resume, candidates, cache, minScore, adaptResume 
     log.info(`Judgements from cache: ${candidates.length - pending.length}/${candidates.length}`);
   }
 
-  const batchSize = parseInt(process.env.JUDGE_BATCH_SIZE || '10', 10);
+  const batchSize = intFromEnv('JUDGE_BATCH_SIZE', 10);
   const date = sessionDate(cache);
-  const batches = [];
-  for (let i = 0; i < pending.length; i += batchSize) {
-    batches.push(pending.slice(i, i + batchSize).map(c => c.full));
-  }
-
-  let nextBatchIdx = 0;
+  const batches = chunk<any>(pending, batchSize).map(group => group.map(c => c.full));
   const CONCURRENCY = getConcurrency();
 
   async function runBatch(idx, batch) {
@@ -102,16 +99,10 @@ async function judgeWithClaude(resume, candidates, cache, minScore, adaptResume 
     }
   }
 
-  async function worker() {
-    while (nextBatchIdx < batches.length) {
-      const batch = batches[nextBatchIdx];
-      const num = nextBatchIdx + 1;
-      nextBatchIdx++;
-      await runBatch(num, batch);
-    }
-  }
-
-  await Promise.all(Array.from({ length: Math.min(CONCURRENCY, batches.length) }, () => worker()));
+  // Ошибка пачки пробрасывается наверх (как и раньше), а не глушится пулом.
+  await runBatches(batches, CONCURRENCY, (batch, index) => runBatch(index + 1, batch), {
+    onError: (err) => { throw err; },
+  });
   return { judgements, judgedCount };
 }
 
