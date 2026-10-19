@@ -15,6 +15,7 @@ import { computeActualization, mergeActualized } from "../domain/actualize.js";
 import { registerResume } from "../store/resume-store.js";
 import type { DigestEntry } from "../types.js";
 import { flattenCollected, fmtSalary, ensureFullVacancies } from "../domain/collect.js";
+import type { CollectDeps } from "../domain/ports.js";
 import { DIGEST_DIR } from "../paths.js";
 import { chunk, runBatches } from "../concurrency.js";
 import { intFromEnv } from "../env.js";
@@ -25,12 +26,12 @@ function sessionDate(cache) {
   return cache.date ? new Date(`${cache.date}T00:00:00.000Z`) : undefined;
 }
 
-async function filterLocally(client, items, cache, cfg, markSeen = true) {
+async function filterLocally(client, items, cache, cfg, deps: CollectDeps, markSeen = true) {
   const candidates = [];
   // Догрузка карточек — общая с шагами search и cover. Просмотренные не качаем: ниже они всё равно пропускаются.
-  const { failedIds } = await ensureFullVacancies(client, items, cache, { skipSeen: true });
+  const { failedIds } = await ensureFullVacancies(client, items, cache, deps, { skipSeen: true });
   // Карточки, которые не удалось скачать, помечаем просмотренными, чтобы не перебирать их при каждом запуске.
-  if (markSeen) for (const id of failedIds) await history.markSeen(id);
+  if (markSeen) for (const id of failedIds) await deps.history.markSeen(id);
 
   for (const item of items) {
     const full = cache.fullById[String(item.id)];
@@ -40,7 +41,7 @@ async function filterLocally(client, items, cache, cfg, markSeen = true) {
     // anyRegions — регионы «любые вакансии» из config.search.area (остальные — только удалёнка).
     const verdict = vacancyMatchesFilter(full, cfg.filter, { anyRegions: cfg.search?.area });
     // В dry-run историю не трогаем: прогон не должен оставлять следов.
-    if (markSeen) await history.markSeen(item.id);
+    if (markSeen) await deps.history.markSeen(item.id);
     if (!verdict.ok) {
       log.info(`Skip ${item.id} (${full.name}): ${verdict.reason}`);
       continue;
@@ -213,7 +214,7 @@ async function build(opts: Record<string, any> = {}) {
   const client = new HHClient();
   try {
     log.info(`Building digest from search cache ${cache.date}: ${items.length} vacancies`);
-    const candidates = await filterLocally(client, items, cache, cfg, !dryRun);
+    const candidates = await filterLocally(client, items, cache, cfg, { cacheStore: collectCache, history }, !dryRun);
     log.info(`Local filter passed: ${candidates.length}/${items.length}`);
 
     const adaptResume = cfg.adaptResume !== false;

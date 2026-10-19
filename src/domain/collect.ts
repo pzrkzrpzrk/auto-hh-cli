@@ -1,7 +1,7 @@
 // Шаг «поиск»: сбор страниц выдачи hh.ru в кэш (cachePages) и полных карточек (cacheFull)
 // + хелперы для остальных шагов.
-import * as collectCache from "../store/cache-store.js";
-import history from "../store/history-store.js";
+// Хранилища приходят параметром (порт CollectDeps) — домен не знает про MongoDB.
+import type { CollectDeps } from "./ports.js";
 import log from "../logger.js";
 
 // Проходы поиска: (регион(ы) + принудительный график). Ключи страниц в кэше разведены
@@ -23,7 +23,7 @@ function searchBuckets(search) {
 
 // Забирает страницы выдачи (start_page..start_page+max_pages) и складывает их в кэш.
 // Страница 0 каждого прохода всегда запрашивается заново — на ней новые вакансии.
-async function collectVacancies(client, search, cache) {
+async function collectVacancies(client, search, cache, deps: CollectDeps) {
   const results = [];
   const startPage = search.start_page || 0;
   const maxPages = search.max_pages || 1;
@@ -58,7 +58,7 @@ async function collectVacancies(client, search, cache) {
       const data = await client.searchVacancies(params);
       log.info(`Page ${page}${bucket.label}: ${data.items.length} vacancies (total ${data.found})`);
       cache.pages[key] = data.items;
-      await collectCache.savePage(cache, key);
+      await deps.cacheStore.savePage(cache, key);
       results.push(...data.items);
       if (page + 1 >= (data.pages || 0)) break;
     }
@@ -70,7 +70,7 @@ async function collectVacancies(client, search, cache) {
 // Общая догрузка для всех шагов: берём из кэша, недостающие — с hh.ru, сохраняем сразу.
 // Каждая карточка сохраняется после загрузки — прерывание не теряет прогресс,
 // повторный запуск продолжит с того же места.
-async function ensureFullVacancies(client, items, cache, opts: { skipSeen?: boolean } = {}) {
+async function ensureFullVacancies(client, items, cache, deps: CollectDeps, opts: { skipSeen?: boolean } = {}) {
   const { skipSeen = false } = opts;
   const stats = { candidates: 0, cached: 0, skippedSeen: 0, saved: 0, failed: 0, failedIds: [] as string[] };
   // На входе — элементы выдачи (id + name для прогресса) либо просто id (шаг cover).
@@ -82,7 +82,7 @@ async function ensureFullVacancies(client, items, cache, opts: { skipSeen?: bool
   // cache.fullById — карточки текущей сессии поиска (ключ даты тот же, что читает digest).
   // Просмотренные не качаем: digest всё равно их пропускает; cover просит skipSeen = false,
   // чтобы не срезать вакансии, для которых письма ещё не сгенерированы.
-  const seen = skipSeen ? (await history.load().catch(() => ({ seen: {} }))).seen : {};
+  const seen = skipSeen ? (await deps.history.load().catch(() => ({ applied: {}, seen: {} }))).seen : {};
   const todo: string[] = [];
   for (const id of ids) {
     if (cache.fullById[id]) { stats.cached++; continue; }
@@ -108,7 +108,7 @@ async function ensureFullVacancies(client, items, cache, opts: { skipSeen?: bool
         stats.failedIds.push(id);
       } else {
         cache.fullById[id] = full;
-        await collectCache.saveFullVacancy(full, date);
+        await deps.cacheStore.saveFullVacancy(full, date);
         stats.saved++;
       }
     } catch (err) {
@@ -128,8 +128,8 @@ async function ensureFullVacancies(client, items, cache, opts: { skipSeen?: bool
 }
 
 // Шаг поиска: карточки просмотренных вакансий не нужны — их всё равно пропускает digest.
-async function collectFullVacancies(client, items, cache) {
-  return ensureFullVacancies(client, items, cache, { skipSeen: true });
+async function collectFullVacancies(client, items, cache, deps: CollectDeps) {
+  return ensureFullVacancies(client, items, cache, deps, { skipSeen: true });
 }
 
 // Плоский список собранных вакансий без дублей — вход для шага digest.
