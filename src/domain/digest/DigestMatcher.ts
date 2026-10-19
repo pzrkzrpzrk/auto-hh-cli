@@ -25,7 +25,7 @@ export class DigestMatcher {
       if (accepted.length >= this.policy.maxRun) break;
 
       let score: number | null = null;
-      let reason = '';
+      let reason: string | null = '';
       let comment: string | null = null;
 
       if (this.policy.useJudge) {

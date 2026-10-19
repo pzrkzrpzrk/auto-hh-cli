@@ -41,7 +41,8 @@ function ageInDays(publishedAt: string | null | undefined, today: string): numbe
 function actualizeEntry(entry: DigestEntry, opts: ActualizeOptions): { entry: DigestEntry; archived: boolean; changed: boolean } {
   const present = opts.todayIds.has(String(entry.id));
   const age = ageInDays(entry.publishedAt, opts.today);
-  const outOfWindow = Boolean(opts.searchPeriod) && age != null && age > opts.searchPeriod;
+  const searchPeriod = opts.searchPeriod;
+  const outOfWindow = searchPeriod != null && searchPeriod !== 0 && age != null && age > searchPeriod;
   const archived = present ? false : (outOfWindow ? Boolean(entry.archived) : true);
   const lastSeenAt = present ? opts.today : (entry.lastSeenAt ?? null);
   const changed = archived !== Boolean(entry.archived)

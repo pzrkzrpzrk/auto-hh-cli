@@ -19,7 +19,6 @@ import type { VacancySource } from "../../domain/search/VacancySource.js";
 import type SearchCache from "../search/SearchCache.js";
 import type { DigestDeps } from "./DigestDeps.js";
 import type { DigestReporter } from "./DigestEvent.js";
-
 /** Чем закончилась предварительная фаза: ok — конвейер идёт дальше. */
 export type DigestOutcome = 'ok' | 'cache-empty' | 'search-empty';
 
@@ -46,4 +45,19 @@ export interface DigestContext {
   matched: DigestEntry[];
   judgedCount: number;
   outcome: DigestOutcome;
+}
+
+/**
+ * Кэш, который заполняет LoadCacheStage. Стадии 3+ вызывают только после неё,
+ * поэтому здесь явная проверка вместо `!`: нарушение порядка стадий видно сразу.
+ */
+export function requireCache(ctx: DigestContext): SearchCache {
+  if (!ctx.cache) throw new Error('Digest: cache is not loaded before this stage');
+  return ctx.cache;
+}
+
+/** Снимок кэша (дата и вердикты) — заполняется той же стадией, что и cache. */
+export function requireSnapshot(ctx: DigestContext): DigestCacheSnapshot {
+  if (!ctx.snapshot) throw new Error('Digest: cache snapshot is not loaded before this stage');
+  return ctx.snapshot;
 }

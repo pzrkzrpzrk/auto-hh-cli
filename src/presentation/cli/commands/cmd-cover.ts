@@ -4,9 +4,10 @@
 import { coverDeps } from "../../../composition.js";
 import { runCover } from "../../../application/cover.js";
 import { fmtSalary } from "../../../application/collect.js";
+import type { Vacancy } from "../../../domain/models.js";
 import log from "../../../shared/logger.js";
 
-function printVacancy(full, vacancyId: string) {
+function printVacancy(full: Vacancy, vacancyId: string) {
   console.log(`\n=== ${full.name} @ ${full.employer?.name || '?'} ===`);
   console.log(`URL: ${full.alternate_url || `https://hh.ru/vacancy/${vacancyId}`}`);
   console.log(`Регион: ${full.area?.name || '—'}`);

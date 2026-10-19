@@ -1,7 +1,9 @@
 import type { Logger } from "../logging.js";
+import type { Resume, Vacancy } from "../models.js";
 import { buildResumeBlock } from "../resume-block.js";
 import type { AiProvider } from "../ports.js";
 import { stripHtml, parseJSON } from "../../shared/text-utils.js";
+import { errorMessage } from "../../shared/errors.js";
 import { adaptResumeForVacancy } from "../adapt-resume.js";
 import { buildBatchSystemText, coverSignature } from "./system-text.js";
 import { chunk, runBatches } from "../../shared/batches.js";
@@ -20,17 +22,23 @@ export interface CoverLetterOptions {
 const DEFAULT_PROFILE = 'опытный разработчик';
 const DEFAULT_CONCURRENCY = 10;
 
-function buildFromTemplate(template, vacancy, signature?: string) {
-  const ctx = {
+function buildFromTemplate(template: string | undefined, vacancy: Vacancy, signature?: string): string {
+  const ctx: Record<string, string> = {
     title: vacancy.name || '',
     employer: vacancy.employer?.name || '',
     area: vacancy.area?.name || '',
     signature: coverSignature(signature),
   };
-  return template.replace(/\{(\w+)\}/g, (_, k) => ctx[k] ?? '');
+  return String(template ?? '').replace(/\{(\w+)\}/g, (_, k: string) => ctx[k] ?? '');
 }
 
-async function buildWithClaude(vacancy, resume = null, adaptResume = false, ai: AiProvider | null = null, options: CoverLetterOptions = {}) {
+async function buildWithClaude(
+  vacancy: Vacancy,
+  resume: Resume | null = null,
+  adaptResume = false,
+  ai: AiProvider | null = null,
+  options: CoverLetterOptions = {},
+): Promise<string | null> {
   if (!ai) return null;
 
   const profile = options.profile || DEFAULT_PROFILE;
@@ -86,19 +94,26 @@ ${coverSignature(options.signature)}
     }
     return text || null;
   } catch (err) {
-    options.logger?.warn(`Claude generation failed: ${err.message}`);
+    options.logger?.warn(`Claude generation failed: ${errorMessage(err)}`);
     return null;
   }
 }
 
 // adaptResume приходит параметром (из config.json, см. cmd-cover): домен не читает файлы.
-async function buildCoverLetter(ai: AiProvider | null, template, vacancy, resume = null, adaptResume = true, options: CoverLetterOptions = {}) {
+async function buildCoverLetter(
+  ai: AiProvider | null,
+  template: string | undefined,
+  vacancy: Vacancy,
+  resume: Resume | null = null,
+  adaptResume = true,
+  options: CoverLetterOptions = {},
+): Promise<string> {
   const claudeText = await buildWithClaude(vacancy, resume, adaptResume, ai, options);
   if (claudeText) return claudeText;
   return buildFromTemplate(template, vacancy, options.signature);
 }
 
-function formatVacancyShort(vacancy) {
+function formatVacancyShort(vacancy: Vacancy): string {
   const description = stripHtml(vacancy.description).slice(0, 1000);
   const skills = (vacancy.key_skills || []).map(s => s.name).join(', ');
   return `vacancyId: ${vacancy.id}
@@ -116,15 +131,16 @@ ${description}`;
 // adaptResume приходит параметром (из config.json, см. cmd-cover): домен не читает файлы.
 async function buildCoverLettersBatch(
   ai: AiProvider | null,
-  resume,
-  items,
+  resume: Resume | null,
+  items: Array<{ vacancy: Vacancy }>,
   batchSize = 20,
-  onBatch = null,
+  onBatch: ((partial: Map<string, string>) => void | Promise<void>) | null = null,
   adaptResume = true,
   options: CoverLetterOptions = {},
-) {
-  const result = new Map();
+): Promise<Map<string, string>> {
+  const result = new Map<string, string>();
   if (!ai || !items.length) return result;
+  const provider: AiProvider = ai;
 
   const profile = options.profile || DEFAULT_PROFILE;
   const logger = options.logger;
@@ -133,12 +149,12 @@ async function buildCoverLettersBatch(
   const systemText = buildBatchSystemText(profile, options.signature) +
     (adaptResume ? '\n\nДля каждой вакансии передано адаптированное под неё резюме — учитывай его при составлении письма, указывая релевантный опыт.' : '');
 
-  const batchTexts = chunk<any>(items, batchSize).map((batch, i) => ({
+  const batchTexts = chunk(items, batchSize).map((batch, i) => ({
     idx: i + 1,
     batch,
     text: batch.map((it, idx) => {
       let block = '';
-      if (adaptResume) {
+      if (adaptResume && resume) {
         const adapted = adaptResumeForVacancy(resume, it.vacancy);
         if (adapted) {
           block += `=== РЕЗЮМЕ (релевантное для вакансии #${idx + 1}) ===\n${adapted}\n\n`;
@@ -150,7 +166,7 @@ async function buildCoverLettersBatch(
   }));
   const CONCURRENCY = options.concurrency ?? DEFAULT_CONCURRENCY;
 
-  async function runBatch(ii) {
+  async function runBatch(ii: number) {
     const { idx, batch, text } = batchTexts[ii];
     const messages = [
       { role: 'system', content: systemText },
@@ -163,7 +179,7 @@ async function buildCoverLettersBatch(
       },
     ] as any;
     try {
-      const resp = await ai.chat({ messages, json: true, label: `письма батч ${batch.length}` });
+      const resp = await provider.chat({ messages, json: true, label: `письма батч ${batch.length}` });
 
       const content = resp.text;
       if (!content) {
@@ -178,10 +194,10 @@ async function buildCoverLettersBatch(
       }
       logger?.debug(`cover batch ${idx}: ${batch.length} letters, in=${resp.usage.prompt || 0} out=${resp.usage.completion || 0}`);
       if (onBatch) {
-        try { await onBatch(result); } catch (e) { logger?.warn(`cover onBatch callback failed: ${e.message}`); }
+        try { await onBatch(result); } catch (e) { logger?.warn(`cover onBatch callback failed: ${errorMessage(e)}`); }
       }
     } catch (err) {
-      logger?.warn(`cover batch ${idx} failed (${batch.length} items): ${err.message}`);
+      logger?.warn(`cover batch ${idx} failed (${batch.length} items): ${errorMessage(err)}`);
     }
   }
 

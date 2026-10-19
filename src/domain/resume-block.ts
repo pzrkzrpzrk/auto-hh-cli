@@ -7,7 +7,7 @@ import type { Resume } from "./models.js";
  * adaptedText — резюме, подогнанное под конкретную вакансию (тогда берётся оно).
  */
 export function buildResumeBlock(
-  resume: Resume,
+  resume: Resume | null,
   adaptedText: string | null = null,
 ): { type: string; text: string } | null {
   if (!resume) return null;

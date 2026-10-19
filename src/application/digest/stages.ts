@@ -9,6 +9,7 @@ import { SkipSeenPolicy } from "../search/FullCardPolicy.js";
 import SearchCache from "../search/SearchCache.js";
 import { VacancyCollector } from "../search/VacancyCollector.js";
 import type { DigestContext } from "./DigestContext.js";
+import { requireCache, requireSnapshot } from "./DigestContext.js";
 import { DigestStage, type StageOutcome } from "./DigestStage.js";
 import { JudgementService } from "./JudgementService.js";
 
@@ -66,9 +67,10 @@ export class CollectCardsStage extends DigestStage {
   readonly name = 'collect-cards';
 
   protected async execute(ctx: DigestContext): Promise<StageOutcome> {
-    log.info(`Building digest from search cache ${ctx.cache.date}: ${ctx.items.length} vacancies`);
+    const cache = requireCache(ctx);
+    log.info(`Building digest from search cache ${cache.date}: ${ctx.items.length} vacancies`);
 
-    const collector = new VacancyCollector(ctx.source, ctx.cache, ctx.deps.collect.history);
+    const collector = new VacancyCollector(ctx.source, cache, ctx.deps.collect.history);
     const { failedIds } = await collector.ensureFullCards(ctx.items, SkipSeenPolicy);
     // Карточки, которые не удалось скачать, помечаем просмотренными,
     // чтобы не перебирать их при каждом запуске.
@@ -84,7 +86,7 @@ export class LocalFilterStage extends DigestStage {
   readonly name = 'local-filter';
 
   protected async execute(ctx: DigestContext): Promise<StageOutcome> {
-    const { candidates, skipped } = ctx.filter.select(ctx.items, ctx.cache.raw);
+    const { candidates, skipped } = ctx.filter.select(ctx.items, requireCache(ctx).raw);
 
     // В dry-run историю не трогаем: прогон не должен оставлять следов.
     if (ctx.policy.tracksHistory) {
@@ -106,7 +108,7 @@ export class JudgeStage extends DigestStage {
   readonly name = 'judge';
 
   protected async execute(ctx: DigestContext): Promise<StageOutcome> {
-    if (!ctx.policy.useJudge) return 'continue';
+    if (!ctx.policy.useJudge || !ctx.resume) return 'continue';
 
     const { judgedCount } = await new JudgementService(ctx.deps.judgements).judge(
       ctx.deps.ai(ctx.opts.config),
@@ -114,7 +116,7 @@ export class JudgeStage extends DigestStage {
       ctx.candidates,
       ctx.judgements,
       ctx.policy,
-      { resumeId: ctx.resumeId, date: sessionDate(ctx.snapshot) },
+      { resumeId: ctx.resumeId, date: sessionDate(requireSnapshot(ctx)) },
     );
     ctx.judgedCount = judgedCount;
     return 'continue';

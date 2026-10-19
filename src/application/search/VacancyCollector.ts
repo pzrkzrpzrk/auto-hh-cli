@@ -8,6 +8,7 @@ import type { HistoryState, HistoryStore } from "../../domain/ports.js";
 import SearchCache from "./SearchCache.js";
 import { PageIterator } from "./PageIterator.js";
 import type { FullCardPolicy } from "./FullCardPolicy.js";
+import { errorMessage } from "../../shared/errors.js";
 import log from "../../shared/logger.js";
 
 /** Сводка по догрузке полных карточек. */
@@ -94,7 +95,7 @@ export class VacancyCollector {
           stats.saved++;
         }
       } catch (err) {
-        log.warn(`Failed to fetch vacancy ${id}: ${err.message}`);
+        log.warn(`Failed to fetch vacancy ${id}: ${errorMessage(err)}`);
         stats.failed++;
         stats.failedIds.push(id);
       }
