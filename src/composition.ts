@@ -12,7 +12,7 @@ import HHClient from "./infrastructure/hh/client.js";
 import HHVacancySource from "./infrastructure/hh/vacancy-source.js";
 import HHResumeSource from "./infrastructure/hh/resume-source.js";
 import HHSourceProvider from "./infrastructure/hh/source-provider.js";
-import type { AiProvider, CollectDeps, ResumeSource, SourceProvider } from "./domain/ports.js";
+import type { AiProvider, CollectDeps, ResumeSource, SearchDeps, SourceProvider } from "./domain/ports.js";
 import type { VacancySource } from "./domain/search/VacancySource.js";
 
 // Зависимости шагов сбора вакансий: search, digest, cover.
@@ -24,6 +24,9 @@ export const collectDeps: CollectDeps = { cacheStore, history };
  */
 export const vacancySource: SourceProvider<VacancySource> =
   new HHSourceProvider(client => new HHVacancySource(client));
+
+/** Зависимости сценария поиска: хранилища + источник вакансий. */
+export const searchDeps: SearchDeps = { ...collectDeps, source: vacancySource };
 
 /** Открытая сессия резюме: меню держит её между списком и скачиванием и закрывает само. */
 export interface ResumeSession extends ResumeSource {

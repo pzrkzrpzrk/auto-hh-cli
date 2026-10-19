@@ -1,6 +1,6 @@
 // Команда search: тонкая оболочка — печать фаз поиска (сценарий в application/search.ts).
 // Отбор + ИИ-судья — отдельный шаг `digest`, сопроводительные — отдельный шаг `cover`.
-import { collectDeps } from "../../../composition.js";
+import { searchDeps } from "../../../composition.js";
 import { runSearch, type SearchEvent } from "../../../application/search.js";
 import { fmtSalary } from "../../../application/collect.js";
 
@@ -35,6 +35,15 @@ function printEvent(e: SearchEvent) {
     case 'files-failed':
       console.error(`⚠️  Выдачу не удалось сохранить в файл: ${e.message}`);
       return;
+    case 'full-start':
+      console.log(`\nПолные карточки: скачиваю ${e.total} (в кэше уже ${e.cached}, просмотренных пропущено ${e.skippedSeen})`);
+      if (e.total > 100) {
+        console.log(`⚠️  Это примерно ${Math.round(e.total * 3 / 60)} мин. Ctrl+C безопасен: скачанное уже сохранено, повторный поиск продолжит.`);
+      }
+      return;
+    case 'full-progress':
+      console.log(`  [${e.done}/${e.total}] ${e.name}`);
+      return;
     case 'full-cards': {
       const { summary } = e;
       const parts = [`+${summary.saved}`];
@@ -66,5 +75,5 @@ function printEvent(e: SearchEvent) {
 }
 
 export default async function search(opts: Record<string, any> = {}) {
-  await runSearch(opts, collectDeps, printEvent);
+  await runSearch(opts, searchDeps, printEvent);
 }
