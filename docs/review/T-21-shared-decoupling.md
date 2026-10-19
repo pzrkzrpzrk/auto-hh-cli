@@ -1,0 +1,66 @@
+# T-21 — `shared` без инфраструктуры и домен без `process.env`
+
+- **Приоритет:** **P1** — транзитивная утечка инфраструктуры в домен
+- **Этап:** 8
+- **Зависимости:** T-17, T-18 (после них видно всех потребителей логгера)
+- **Объём:** 3 файла `shared` + 2 файла домена + точки передачи параметров
+- **Пути:** актуальные, состояние на 2026-10-19
+
+## Проблема
+
+По документации (`docs/architecture.md:34`) `shared` «не зависит ни от чего из слоёв». Фактически:
+
+| Файл | Строка | Импорт |
+|---|---|---|
+| `shared/logger.ts` | `:2-3` | `fs` + `infrastructure/config/paths` (`LOG_FILE`, `ensureDir`) |
+| `shared/concurrency.ts` | `:6` | `intFromEnv` из `infrastructure/config/env` |
+| `shared/retry.ts` | `:1,3` | **`openai`** + `positiveIntFromEnv` |
+
+Из-за этого домен **транзитивно** зависит от файловой системы и env:
+
+- `domain/grade-resume.ts:2`, `domain/judge/judge.ts:1`, `domain/cover-letter/cover-letter.ts:1,7`,
+  `domain/digest/DigestEntryFactory.ts:4`, `domain/digest/DigestMatcher.ts:4` — через `logger`
+  и `concurrency`;
+- `domain/cover-letter/cover-letter.ts:22,107` и `domain/cover-letter/system-text.ts:6` —
+  прямой `process.env` (`APPLICANT_PROFILE`, `COVER_SIGNATURE`);
+- `shared/retry.ts:5-7` вычисляет конфиг **на этапе импорта** — настройки «запекаются» при загрузке модуля.
+
+Утверждение «домен не импортирует инфраструктуру» верно только для прямых импортов.
+
+## Что сделать
+
+- [ ] `domain/ports.ts`: узкий порт `Logger { info; warn; error; debug }` (или `LogSink`).
+- [ ] `infrastructure/logging/logger.ts`: текущая реализация (`fs.appendFileSync` + `LOG_FILE`).
+      `shared/logger.ts` удалить; импорты в слоях перевести на порт (в `application` — через deps,
+      в `domain` — параметром или через событие).
+- [ ] `shared/concurrency.ts`, `shared/retry.ts`: убрать чтение env — числа приходят параметрами
+      (`concurrency`, `attempts`, `baseDelayMs`); значения по умолчанию остаются в адаптере.
+- [ ] `shared/retry.ts:25`: убрать `import OpenAI` — проверять `err?.name === 'APIConnectionError'`
+      или `err?.status`, как уже делается ниже.
+- [ ] Домен: `coverSignature()` и `APPLICANT_PROFILE` → поля `CoverOptions { signature, profile }`,
+      заполняет сценарий из `CoverConfig`.
+- [ ] Логи домена (`DigestMatcher`, `DigestEntryFactory`) — вернуть данные, логи оставить стадии
+      (см. T-24/идею «домен без побочек»).
+
+## Definition of Done
+
+- [ ] `Select-String -Path src\shared -Pattern '../infrastructure|from \"openai\"'` → пусто.
+- [ ] `Select-String -Path src\domain -Pattern 'process\.env|shared/logger|shared/concurrency'` → пусто.
+- [ ] `npx tsc --noEmit` → exit 0.
+- [ ] Логи в `data/app.log` пишутся как раньше (уровни, отметка времени Europe/Moscow).
+
+## Проверка
+
+```powershell
+npx tsc --noEmit
+Select-String -Path src\shared,src\domain -Pattern 'infrastructure|process\.env|from "openai"'
+Get-Content data\app.log -Tail 5
+```
+
+## Риски
+
+- Логгер — самое частое место правок: 26 файлов импортируют `shared/logger`. Чтобы не раздувать diff,
+  допустим промежуточный шаг: `shared/logging.ts` с типом + `infrastructure/logging` с реализацией,
+  а `shared/logger.ts` остаётся фасадом **до** T-22. Полный уход от глобального логгера — отдельный коммит.
+- Подпись письма (`COVER_SIGNATURE`) — часть формата `.md` и писем; при передаче параметром
+  значение по умолчанию должно остаться тем же плейсхолдером.

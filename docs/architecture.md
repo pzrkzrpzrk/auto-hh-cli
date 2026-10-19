@@ -1,6 +1,6 @@
 # Архитектура auto-hh-cli
 
-- **Статус:** этапы 1–7 выполнены — структура приведена к целевой (раздел 4), домен не зависит от инфраструктуры, все сценарии в `application/`; поиск (этап 6) и дайджест (этап 7) переведены на ООП (порты, конвейер, репортёр); документация обновлена.
+- **Статус:** этапы 1–8 выполнены — структура приведена к целевой (раздел 4), домен не зависит от инфраструктуры, все сценарии в `application/`; поиск (этап 6) и дайджест (этап 7) переведены на ООП (порты, конвейер, репортёр), этап 8 закрыл `apply`/`cover` портами (T-17/T-18); документация обновлена.
 - **Дата:** 2026-10-19.
 - **Ветка:** `refactoring/digest-oop`.
 - **Состояние кода:** `src/` — 118 файлов, ≈7,1 тыс. строк; `npx tsc --noEmit` → exit 0.
@@ -398,7 +398,30 @@ sequenceDiagram
 
 Проверка: `tsc --noEmit` → 0 после каждого коммита, `node bin/auto-hh --version` → 1.0.0; скрипт сверки литералов `log.*`/`console.*` с `origin/development` — 0 расхождений; smoke на фейковых портах: accept/reject и `maxRun`, dry-run без записей, пустой кэш и пустая выдача, показ mongo/files/none, актуализация и её dry-run, батч-фолбэк и повторное использование вердиктов.
 
-Ограничения: `cover.ts` и `apply.ts` по-прежнему работают с `digest-store`/`cache-store` напрямую (их перевод — возможный этап 8); E2E с живыми hh.ru, Mongo и ИИ не запускался — проверка шла на фейковых портах.
+E2E с живыми hh.ru, Mongo и ИИ не запускался — проверка шла на фейковых портах.
+
+### Этап 8 — `apply` и `cover` за порты (выполнено 2026-10-19, T-17/T-18)
+
+1. Порты в `domain/ports.ts`: `ApplicationSession` (`ensureLoggedIn`, `apply`), `ApplicationGateway`
+   (`withSession` — RAII по образцу `SourceProvider`), `LoginGateway`, `ApplyResult`;
+   `CacheStore.getFullByVacancyIds`. `CoverLetterCache` расширен: `attach(entries, { force })` и
+   `save(vacancyId, letter)`.
+2. Адаптер `infrastructure/playwright/application-gateway.ts` — единственное место, где шаг отклика
+   касается Playwright (`openBrowser`, `ensureLoggedIn`, `applyToVacancy`, ручной вход).
+3. `application/apply.ts`: `ApplyDeps { digests, letters, history, gateway, login, settings }`,
+   `runApply(opts, deps)`; браузер закрывается в `finally` адаптера; `history.load()` — один раз на прогон.
+4. `application/cover.ts`: `CoverDeps { ai, config, collect, source, resumeFiles, digests, letters }`;
+   `CoverConfig` (шаблон, `adaptResume`, `COVER_BATCH_SIZE`) собирает `composition.ts`.
+5. `composition.ts`: `applyDeps` + `coverDeps`; `cmd-apply`/`cmd-cover` только передают зависимости.
+
+Проверка: `application → infrastructure` — 26 импортов в 12 файлах → **15 в 10**;
+`npx tsc --noEmit` → 0; smoke на фейковых портах — 8 сценариев (cover: генерация через
+`letters.save`/`digests.save`, нет резюме, пустой дайджест, письма уже есть; apply: архивные
+отброшены, `type=all`, `not-logged-in`, ручной вход).
+
+Ограничения: `reset.ts`, `resume*.ts`, `history.ts`, `grade.ts`, `schedule.ts`, `search/stages.ts`
+и чтение конфига в `DigestScenario`/`ActualizeScenario`/`SearchScenario` по-прежнему импортируют
+инфраструктуру — это тикеты T-19/T-20/T-22 в [`docs/review/`](review/README.md).
 
 ---
 
