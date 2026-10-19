@@ -1,4 +1,4 @@
-import { loadResume } from "../infrastructure/files/resume-loader.js";
+import type { Resume } from "./models.js";
 import log from "../shared/logger.js";
 import type { AiProvider } from "./ports.js";
 
@@ -90,17 +90,20 @@ function buildSystemText(): string {
 }`;
 }
 
-async function gradeResume(ai: AiProvider | null, resume?: any, resumeName?: string): Promise<Record<string, any> | null> {
+// Резюме приходит готовым (загрузку с диска делает application/grade.ts):
+// у домена не остаётся ни файлов, ни путей — только правило оценки.
+async function gradeResume(ai: AiProvider | null, resume: Resume | null): Promise<Record<string, any> | null> {
   if (!ai) {
     log.warn("gradeResume: no API client (check API key)");
     return null;
   }
 
-  const r = resume || loadResume(resumeName);
-  if (!r) {
+  if (!resume) {
     log.warn("gradeResume: resume not found (set RESUME_PATH)");
     return null;
   }
+
+  const r = resume;
 
   const resumeText = r.type === "pdf" ? `[PDF] ${r.filename}` : r.text;
 

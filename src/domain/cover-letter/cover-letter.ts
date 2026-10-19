@@ -1,5 +1,4 @@
 import log from "../../shared/logger.js";
-import { loadConfig } from "../../infrastructure/config/config.js";
 import { buildResumeBlock } from "../resume-block.js";
 import type { AiProvider } from "../ports.js";
 import { stripHtml, parseJSON } from "../../shared/text-utils.js";
@@ -78,9 +77,8 @@ ${coverSignature()}
   }
 }
 
-async function buildCoverLetter(ai: AiProvider | null, template, vacancy, resume = null) {
-  const cfg = loadConfig();
-  const adaptResume = cfg.adaptResume !== false;
+// adaptResume приходит параметром (из config.json, см. cmd-cover): домен не читает файлы.
+async function buildCoverLetter(ai: AiProvider | null, template, vacancy, resume = null, adaptResume = true) {
   const claudeText = await buildWithClaude(vacancy, resume, adaptResume, ai);
   if (claudeText) return claudeText;
   return buildFromTemplate(template, vacancy);
@@ -101,24 +99,23 @@ ${description}`;
 // Генерирует сопроводительные пачками по batchSize вакансий за один запрос.
 // items: [{ vacancy }]. Возвращает Map<vacancyId, text>.
 // onBatch(partialResult) — вызывается после каждой пачки с накопленным результатом.
-async function buildCoverLettersBatch(ai: AiProvider | null, resume, items, batchSize = 20, onBatch = null) {
+// adaptResume приходит параметром (из config.json, см. cmd-cover): домен не читает файлы.
+async function buildCoverLettersBatch(ai: AiProvider | null, resume, items, batchSize = 20, onBatch = null, adaptResume = true) {
   const result = new Map();
   if (!ai || !items.length) return result;
 
   const profile = process.env.APPLICANT_PROFILE || 'опытный разработчик';
-  const cfg = loadConfig();
-  const adapt = cfg.adaptResume !== false;
-  const resumeBlock = !adapt ? buildResumeBlock(resume) : null;
+  const resumeBlock = !adaptResume ? buildResumeBlock(resume) : null;
 
   const systemText = buildBatchSystemText(profile) +
-    (adapt ? '\n\nДля каждой вакансии передано адаптированное под неё резюме — учитывай его при составлении письма, указывая релевантный опыт.' : '');
+    (adaptResume ? '\n\nДля каждой вакансии передано адаптированное под неё резюме — учитывай его при составлении письма, указывая релевантный опыт.' : '');
 
   const batchTexts = chunk<any>(items, batchSize).map((batch, i) => ({
     idx: i + 1,
     batch,
     text: batch.map((it, idx) => {
       let block = '';
-      if (adapt) {
+      if (adaptResume) {
         const adapted = adaptResumeForVacancy(resume, it.vacancy);
         if (adapted) {
           block += `=== РЕЗЮМЕ (релевантное для вакансии #${idx + 1}) ===\n${adapted}\n\n`;

@@ -1,6 +1,6 @@
 # Архитектура auto-hh-cli
 
-- **Статус:** этап 1 выполнен — структура приведена к целевой (раздел 4), импорты пересчитаны. Этапы 2–4 впереди.
+- **Статус:** этапы 1–2 выполнены — структура приведена к целевой (раздел 4), домен не зависит от инфраструктуры. Этапы 3–4 впереди.
 - **Дата:** 2026-10-19.
 - **Ветка:** `refactoring/add-solid`.
 - **Состояние кода:** `src/` — 56 файлов, ≈5,9 тыс. строк; `npx tsc --noEmit` → exit 0.
@@ -199,6 +199,8 @@ src/
 2. Убрать `loadResume()` из `domain/grade-resume.ts`: резюме передаётся параметром, загрузка — в `application/grade.ts`.
 
 Проверка зависимости: `grep "infrastructure" src/domain` не должен находить совпадений.
+
+**Выполнено (2026-10-19).** Типы `HhResume*` перенесены в `domain/models.ts`; `infrastructure/hh/resume.ts` оставляет реэкспорт, поэтому адаптеры и команды не менялись. `loadResume()` убран из домена: сценарий `application/grade.ts` загружает резюме и передаёт его параметром. Заодно закрыты ещё две утечки: `sanitizeSegment`/`UNKNOWN_REGION` вынесены в `shared/path-utils.ts` (реэкспорт из `paths.ts` сохранён), а `domain/cover-letter/*` больше не читает `config.json` — флаг `adaptResume` передаётся из `cmd-cover`. Проверка: `grep "infrastructure" src/domain` → 0 совпадений, `npx tsc --noEmit` → exit 0.
 
 ### Этап 3 — use cases
 

@@ -46,7 +46,7 @@ async function coverOne(ai: AiProvider | null, vacancyId: string, opts: Record<s
     printVacancy(full, vacancyId);
 
     log.info('Generating cover letter...');
-    const letter = await buildCoverLetter(ai, cfg.apply.coverLetterTemplate, full, resume);
+    const letter = await buildCoverLetter(ai, cfg.apply.coverLetterTemplate, full, resume, cfg.adaptResume !== false);
     if (!letter) {
       log.warn('No cover letter generated (API may be unavailable)');
       return;
@@ -62,6 +62,7 @@ async function coverOne(ai: AiProvider | null, vacancyId: string, opts: Record<s
 
 // Весь последний дайджест: письма генерируются батчами и сохраняются в кэш + дайджест.
 async function coverDigest(ai: AiProvider | null, opts: Record<string, any>, resume) {
+  const cfg = loadConfig();
   const digest = await getLatestDigest().catch(() => null);
   if (!digest || !digest.entries.length) {
     log.warn('Дайджест пуст — сначала соберите его: пункт меню «🧠 Собрать дайджест» (нужна MongoDB)');
@@ -109,7 +110,7 @@ async function coverDigest(ai: AiProvider | null, opts: Record<string, any>, res
       letters.set(id, letter);
       await collectCache.saveLetter(id, letter).catch(err => log.warn(`saveLetter ${id}: ${err.message}`));
     }
-  });
+  }, cfg.adaptResume !== false);
   for (const [id, letter] of generated.entries()) letters.set(id, letter);
 
   const updated = digest.entries.map(e => ({ ...e, coverLetter: letters.get(String(e.id)) || e.coverLetter || '' }));

@@ -4,78 +4,29 @@
 // жёсткому пути initialState.resumeView.resume. Это позволяет пережить переезд
 // данных в другую обёртку без правки кода.
 
-export interface HhResumeSalary {
-  amount: number | null;
-  from: number | null;
-  to: number | null;
-  currency: string | null;
-}
+// Типы резюме объявлены в доменной модели (domain/models.ts) — их использует
+// рендер Markdown. Реэкспорт сохраняет прежний путь импорта для адаптеров hh.ru.
+import type {
+  HhResumeCertificate,
+  HhResumeData,
+  HhResumeEducation,
+  HhResumeEducationItem,
+  HhResumeExperience,
+  HhResumeLanguage,
+  HhResumeSalary,
+  HhResumeSummary,
+} from "../../domain/models.js";
 
-export interface HhResumeExperience {
-  company: string | null;
-  position: string | null;
-  start: string | null;
-  end: string | null;
-  description: string | null;
-  industries: string[];
-}
-
-export interface HhResumeEducationItem {
-  institution: string | null;
-  faculty: string | null;
-  specialty: string | null;
-  year: string | null;
-}
-
-export interface HhResumeEducation {
-  primary: HhResumeEducationItem[];
-  additional: HhResumeEducationItem[];
-}
-
-export interface HhResumeLanguage {
-  name: string;
-  level: string | null;
-}
-
-export interface HhResumeCertificate {
-  title: string;
-  owner: string | null;
-  issued: string | null;
-  url: string | null;
-}
-
-export interface HhResumeData {
-  hash: string;
-  firstName: string | null;
-  lastName: string | null;
-  middleName: string | null;
-  title: string | null;
-  salary: HhResumeSalary | null;
-  area: string | null;
-  employment: string | null;
-  schedule: string | null;
-  workFormats: string[];
-  businessTripReadiness: string | null;
-  relocation: string | null;
-  about: string | null;
-  keySkills: string[];
-  experience: HhResumeExperience[];
-  education: HhResumeEducation;
-  languages: HhResumeLanguage[];
-  certificates: HhResumeCertificate[];
-  // Сырой текст страницы — последний фолбэк, если structured-блоки не распознаны.
-  rawText: string | null;
-  updatedAt: string | null;
-  url: string;
-}
-
-export interface HhResumeSummary {
-  hash: string;
-  title: string;
-  status: string | null;
-  updatedAt: string | null;
-  url: string;
-}
+export type {
+  HhResumeCertificate,
+  HhResumeData,
+  HhResumeEducation,
+  HhResumeEducationItem,
+  HhResumeExperience,
+  HhResumeLanguage,
+  HhResumeSalary,
+  HhResumeSummary,
+};
 
 // hash резюме на hh.ru — 40 hex-символов; 16 — запас на случай смены длины.
 const HASH_RE = /^[0-9a-f]{16,}$/i;

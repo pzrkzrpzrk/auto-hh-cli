@@ -38,6 +38,84 @@ export interface Resume {
   filename: string;
 }
 
+// --- Резюме hh.ru ---------------------------------------------------------
+// Модель страницы резюме (разбор — в адаптере hh.ru).
+// Живёт в домене, потому что её использует рендер Markdown (domain/resume-markdown.ts)
+// и правила адаптации резюме под вакансию (domain/adapt-resume.ts).
+
+export interface HhResumeSalary {
+  amount: number | null;
+  from: number | null;
+  to: number | null;
+  currency: string | null;
+}
+
+export interface HhResumeExperience {
+  company: string | null;
+  position: string | null;
+  start: string | null;
+  end: string | null;
+  description: string | null;
+  industries: string[];
+}
+
+export interface HhResumeEducationItem {
+  institution: string | null;
+  faculty: string | null;
+  specialty: string | null;
+  year: string | null;
+}
+
+export interface HhResumeEducation {
+  primary: HhResumeEducationItem[];
+  additional: HhResumeEducationItem[];
+}
+
+export interface HhResumeLanguage {
+  name: string;
+  level: string | null;
+}
+
+export interface HhResumeCertificate {
+  title: string;
+  owner: string | null;
+  issued: string | null;
+  url: string | null;
+}
+
+export interface HhResumeData {
+  hash: string;
+  firstName: string | null;
+  lastName: string | null;
+  middleName: string | null;
+  title: string | null;
+  salary: HhResumeSalary | null;
+  area: string | null;
+  employment: string | null;
+  schedule: string | null;
+  workFormats: string[];
+  businessTripReadiness: string | null;
+  relocation: string | null;
+  about: string | null;
+  keySkills: string[];
+  experience: HhResumeExperience[];
+  education: HhResumeEducation;
+  languages: HhResumeLanguage[];
+  certificates: HhResumeCertificate[];
+  // Сырой текст страницы — последний фолбэк, если structured-блоки не распознаны.
+  rawText: string | null;
+  updatedAt: string | null;
+  url: string;
+}
+
+export interface HhResumeSummary {
+  hash: string;
+  title: string;
+  status: string | null;
+  updatedAt: string | null;
+  url: string;
+}
+
 export interface DigestDoc {
   date: string;
   entries: DigestEntry[];
