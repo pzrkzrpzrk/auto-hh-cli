@@ -2,6 +2,7 @@
 // Домен зависит от этих узких интерфейсов, а не от конкретных модулей store/ (MongoDB).
 // Реализации подставляет вызывающий код (CLI — временный composition root), поэтому
 // доменные шаги можно прогонять с подставными хранилищами, без базы.
+import type { HhResumeData, HhResumeSummary } from "./models.js";
 
 /**
  * История откликов и просмотров — домену нужны только эти две операции:
@@ -22,6 +23,24 @@ export interface CacheStore {
 export interface CollectDeps {
   cacheStore: CacheStore;
   history: HistoryStore;
+}
+
+// --- Источники hh.ru ------------------------------------------------------
+
+/** Порт источника резюме соискателя: список, карточка, PDF-копия. */
+export interface ResumeSource {
+  listMyResumes(): Promise<HhResumeSummary[]>;
+  getMyResume(hash: string): Promise<HhResumeData | null>;
+  downloadResumePdf(hash: string, destPath: string): Promise<string | null>;
+}
+
+/**
+ * Фабрика с жизненным циклом (RAII): открыть источник → работа → закрыть.
+ * Заменяет копии `const client = new HHClient(); try { ... } finally { client.close(); }`,
+ * поэтому сценарии не знают ни про Playwright, ни про порядок закрытия браузера.
+ */
+export interface SourceProvider<T> {
+  withSource<R>(fn: (source: T) => Promise<R>): Promise<R>;
 }
 
 // --- ИИ-провайдер ---------------------------------------------------------
