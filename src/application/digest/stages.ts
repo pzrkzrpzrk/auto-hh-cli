@@ -136,7 +136,7 @@ export class SelectStage extends DigestStage {
     ctx.matched = matched;
 
     log.info(`Judged by Claude: ${ctx.judgedCount}, accepted: ${matched.length}, rejected: ${rejected.length}`);
-    ctx.report({ type: 'matched', matched });
+    ctx.report.on({ type: 'matched', matched });
     return 'continue';
   }
 }
@@ -163,7 +163,7 @@ export class PersistStage extends DigestStage {
 
     const files = await ctx.deps.digest.save('digest', ctx.matched);
     log.info(`Digest saved: ${files.length} regions, ${ctx.matched.length} vacancies -> ${files.join(', ')}`);
-    ctx.report({ type: 'digest-saved', files, count: ctx.matched.length });
+    ctx.report.on({ type: 'digest-saved', files, count: ctx.matched.length });
     return 'continue';
   }
 }

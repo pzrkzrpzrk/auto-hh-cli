@@ -25,8 +25,10 @@ export async function buildDigest(
   deps: DigestDeps,
   onMatched?: (matched: DigestEntry[]) => void,
 ): Promise<DigestBuildResult | null> {
-  const scenario = new DigestScenario(deps, event => {
-    if (event.type === 'matched' && onMatched) onMatched(event.matched);
+  const scenario = new DigestScenario(deps, {
+    on: event => {
+      if (event.type === 'matched' && onMatched) onMatched(event.matched);
+    },
   });
   return scenario.build(opts);
 }

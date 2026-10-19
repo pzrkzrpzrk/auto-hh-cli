@@ -55,7 +55,7 @@ export class DigestScenario {
 
   constructor(
     private readonly deps: DigestDeps,
-    private readonly report: DigestReporter = () => {},
+    private readonly report: DigestReporter = { on: () => {} },
   ) {}
 
   /**

@@ -6,5 +6,7 @@ export type DigestEvent =
   | { type: 'matched'; matched: DigestEntry[] }
   | { type: 'digest-saved'; files: string[]; count: number };
 
-/** Подписчик на события сценария. */
-export type DigestReporter = (event: DigestEvent) => void;
+/** Подписчик на события сценария (как SearchReporter: один метод on). */
+export interface DigestReporter {
+  on(event: DigestEvent): void;
+}
