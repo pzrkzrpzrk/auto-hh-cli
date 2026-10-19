@@ -3,10 +3,14 @@
 // MongoDB, fs и разбор файлов живут в infrastructure, а связывает их composition root.
 import type { CacheStore } from "../ports.js";
 import type { DigestDoc, DigestEntry, Resume } from "../models.js";
+import type { RejectedEntry } from "./DigestCandidate.js";
 import type { DigestCacheSnapshot } from "./types.js";
 
 /** Какие артефакты дайджеста пишутся одинаковым кодом (digest.md и rejected.md). */
 export type DigestKind = 'digest' | 'rejected';
+
+/** Запись артефакта: полный DigestEntry либо rejected-запись без письма и комментария. */
+export type DigestArtifactEntry = DigestEntry | RejectedEntry;
 
 /**
  * Кэш поиска для дайджеста: страницы/карточки (как у search) плюс загрузка
@@ -27,9 +31,9 @@ export interface DigestRepository {
   /** Документы коллекции с датами — вход актуализации. */
   listDocs(kind: DigestKind): Promise<DigestDoc[]>;
   /** Записать артефакт и вернуть пути .md-файлов по регионам. */
-  save(kind: DigestKind, entries: DigestEntry[], date?: string): Promise<string[]>;
+  save(kind: DigestKind, entries: DigestArtifactEntry[], date?: string): Promise<string[]>;
   /** Сводный снимок актуальных вакансий за дату (actual.md). */
-  saveActual(kind: DigestKind, entries: DigestEntry[], date: string): string | null;
+  saveActual(kind: DigestKind, entries: DigestArtifactEntry[], date: string): string | null;
 }
 
 /** Кэш вердиктов ИИ-судьи (коллекция cacheJudgements). */

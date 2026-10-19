@@ -13,6 +13,8 @@ import type { VacancySource } from "./search/VacancySource.js";
 export interface HistoryStore {
   load(): Promise<{ applied: Record<string, any>; seen: Record<string, string> }>;
   markSeen(vacancyId: string | number): Promise<void>;
+  /** Отметка «взято в дайджест/отклик»: digest пишет digestOnly, apply — via=playwright. */
+  markApplied(vacancyId: string | number, meta: Record<string, any>): Promise<void>;
 }
 
 /** Кэш поиска: чтение снимка (cachePages/cacheFull) и запись страниц и карточек. */

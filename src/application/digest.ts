@@ -22,12 +22,16 @@ import { registerResume } from "../infrastructure/mongo/resume-store.js";
 import { listDigestFiles } from "../infrastructure/files/digest-files.js";
 import { DIGEST_DIR } from "../infrastructure/config/paths.js";
 import type { DigestEntry } from "../domain/models.js";
-import { flattenCollected, fmtSalary } from "./collect.js";
+import { flattenCollected } from "./collect.js";
 import type { AiProvider, CollectDeps, SourceProvider } from "../domain/ports.js";
 import type { VacancySource } from "../domain/search/VacancySource.js";
 import SearchCache from "./search/SearchCache.js";
 import { VacancyCollector } from "./search/VacancyCollector.js";
 import { SkipSeenPolicy } from "./search/FullCardPolicy.js";
+import { DigestPolicy } from "../domain/digest/DigestPolicy.js";
+import { DigestMatcher } from "../domain/digest/DigestMatcher.js";
+import { DigestEntryFactory } from "../domain/digest/DigestEntryFactory.js";
+import { JudgementSet } from "../domain/digest/JudgementSet.js";
 import { intFromEnv } from "../infrastructure/config/env.js";
 import log from "../shared/logger.js";
 
@@ -111,79 +115,6 @@ async function judgeWithClaude(ai, resume, candidates, cache, minScore, adaptRes
   return { judgements, judgedCount };
 }
 
-function selectAccepted(candidates, judgements, useClaude, maxRun) {
-  const accepted = [];
-  const rejected = [];
-  for (const { full, verdict } of candidates) {
-    if (accepted.length >= maxRun) break;
-
-    let score = null, reason = '', comment = null;
-
-    if (useClaude) {
-      const judgement = judgements.get(String(full.id));
-      if (!judgement) {
-        log.warn(`No judgement for ${full.id}, falling back to template`);
-      } else {
-        score = judgement.score;
-        reason = judgement.reason;
-        comment = judgement.comment;
-        if (!judgement.fit) {
-          log.info(`Claude rejected ${full.id} (score=${score}): ${reason}`);
-          rejected.push({
-            id: full.id,
-            title: full.name,
-            employer: full.employer?.name || '—',
-            area: full.area?.name || '—',
-            salary: fmtSalary(full.salary),
-            url: full.alternate_url,
-            publishedAt: full.publishedAt || null,
-            score,
-            reason,
-          });
-          continue;
-        }
-        log.info(`Claude approved ${full.id} (score=${score}): ${comment || reason}`);
-      }
-    }
-
-    accepted.push({ full, verdict, score, reason, comment });
-  }
-  return { accepted, rejected };
-}
-
-// Записи дайджеста без писем: письма добавляются отдельным шагом cover.
-// track=false (dry-run) — не трогаем историю откликов.
-async function buildResults(accepted, track = true) {
-  const matched = [];
-  for (const a of accepted) {
-    const { full, score, reason, comment } = a;
-    matched.push({
-      id: full.id,
-      title: full.name,
-      employer: full.employer?.name || '—',
-      area: full.area?.name || '—',
-      salary: fmtSalary(full.salary),
-      url: full.alternate_url,
-      publishedAt: full.publishedAt || null,
-      score,
-      reason,
-      comment,
-      coverLetter: '',
-    });
-    if (track) {
-      await history.markApplied(full.id, {
-        title: full.name,
-        employer: full.employer?.name,
-        url: full.alternate_url,
-        score,
-        digestOnly: true,
-      });
-    }
-    log.info(`Match: ${full.name} @ ${full.employer?.name} -> ${full.alternate_url}`);
-  }
-  return matched;
-}
-
 /**
  * Шаг digest: кэш поиска → локальный фильтр → ИИ-судья → digest/rejected (файлы + Mongo).
  * null — собирать нечего (пустой кэш или пустая выдача). onMatched команда использует для печати топа.
@@ -198,11 +129,14 @@ export async function buildDigest(
   const cfg = loadConfig();
   const resume = loadResume(opts.resume);
   const resumeId = resume?.id;
-  const minScore = cfg.apply.minClaudeScore ?? 7;
-  const maxRun = opts.limit || cfg.apply.maxPerRun || 50;
-  const dryRun = opts.dryRun ?? cfg.apply.dryRun ?? false;
   const hasApiKey = cfg.api?.apiKey || process.env.OPENAI_API_KEY || process.env.ANTHROPIC_API_KEY;
-  const useClaude = Boolean(resume && hasApiKey && opts.claude !== false);
+  // Все флаги прогона — в одном объекте (domain/digest/DigestPolicy.ts).
+  const policy = DigestPolicy.from(cfg, opts, {
+    hasResume: Boolean(resume),
+    hasApiKey: Boolean(hasApiKey),
+    judgeBatchSize: intFromEnv('JUDGE_BATCH_SIZE', 10),
+    aiConcurrency: aiConcurrencyFromEnv(),
+  });
 
   const cache = await collectCache.loadLatest(resumeId);
   if (!cache) {
@@ -225,24 +159,25 @@ export async function buildDigest(
 
   return await deps.source.withSource(async source => {
     log.info(`Building digest from search cache ${cache.date}: ${items.length} vacancies`);
-    const candidates = await filterLocally(source, items, cache, cfg, deps.collect, !dryRun);
+    const candidates = await filterLocally(source, items, cache, cfg, deps.collect, policy.tracksHistory);
     log.info(`Local filter passed: ${candidates.length}/${items.length}`);
 
-    const adaptResume = cfg.adaptResume !== false;
     const ai = deps.ai();
-    const { judgements, judgedCount } = useClaude
-      ? await judgeWithClaude(ai, resume, candidates, cache, minScore, adaptResume, resumeId)
+    const { judgements, judgedCount } = policy.useJudge
+      ? await judgeWithClaude(ai, resume, candidates, cache, policy.minScore, policy.adaptResume, resumeId)
       : { judgements: new Map(), judgedCount: 0 };
 
-    const { accepted, rejected } = selectAccepted(candidates, judgements, useClaude, maxRun);
-    const matched = await buildResults(accepted, !dryRun);
+    // Отбор и сборка записей — доменные сервисы: сценарий только связывает их с I/O.
+    const judgementSet = JudgementSet.fromSnapshot(Object.fromEntries(judgements));
+    const { accepted, rejected } = new DigestMatcher(policy).select(candidates, judgementSet);
+    const matched = await new DigestEntryFactory(deps.collect.history).create(accepted, policy.tracksHistory);
 
     log.info(`Judged by Claude: ${judgedCount}, accepted: ${matched.length}, rejected: ${rejected.length}`);
     if (onMatched) onMatched(matched);
 
-    if (dryRun) {
+    if (policy.dryRun) {
       log.warn('Dry-run: история, дайджест и rejected не изменялись');
-      return { matched, rejected, dryRun };
+      return { matched, rejected, dryRun: policy.dryRun };
     }
 
     const rejectedFiles = await writeRejected(rejected);
@@ -252,12 +187,12 @@ export async function buildDigest(
 
     if (!matched.length) {
       log.info('No matching vacancies.');
-      return { matched, rejected, dryRun };
+      return { matched, rejected, dryRun: policy.dryRun };
     }
 
     const files = await writeDigest(matched);
     log.info(`Digest saved: ${files.length} regions, ${matched.length} vacancies -> ${files.join(', ')}`);
-    return { matched, rejected, dryRun };
+    return { matched, rejected, dryRun: policy.dryRun };
   });
 }
 

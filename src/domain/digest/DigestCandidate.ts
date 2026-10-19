@@ -8,6 +8,12 @@ export interface CandidateVerdict {
   reason?: string;
 }
 
+/**
+ * Запись rejected.md: те же поля, что у DigestEntry, но без письма и комментария —
+ * судья их не заполняет, а .md-рендер выводит только присутствующие поля.
+ */
+export type RejectedEntry = Omit<DigestEntry, 'comment' | 'coverLetter'>;
+
 export interface DigestCandidate {
   readonly full: Vacancy;
   readonly verdict: CandidateVerdict;
@@ -23,5 +29,5 @@ export interface AcceptedCandidate extends DigestCandidate {
 /** Результат отбора: принятые кандидаты и готовые записи для rejected.md. */
 export interface DigestSelection {
   accepted: AcceptedCandidate[];
-  rejected: DigestEntry[];
+  rejected: RejectedEntry[];
 }
