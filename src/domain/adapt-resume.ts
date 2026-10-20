@@ -1,8 +1,8 @@
 // Адаптация резюме под конкретную вакансию.
 // Оставляет только секции, релевантные для данной вакансии — по совпадению ключевых
 // терминов (название, навыки, описание). Если ни одна секция не подошла — не адаптирует.
-import { stripHtml } from "../shared/text-utils.js";
-import type { Resume, Vacancy } from "./models.js";
+import { stripHtml } from "@/shared/text-utils.js";
+import type { Resume, Vacancy } from "@/domain/models.js";
 
 export function adaptResumeForVacancy(resume: Resume | null, vacancy: Vacancy): string | null {
   if (!resume || resume.type === "pdf" || !resume.text) return null;

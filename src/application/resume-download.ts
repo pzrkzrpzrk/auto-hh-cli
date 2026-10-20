@@ -2,12 +2,12 @@
 // Печать — в команде: сценарий отдаёт события фаз и итоговый массив результатов.
 // Источник резюме можно передать снаружи (меню уже открыло сессию) — тогда сценарий
 // её не закрывает: владелец браузера закрывает сам.
-import type { HhResumeSummary } from "../domain/models.js";
-import type { ResumeFiles, ResumeSource, SourceProvider } from "../domain/ports.js";
-import type { ResumeRegistry } from "../domain/digest/ports.js";
-import { renderResumeMarkdown, slugifyResumeName } from "../domain/resume-markdown.js";
-import { errorMessage, errorName } from "../shared/errors.js";
-import log from "../shared/logger.js";
+import type { HhResumeSummary } from "@/domain/models.js";
+import type { ResumeFiles, ResumeSource, SourceProvider } from "@/domain/ports.js";
+import type { ResumeRegistry } from "@/domain/digest/ports.js";
+import { renderResumeMarkdown, slugifyResumeName } from "@/domain/resume-markdown.js";
+import { errorMessage, errorName } from "@/shared/errors.js";
+import log from "@/shared/logger.js";
 
 export interface ResumeDownloadOptions {
   /** Открытая сессия резюме: меню держит её само и само закрывает. */

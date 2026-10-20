@@ -1,16 +1,16 @@
 // Domain Service отбора: кто попадает в дайджест, а кто — в rejected.
 // Правило не делает I/O и не логирует: факты для логов возвращаются событиями,
 // а печатает их стадия (application/digest/stages.ts).
-import { fmtSalary } from "../../shared/format.js";
+import { fmtSalary } from "@/shared/format.js";
 import type {
   AcceptedCandidate,
   DigestCandidate,
   DigestSelection,
   DigestSelectionEvent,
   RejectedEntry,
-} from "./DigestCandidate.js";
-import type { DigestPolicy } from "./DigestPolicy.js";
-import type { JudgementSet } from "./JudgementSet.js";
+} from "@/domain/digest/DigestCandidate.js";
+import type { DigestPolicy } from "@/domain/digest/DigestPolicy.js";
+import type { JudgementSet } from "@/domain/digest/JudgementSet.js";
 
 export class DigestMatcher {
   constructor(private readonly policy: DigestPolicy) {}

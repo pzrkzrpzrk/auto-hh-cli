@@ -1,5 +1,5 @@
 // Сценарий «покажи конфиг»: presentation не читает infrastructure напрямую.
-import type { ConfigProvider } from "../domain/ports.js";
+import type { ConfigProvider } from "@/domain/ports.js";
 
 export interface ConfigViewDeps {
   config: ConfigProvider;

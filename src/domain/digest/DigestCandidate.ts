@@ -1,6 +1,6 @@
 // Кандидат дайджеста (Value Object): полная карточка + вердикт локального фильтра.
 // Раньше это был безымянный объект `{ full, verdict }` из локального фильтра.
-import type { DigestEntry, Vacancy } from "../models.js";
+import type { DigestEntry, Vacancy } from "@/domain/models.js";
 
 /** Вердикт локального фильтра: ok=false несёт причину для лога и истории. */
 export interface CandidateVerdict {

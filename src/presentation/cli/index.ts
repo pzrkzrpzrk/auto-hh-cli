@@ -3,8 +3,8 @@
 // Все шаги (поиск, дайджест, письма, отклики, планировщик, резюме) меню вызывает
 // напрямую из cmd-*, поэтому отдельных подкоманд у CLI больше нет.
 import {  Command  } from "commander";
-import cmdUi from "./menu/menu.js";
-import { closeResources } from "../../composition.js";
+import cmdUi from "@/presentation/cli/menu/menu.js";
+import { closeResources } from "@/composition.js";
 
 const program = new Command();
 

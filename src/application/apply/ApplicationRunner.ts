@@ -1,12 +1,12 @@
 // Исполнитель плана отклика: проверка входа, пропуски по цепочке правил, счётчики.
 // Браузер открывает и закрывает адаптер (RAII), поэтому здесь — только работа внутри сессии.
-import log from "../../shared/logger.js";
-import type { DigestEntry } from "../../domain/models.js";
-import type { ApplicationSession } from "../../domain/ports.js";
-import type { ApplyDeps, ApplyOutcome } from "./ApplyDeps.js";
-import type { ApplySummary } from "./ApplySummary.js";
-import type { Pacing } from "./Pacing.js";
-import type { SkipDecision, SkipRule } from "./SkipRules.js";
+import log from "@/shared/logger.js";
+import type { DigestEntry } from "@/domain/models.js";
+import type { ApplicationSession } from "@/domain/ports.js";
+import type { ApplyDeps, ApplyOutcome } from "@/application/apply/ApplyDeps.js";
+import type { ApplySummary } from "@/application/apply/ApplySummary.js";
+import type { Pacing } from "@/application/apply/Pacing.js";
+import type { SkipDecision, SkipRule } from "@/application/apply/SkipRules.js";
 
 export class ApplicationRunner {
   constructor(

@@ -1,6 +1,6 @@
 // Сценарий истории откликов: чтение состояния через порт HistoryStore и выборки для показа.
 // Печать (включая --json) — в команде: здесь только данные и ошибка чтения.
-import type { HistoryStore } from "../domain/ports.js";
+import type { HistoryStore } from "@/domain/ports.js";
 
 export interface HistoryDeps {
   history: HistoryStore;

@@ -1,7 +1,7 @@
 // Конвейер дайджеста (Chain of Responsibility): стадии идут по порядку,
 // каждая может остановить цепочку (пустой кэш, пустая выдача, dry-run).
-import type { DigestContext } from "./DigestContext.js";
-import type { DigestStage } from "./DigestStage.js";
+import type { DigestContext } from "@/application/digest/DigestContext.js";
+import type { DigestStage } from "@/application/digest/DigestStage.js";
 
 export class DigestPipeline {
   constructor(private readonly stages: DigestStage[]) {}

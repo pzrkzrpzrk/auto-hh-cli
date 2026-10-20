@@ -1,6 +1,6 @@
 // Цели актуализации (Strategy по виду артефакта): digest и rejected обновляются
 // одинаковым кодом, различаются только kind и подписью в логе.
-import type { DigestKind } from "../../domain/digest/ports.js";
+import type { DigestKind } from "@/domain/digest/ports.js";
 
 export interface ActualizeTarget {
   readonly kind: DigestKind;

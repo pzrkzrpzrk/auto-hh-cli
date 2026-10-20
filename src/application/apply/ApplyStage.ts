@@ -1,6 +1,6 @@
 // Стадия конвейера отклика (Template Method): общий каркас «включена → выполнить → ошибка».
 // Подкласс описывает только свою фазу плана и политику ошибки.
-import type { ApplyContext } from "./ApplyContext.js";
+import type { ApplyContext } from "@/application/apply/ApplyContext.js";
 
 export type StageResult = 'continue' | 'stop';
 

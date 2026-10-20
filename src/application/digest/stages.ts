@@ -1,17 +1,17 @@
 // Стадии конвейера дайджеста. Каждая — один шаг прежнего buildDigest,
 // с тем же порядком логов; I/O идёт через порты, бизнес-правила — в домене.
-import log from "../../shared/logger.js";
-import { DigestMatcher } from "../../domain/digest/DigestMatcher.js";
-import { DigestEntryFactory } from "../../domain/digest/DigestEntryFactory.js";
-import { JudgementSet } from "../../domain/digest/JudgementSet.js";
-import type { DigestCacheSnapshot } from "../../domain/digest/types.js";
-import { SkipSeenPolicy } from "../../domain/search/FullCardPolicy.js";
-import SearchCache from "../search/SearchCache.js";
-import { VacancyCollector } from "../search/VacancyCollector.js";
-import type { DigestContext } from "./DigestContext.js";
-import { requireCache, requireSnapshot } from "./DigestContext.js";
-import { DigestStage, type StageOutcome } from "./DigestStage.js";
-import { DigestJudgeRunner } from "./DigestJudgeRunner.js";
+import log from "@/shared/logger.js";
+import { DigestMatcher } from "@/domain/digest/DigestMatcher.js";
+import { DigestEntryFactory } from "@/domain/digest/DigestEntryFactory.js";
+import { JudgementSet } from "@/domain/digest/JudgementSet.js";
+import type { DigestCacheSnapshot } from "@/domain/digest/types.js";
+import { SkipSeenPolicy } from "@/domain/search/FullCardPolicy.js";
+import SearchCache from "@/application/search/SearchCache.js";
+import { VacancyCollector } from "@/application/search/VacancyCollector.js";
+import type { DigestContext } from "@/application/digest/DigestContext.js";
+import { requireCache, requireSnapshot } from "@/application/digest/DigestContext.js";
+import { DigestStage, type StageOutcome } from "@/application/digest/DigestStage.js";
+import { DigestJudgeRunner } from "@/application/digest/DigestJudgeRunner.js";
 
 // Дата кэша поиска: тем же ключом пишутся полные вакансии и вердикты ИИ.
 function sessionDate(snapshot: DigestCacheSnapshot): Date | undefined {

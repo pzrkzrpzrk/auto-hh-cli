@@ -1,8 +1,8 @@
 // Загрузка конфигурации из JSON и .env.
 import fs from "fs";
 import path from "path";
-import { intFromEnv } from "./env.js";
-import type { AppConfig, ConfigProvider } from "../../domain/ports.js";
+import { intFromEnv } from "@/infrastructure/config/env.js";
+import type { AppConfig, ConfigProvider } from "@/domain/ports.js";
 
 // Личный список компаний из .env (через запятую). Пустая переменная = null,
 // тогда работает список из config.json → filter.excludedCompanies.

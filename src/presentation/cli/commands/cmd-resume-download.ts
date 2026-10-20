@@ -1,12 +1,12 @@
 // Команда resume-download: тонкая оболочка — печать фаз скачивания
 // (сценарий — application/resume-download.ts, там же типы опций и результата).
-import { resumeDownloadDeps } from "../../../composition.js";
+import { resumeDownloadDeps } from "@/composition.js";
 import {
   downloadResumes,
   type ResumeDownloadEvent,
   type ResumeDownloadOptions,
   type ResumeDownloadResult,
-} from "../../../application/resume-download.js";
+} from "@/application/resume-download.js";
 
 export type { ResumeDownloadOptions, ResumeDownloadResult };
 

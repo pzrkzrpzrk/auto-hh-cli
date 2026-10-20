@@ -1,11 +1,11 @@
 // Сценарий поиска: точка входа для команды и обратная совместимость runSearch().
 // Вся оркестрация — SearchScenario (фасад) + стадии конвейера.
-import type { SearchDeps } from "../domain/ports.js";
-import { SearchScenario } from "./search/SearchScenario.js";
-import type { SearchEvent } from "./search/SearchEvent.js";
+import type { SearchDeps } from "@/domain/ports.js";
+import { SearchScenario } from "@/application/search/SearchScenario.js";
+import type { SearchEvent } from "@/application/search/SearchEvent.js";
 
 export type { SearchEvent };
-export type { FullCardsSummary } from "./search/VacancyCollector.js";
+export type { FullCardsSummary } from "@/application/search/VacancyCollector.js";
 
 /**
  * Поиск вакансий и догрузка описаний.

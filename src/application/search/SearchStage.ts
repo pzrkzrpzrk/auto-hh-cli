@@ -1,6 +1,6 @@
 // Стадия конвейера поиска (Template Method): общий каркас «включена → выполнить → ошибка»,
 // подкласс описывает только свою фазу и политику ошибки.
-import type { SearchContext } from "./SearchContext.js";
+import type { SearchContext } from "@/application/search/SearchContext.js";
 
 export type StageResult = 'continue' | 'stop';
 

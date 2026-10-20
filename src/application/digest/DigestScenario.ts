@@ -1,20 +1,20 @@
 // Сценарий сборки дайджеста (Facade): один вход для команды, внутри — конвейер стадий.
 // Команда больше не собирает политику, коллектор и сервисы руками.
-import { DigestPolicy } from "../../domain/digest/DigestPolicy.js";
-import { DigestFilter } from "../../domain/digest/DigestFilter.js";
-import { JudgementSet } from "../../domain/digest/JudgementSet.js";
-import type { DigestEntry, Resume } from "../../domain/models.js";
-import type { RejectedEntry } from "../../domain/digest/DigestCandidate.js";
+import { DigestPolicy } from "@/domain/digest/DigestPolicy.js";
+import { DigestFilter } from "@/domain/digest/DigestFilter.js";
+import { JudgementSet } from "@/domain/digest/JudgementSet.js";
+import type { DigestEntry, Resume } from "@/domain/models.js";
+import type { RejectedEntry } from "@/domain/digest/DigestCandidate.js";
 import type {
   DigestCacheSnapshot,
   DigestConfig,
   DigestRunOptions,
-} from "../../domain/digest/types.js";
-import type { VacancySource } from "../../domain/search/VacancySource.js";
-import type { DigestContext } from "./DigestContext.js";
-import type { DigestDeps } from "./DigestDeps.js";
-import type { DigestReporter } from "./DigestEvent.js";
-import { DigestPipeline } from "./DigestPipeline.js";
+} from "@/domain/digest/types.js";
+import type { VacancySource } from "@/domain/search/VacancySource.js";
+import type { DigestContext } from "@/application/digest/DigestContext.js";
+import type { DigestDeps } from "@/application/digest/DigestDeps.js";
+import type { DigestReporter } from "@/application/digest/DigestEvent.js";
+import { DigestPipeline } from "@/application/digest/DigestPipeline.js";
 import {
   CollectCardsStage,
   JudgeStage,
@@ -23,7 +23,7 @@ import {
   PersistStage,
   RegisterResumeStage,
   SelectStage,
-} from "./stages.js";
+} from "@/application/digest/stages.js";
 
 /** Результат сборки: что попало в дайджест и было ли это dry-run. */
 export interface DigestBuildResult {

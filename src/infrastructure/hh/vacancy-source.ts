@@ -1,9 +1,9 @@
 // Адаптер порта VacancySource поверх Playwright-клиента hh.ru (Adapter).
 // Сценарии видят только searchVacancies/getVacancy, а init/close браузера — здесь.
-import HHClient from "./client.js";
-import type { VacancySource } from "../../domain/search/VacancySource.js";
-import type { SearchParams, SearchPageResult } from "../../domain/search/types.js";
-import type { Vacancy } from "../../domain/models.js";
+import HHClient from "@/infrastructure/hh/client.js";
+import type { VacancySource } from "@/domain/search/VacancySource.js";
+import type { SearchParams, SearchPageResult } from "@/domain/search/types.js";
+import type { Vacancy } from "@/domain/models.js";
 
 class HHVacancySource implements VacancySource {
   constructor(private readonly client: HHClient) {}

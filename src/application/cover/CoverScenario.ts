@@ -1,13 +1,13 @@
 // Сценарий писем (Facade): проверки входа → стратегия режима → результат.
 // Раньше здесь же лежали обе ветки (одна вакансия и весь дайджест); теперь сценарий
 // отвечает только за общие проверки и выбор стратегии, а работа — в режимах.
-import log from "../../shared/logger.js";
-import type { AiProvider } from "../../domain/ports.js";
-import type { Resume } from "../../domain/models.js";
-import type { CoverConfig, CoverDeps, CoverOutcome, OnVacancy } from "./CoverDeps.js";
-import type { CoverMode } from "./CoverMode.js";
-import { DigestCoverMode } from "./DigestCoverMode.js";
-import { SingleVacancyMode } from "./SingleVacancyMode.js";
+import log from "@/shared/logger.js";
+import type { AiProvider } from "@/domain/ports.js";
+import type { Resume } from "@/domain/models.js";
+import type { CoverConfig, CoverDeps, CoverOutcome, OnVacancy } from "@/application/cover/CoverDeps.js";
+import type { CoverMode } from "@/application/cover/CoverMode.js";
+import { DigestCoverMode } from "@/application/cover/DigestCoverMode.js";
+import { SingleVacancyMode } from "@/application/cover/SingleVacancyMode.js";
 
 export class CoverScenario {
   constructor(private readonly deps: CoverDeps) {}

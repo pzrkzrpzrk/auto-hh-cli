@@ -1,12 +1,12 @@
 // Сценарий актуализации (Facade): помечает в старых дайджестах и rejected вакансии,
 // которых нет в последней выдаче. Ничего не удаляет — перезаписывает .md по регионам
 // и пишет сводный снимок по всем прошлым датам в <today>/actual.md.
-import { computeActualization, mergeActualized } from "../../domain/actualize.js";
-import { flattenCollected } from "../collect.js";
-import log from "../../shared/logger.js";
-import type { DigestRunOptions } from "../../domain/digest/types.js";
-import { ACTUALIZE_TARGETS } from "./ActualizeTarget.js";
-import type { ActualizeDeps } from "./DigestDeps.js";
+import { computeActualization, mergeActualized } from "@/domain/actualize.js";
+import { flattenCollected } from "@/application/collect.js";
+import log from "@/shared/logger.js";
+import type { DigestRunOptions } from "@/domain/digest/types.js";
+import { ACTUALIZE_TARGETS } from "@/application/digest/ActualizeTarget.js";
+import type { ActualizeDeps } from "@/application/digest/DigestDeps.js";
 
 export interface ActualizeResult {
   today: string;

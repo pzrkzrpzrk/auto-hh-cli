@@ -1,1 +1,1 @@
-export { buildCoverLetter, buildCoverLettersBatch } from "./cover-letter.js";
+export { buildCoverLetter, buildCoverLettersBatch } from "@/domain/cover-letter/cover-letter.js";

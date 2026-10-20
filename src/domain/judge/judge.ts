@@ -1,10 +1,10 @@
-import { buildResumeBlock } from "../resume-block.js";
-import type { AiProvider } from "../ports.js";
-import { stripHtml, parseJSON } from "../../shared/text-utils.js";
-import { errorMessage } from "../../shared/errors.js";
-import { adaptResumeForVacancy } from "../adapt-resume.js";
-import type { Vacancy, Resume, Verdict, JudgeOpts } from "../models.js";
-import { buildSystemText } from "./system-text.js";
+import { buildResumeBlock } from "@/domain/resume-block.js";
+import type { AiProvider } from "@/domain/ports.js";
+import { stripHtml, parseJSON } from "@/shared/text-utils.js";
+import { errorMessage } from "@/shared/errors.js";
+import { adaptResumeForVacancy } from "@/domain/adapt-resume.js";
+import type { Vacancy, Resume, Verdict, JudgeOpts } from "@/domain/models.js";
+import { buildSystemText } from "@/domain/judge/system-text.js";
 
 // Гарантирует инвариант вердикта: fit=true ⇒ comment непустой, reason=null;
 // fit=false ⇒ reason непустой, comment=null.

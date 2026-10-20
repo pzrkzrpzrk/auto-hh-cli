@@ -1,9 +1,9 @@
 // Кэш в отдельных MongoDB коллекциях: cachePages, cacheFull, cacheJudgements, cacheCoverLetters.
-import { connect, dbInstance } from "./db.js";
-import { dateKey } from "../../shared/time.js";
-import type { Vacancy } from "../../domain/models.js";
-import type { VacancyListItem } from "../../domain/search/types.js";
-import type { Judgement } from "../../domain/digest/JudgementSet.js";
+import { connect, dbInstance } from "@/infrastructure/mongo/db.js";
+import { dateKey } from "@/shared/time.js";
+import type { Vacancy } from "@/domain/models.js";
+import type { VacancyListItem } from "@/domain/search/types.js";
+import type { Judgement } from "@/domain/digest/JudgementSet.js";
 
 export interface CacheDoc {
   date: string;

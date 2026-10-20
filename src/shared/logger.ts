@@ -1,6 +1,6 @@
 // Простой логгер с уровнями. Реализация записи (файл, env DEBUG) — в infrastructure,
 // чтобы shared не зависел от fs и config/paths. До регистрации sink пишет в консоль.
-import type { LogSink } from "./logging.js";
+import type { LogSink } from "@/shared/logging.js";
 
 function line(level: string, msg: string, meta?: unknown): string {
   const ts = new Date().toLocaleString('ru-RU', { timeZone: 'Europe/Moscow', hour12: false }).replace(',', '');
@@ -29,4 +29,4 @@ const log: LogSink = {
 };
 
 export default log;
-export type { LogSink } from "./logging.js";
+export type { LogSink } from "@/shared/logging.js";

@@ -1,11 +1,11 @@
 // Стратегия судейства (Strategy): КАК спрашивать ИИ — пачкой или поштучно.
 // Реализация по умолчанию — реальные вызовы доменного судьи; в проверках подставляется
 // детерминированная стратегия, поэтому DigestJudgeRunner не знает про сеть.
-import { judgeVacancy, judgeVacanciesBatch } from "../../domain/judge/index.js";
-import type { Logger } from "../../domain/logging.js";
-import type { Judgement } from "../../domain/digest/JudgementSet.js";
-import type { AiProvider } from "../../domain/ports.js";
-import type { Resume, Vacancy } from "../../domain/models.js";
+import { judgeVacancy, judgeVacanciesBatch } from "@/domain/judge/index.js";
+import type { Logger } from "@/domain/logging.js";
+import type { Judgement } from "@/domain/digest/JudgementSet.js";
+import type { AiProvider } from "@/domain/ports.js";
+import type { Resume, Vacancy } from "@/domain/models.js";
 
 /** Параметры судейства, общие для пачки и одиночного запроса. */
 export interface JudgeOptions {

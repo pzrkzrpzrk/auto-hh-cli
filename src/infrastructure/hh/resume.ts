@@ -15,7 +15,7 @@ import type {
   HhResumeLanguage,
   HhResumeSalary,
   HhResumeSummary,
-} from "../../domain/models.js";
+} from "@/domain/models.js";
 
 export type {
   HhResumeCertificate,

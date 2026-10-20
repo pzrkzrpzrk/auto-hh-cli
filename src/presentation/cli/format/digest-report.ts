@@ -1,10 +1,10 @@
 // Консольный репортер дайджеста (Observer) и печать показа/актуализации.
 // Сценарий сообщает события, тексты и форматирование живут здесь; команда только связывает.
-import type { DigestEvent, DigestReporter } from "../../../application/digest/DigestEvent.js";
-import type { DigestShowOutcome } from "../../../application/digest/DigestShowScenario.js";
-import type { ActualizeResult } from "../../../application/digest/ActualizeScenario.js";
-import type { DigestEntry } from "../../../domain/models.js";
-import log from "../../../shared/logger.js";
+import type { DigestEvent, DigestReporter } from "@/application/digest/DigestEvent.js";
+import type { DigestShowOutcome } from "@/application/digest/DigestShowScenario.js";
+import type { ActualizeResult } from "@/application/digest/ActualizeScenario.js";
+import type { DigestEntry } from "@/domain/models.js";
+import log from "@/shared/logger.js";
 
 const TOP_LIMIT = 10;
 

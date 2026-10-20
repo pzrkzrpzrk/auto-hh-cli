@@ -1,8 +1,8 @@
 // Зависимости сценариев дайджеста: только порты домена, без Mongo и fs.
 // Раньше этот интерфейс жил рядом со свободными функциями в application/digest.ts;
 // теперь он в модуле сценария, а composition root импортирует его отсюда.
-import type { AiProvider, CollectDeps, ConfigProvider, SourceProvider } from "../../domain/ports.js";
-import type { VacancySource } from "../../domain/search/VacancySource.js";
+import type { AiProvider, CollectDeps, ConfigProvider, SourceProvider } from "@/domain/ports.js";
+import type { VacancySource } from "@/domain/search/VacancySource.js";
 import type {
   CoverLetterCache,
   DigestCacheStore,
@@ -11,7 +11,7 @@ import type {
   JudgementCache,
   ResumeProvider,
   ResumeRegistry,
-} from "../../domain/digest/ports.js";
+} from "@/domain/digest/ports.js";
 
 /** Лимиты ИИ-шагов: env читает composition root, сценарий получает числа. */
 export interface DigestSettings {

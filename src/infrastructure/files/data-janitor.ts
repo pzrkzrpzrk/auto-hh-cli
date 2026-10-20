@@ -3,11 +3,11 @@
 // те же каталоги и коллекции, та же сводка (её форматирует сценарий).
 import fs from "fs";
 import path from "path";
-import { connect, dbInstance } from "../mongo/db.js";
-import * as collectCache from "../mongo/cache-store.js";
-import { DATA_DIR, SEARCH_DIR, DIGEST_DIR, REJECTED_DIR } from "../config/paths.js";
-import type { DataJanitor, ResetSummary } from "../../domain/ports.js";
-import log from "../../shared/logger.js";
+import { connect, dbInstance } from "@/infrastructure/mongo/db.js";
+import * as collectCache from "@/infrastructure/mongo/cache-store.js";
+import { DATA_DIR, SEARCH_DIR, DIGEST_DIR, REJECTED_DIR } from "@/infrastructure/config/paths.js";
+import type { DataJanitor, ResetSummary } from "@/domain/ports.js";
+import log from "@/shared/logger.js";
 
 async function clearMongoCollection(name: string): Promise<{ collection: string; deleted: number }> {
   try {

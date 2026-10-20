@@ -1,6 +1,6 @@
 // Единый пул воркеров для пачек ИИ-запросов.
 // Чистый shared-модуль: без env и инфраструктуры; логгер приходит параметром.
-import type { LogSink } from "./logging.js";
+import type { LogSink } from "@/shared/logging.js";
 
 /** Режет список на пачки по `size` элементов. `size < 1` поднимается до 1. */
 export function chunk<T>(items: T[], size: number): T[][] {

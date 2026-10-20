@@ -1,6 +1,6 @@
 // MongoDB connection manager.
 import { MongoClient, Db } from "mongodb";
-import { intFromEnv } from "../config/env.js";
+import { intFromEnv } from "@/infrastructure/config/env.js";
 
 const URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/autohh';
 // Не ждём дефолтные 30 с, если MongoDB недоступна: команды (digest show, cover, apply)

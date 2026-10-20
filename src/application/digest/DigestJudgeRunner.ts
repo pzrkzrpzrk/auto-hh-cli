@@ -1,15 +1,15 @@
 // Application Service судейства: пачки, кэш вердиктов и частичное сохранение.
 // Заменяет judgeWithClaude из application/digest.ts: политика пачек и сохранение
 // после каждой пачки — здесь, а как именно спрашивать ИИ — в JudgeStrategy.
-import { chunk, runBatches } from "../../shared/batches.js";
-import type { DigestPolicy } from "../../domain/digest/DigestPolicy.js";
-import type { JudgementSet } from "../../domain/digest/JudgementSet.js";
-import type { DigestCandidate } from "../../domain/digest/DigestCandidate.js";
-import type { JudgementCache } from "../../domain/digest/ports.js";
-import type { AiProvider } from "../../domain/ports.js";
-import type { Resume } from "../../domain/models.js";
-import { AiJudgeStrategy, type JudgeStrategy } from "./JudgeStrategy.js";
-import log from "../../shared/logger.js";
+import { chunk, runBatches } from "@/shared/batches.js";
+import type { DigestPolicy } from "@/domain/digest/DigestPolicy.js";
+import type { JudgementSet } from "@/domain/digest/JudgementSet.js";
+import type { DigestCandidate } from "@/domain/digest/DigestCandidate.js";
+import type { JudgementCache } from "@/domain/digest/ports.js";
+import type { AiProvider } from "@/domain/ports.js";
+import type { Resume } from "@/domain/models.js";
+import { AiJudgeStrategy, type JudgeStrategy } from "@/application/digest/JudgeStrategy.js";
+import log from "@/shared/logger.js";
 
 /** Итог прогона судьи: сколько вакансий реально ушло в модель. */
 export interface JudgeRunResult {

@@ -1,7 +1,7 @@
 // Value Object: счётчики прогона отклика и их представление.
 // Раньше ok/fail/skipped были тремя let-переменными внутри цикла — теперь один объект,
 // который умеет и считать, и отдать готовый итог команде.
-import type { ApplyOutcome } from "./ApplyDeps.js";
+import type { ApplyOutcome } from "@/application/apply/ApplyDeps.js";
 
 export class ApplySummary {
   private okCount = 0;

@@ -4,49 +4,49 @@
 //
 // Здесь же — точка, где позже подключаются другие адаптеры (ИИ-провайдер, уведомления):
 // домен о них не знает, знает только этот файл.
-import "./infrastructure/logging/logger.js";
-import * as cacheStore from "./infrastructure/mongo/cache-store.js";
-import history from "./infrastructure/mongo/history-store.js";
-import MongoJudgementCache from "./infrastructure/mongo/judgement-cache.js";
-import MongoDigestRepository from "./infrastructure/mongo/digest-repository.js";
-import MongoCoverLetterCache from "./infrastructure/mongo/cover-letter-cache.js";
-import MongoResumeRegistry from "./infrastructure/mongo/resume-registry.js";
-import FileDigestSource from "./infrastructure/files/digest-file-source.js";
-import FileDataJanitor from "./infrastructure/files/data-janitor.js";
-import FileResumeFiles from "./infrastructure/files/resume-files.js";
-import FileSearchReportWriter from "./infrastructure/files/search-report-writer.js";
-import { createAiProvider } from "./infrastructure/ai/client.js";
-import { configProvider } from "./infrastructure/config/config.js";
-import { intFromEnv } from "./infrastructure/config/env.js";
-import { DEFAULT_COVER_SIGNATURE } from "./domain/cover-letter/system-text.js";
-import { close as closeDb } from "./infrastructure/mongo/db.js";
-import NodeCronScheduler from "./infrastructure/scheduling/node-cron.js";
-import log from "./shared/logger.js";
-import { MIN_DELAY, MAX_DELAY } from "./infrastructure/config/apply-config.js";
-import PlaywrightApplicationGateway from "./infrastructure/playwright/application-gateway.js";
-import HHClient from "./infrastructure/hh/client.js";
-import HHVacancySource from "./infrastructure/hh/vacancy-source.js";
-import HHResumeSource from "./infrastructure/hh/resume-source.js";
-import HHSourceProvider from "./infrastructure/hh/source-provider.js";
+import "@/infrastructure/logging/logger.js";
+import * as cacheStore from "@/infrastructure/mongo/cache-store.js";
+import history from "@/infrastructure/mongo/history-store.js";
+import MongoJudgementCache from "@/infrastructure/mongo/judgement-cache.js";
+import MongoDigestRepository from "@/infrastructure/mongo/digest-repository.js";
+import MongoCoverLetterCache from "@/infrastructure/mongo/cover-letter-cache.js";
+import MongoResumeRegistry from "@/infrastructure/mongo/resume-registry.js";
+import FileDigestSource from "@/infrastructure/files/digest-file-source.js";
+import FileDataJanitor from "@/infrastructure/files/data-janitor.js";
+import FileResumeFiles from "@/infrastructure/files/resume-files.js";
+import FileSearchReportWriter from "@/infrastructure/files/search-report-writer.js";
+import { createAiProvider } from "@/infrastructure/ai/client.js";
+import { configProvider } from "@/infrastructure/config/config.js";
+import { intFromEnv } from "@/infrastructure/config/env.js";
+import { DEFAULT_COVER_SIGNATURE } from "@/domain/cover-letter/system-text.js";
+import { close as closeDb } from "@/infrastructure/mongo/db.js";
+import NodeCronScheduler from "@/infrastructure/scheduling/node-cron.js";
+import log from "@/shared/logger.js";
+import { MIN_DELAY, MAX_DELAY } from "@/infrastructure/config/apply-config.js";
+import PlaywrightApplicationGateway from "@/infrastructure/playwright/application-gateway.js";
+import HHClient from "@/infrastructure/hh/client.js";
+import HHVacancySource from "@/infrastructure/hh/vacancy-source.js";
+import HHResumeSource from "@/infrastructure/hh/resume-source.js";
+import HHSourceProvider from "@/infrastructure/hh/source-provider.js";
 import type {
   AiProvider,
   CollectDeps,
   ResumeSource,
   SearchDeps,
   SourceProvider,
-} from "./domain/ports.js";
-import type { DigestCacheStore } from "./domain/digest/ports.js";
-import type { VacancySource } from "./domain/search/VacancySource.js";
-import type { ApplyDeps } from "./application/apply.js";
-import type { CoverConfig, CoverDeps } from "./application/cover.js";
-import type { DigestDeps } from "./application/digest.js";
-import type { ActualizeDeps, DigestShowDeps } from "./application/digest.js";
-import type { GradeDeps } from "./application/grade.js";
-import type { HistoryDeps } from "./application/history.js";
-import type { ResetDeps } from "./application/reset.js";
-import type { ResumeDeps } from "./application/resume.js";
-import type { ResumeDownloadDeps } from "./application/resume-download.js";
-import type { ScheduleRuntimeDeps } from "./application/schedule.js";
+} from "@/domain/ports.js";
+import type { DigestCacheStore } from "@/domain/digest/ports.js";
+import type { VacancySource } from "@/domain/search/VacancySource.js";
+import type { ApplyDeps } from "@/application/apply.js";
+import type { CoverConfig, CoverDeps } from "@/application/cover.js";
+import type { DigestDeps } from "@/application/digest.js";
+import type { ActualizeDeps, DigestShowDeps } from "@/application/digest.js";
+import type { GradeDeps } from "@/application/grade.js";
+import type { HistoryDeps } from "@/application/history.js";
+import type { ResetDeps } from "@/application/reset.js";
+import type { ResumeDeps } from "@/application/resume.js";
+import type { ResumeDownloadDeps } from "@/application/resume-download.js";
+import type { ScheduleRuntimeDeps } from "@/application/schedule.js";
 
 // Адаптер конфигурации — один на процесс; команды получают его через composition.
 export { configProvider };

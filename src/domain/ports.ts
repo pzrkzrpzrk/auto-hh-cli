@@ -10,12 +10,12 @@ import type {
   SearchEntry,
   SearchFileResult,
   Vacancy,
-} from "./models.js";
-import type { DigestFilterRules } from "./digest/types.js";
-import type { SearchCacheSnapshot, SearchConfig } from "./search/types.js";
-import type { VacancySource } from "./search/VacancySource.js";
+} from "@/domain/models.js";
+import type { DigestFilterRules } from "@/domain/digest/types.js";
+import type { SearchCacheSnapshot, SearchConfig } from "@/domain/search/types.js";
+import type { VacancySource } from "@/domain/search/VacancySource.js";
 
-export type { Logger } from "./logging.js";
+export type { Logger } from "@/domain/logging.js";
 
 /** Планировщик cron: сценарий не зависит от node-cron. */
 export interface Scheduler {

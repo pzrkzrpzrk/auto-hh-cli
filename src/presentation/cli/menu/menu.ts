@@ -1,10 +1,10 @@
 // Интерактивное меню: список пунктов, диспетчеризация и обработка Ctrl+C.
 // Меню ничего не делает само — оно собирает ответы (ui/steps.ts) и вызывает существующие cmd-*.
 import { confirm, select, Separator } from "@inquirer/prompts";
-import cmdApply from "../commands/cmd-apply.js";
-import cmdDigest from "../commands/cmd-digest.js";
-import cmdHistory from "../commands/cmd-history.js";
-import cmdConfig from "../commands/cmd-config.js";
+import cmdApply from "@/presentation/cli/commands/cmd-apply.js";
+import cmdDigest from "@/presentation/cli/commands/cmd-digest.js";
+import cmdHistory from "@/presentation/cli/commands/cmd-history.js";
+import cmdConfig from "@/presentation/cli/commands/cmd-config.js";
 import {
   runActualize,
   runApply,
@@ -17,8 +17,8 @@ import {
   runSchedule,
   runSearch,
   runSearchDigest,
-} from "./steps.js";
-import { describeActiveResume, type UiContext } from "./resume.js";
+} from "@/presentation/cli/menu/steps.js";
+import { describeActiveResume, type UiContext } from "@/presentation/cli/menu/resume.js";
 
 type MenuItem =
   | "search"

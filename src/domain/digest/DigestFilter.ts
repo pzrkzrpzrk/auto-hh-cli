@@ -3,15 +3,15 @@
 // в класс: правила config.filter и регионы «любые вакансии» задаются один раз
 // в конструкторе (или через DigestFilter.from). I/O здесь нет — отметки истории
 // и логи пропусков остаются в стадии LocalFilterStage.
-import type { Vacancy } from "../models.js";
-import type { VacancyListItem } from "../search/types.js";
+import type { Vacancy } from "@/domain/models.js";
+import type { VacancyListItem } from "@/domain/search/types.js";
 import type {
   CandidateVerdict,
   DigestCandidate,
   DigestFilterSelection,
   SkippedCandidate,
-} from "./DigestCandidate.js";
-import type { DigestConfig, DigestFilterRules } from "./types.js";
+} from "@/domain/digest/DigestCandidate.js";
+import type { DigestConfig, DigestFilterRules } from "@/domain/digest/types.js";
 
 // ID регионов «любые вакансии» по умолчанию (hh: 1 = Москва, 2 = Санкт-Петербург).
 const DEFAULT_ANY_REGIONS: (string | number)[] = ['1', '2'];

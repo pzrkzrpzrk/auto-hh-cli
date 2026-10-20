@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+const path = require('path');
 require('dotenv').config();
+// tsx ищет tsconfig.json по cwd, поэтому алиасы "@/..." ломаются при запуске из другой папки.
+process.env.TSX_TSCONFIG_PATH = process.env.TSX_TSCONFIG_PATH || path.join(__dirname, '..', 'tsconfig.json');
 require('tsx/cjs');
 require('../src/presentation/cli/index').run();

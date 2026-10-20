@@ -1,6 +1,6 @@
 // Стадия конвейера (Template Method): общий каркас запуска, шаг — в execute().
 // Проверка «конвейер уже остановлен» живёт здесь, поэтому каждая стадия не дублирует её.
-import type { DigestContext } from "./DigestContext.js";
+import type { DigestContext } from "@/application/digest/DigestContext.js";
 
 export type StageOutcome = 'continue' | 'stop';
 

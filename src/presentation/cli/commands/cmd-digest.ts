@@ -1,10 +1,10 @@
 // Команда digest: выбор действия и подключение репортера.
 // Оркестрация — в сценариях application/digest, тексты — в format/digest-report.
-import { digestDeps, digestShowDeps, actualizeDeps } from "../../../composition.js";
-import { DigestScenario } from "../../../application/digest/DigestScenario.js";
-import { DigestShowScenario } from "../../../application/digest/DigestShowScenario.js";
-import { ActualizeScenario } from "../../../application/digest/ActualizeScenario.js";
-import { ConsoleDigestReporter, printActualize, printDigestShow } from "../format/digest-report.js";
+import { digestDeps, digestShowDeps, actualizeDeps } from "@/composition.js";
+import { DigestScenario } from "@/application/digest/DigestScenario.js";
+import { DigestShowScenario } from "@/application/digest/DigestShowScenario.js";
+import { ActualizeScenario } from "@/application/digest/ActualizeScenario.js";
+import { ConsoleDigestReporter, printActualize, printDigestShow } from "@/presentation/cli/format/digest-report.js";
 
 const reporter = new ConsoleDigestReporter();
 

@@ -1,14 +1,14 @@
 // Стадии подготовки писем по дайджесту. Каждая — один шаг прежнего coverDigest,
 // с тем же порядком и текстами логов; I/O идёт через порты.
-import log from "../../shared/logger.js";
-import { buildCoverLettersBatch } from "../../domain/cover-letter/index.js";
-import type { DigestEntry, Vacancy } from "../../domain/models.js";
-import { AllVacanciesPolicy } from "../../domain/search/FullCardPolicy.js";
-import SearchCache from "../search/SearchCache.js";
-import { VacancyCollector } from "../search/VacancyCollector.js";
-import { CoverStage, type StageResult } from "./CoverStage.js";
-import { CoverPlan, CoverProgress } from "./CoverPlan.js";
-import type { CoverContext } from "./CoverContext.js";
+import log from "@/shared/logger.js";
+import { buildCoverLettersBatch } from "@/domain/cover-letter/index.js";
+import type { DigestEntry, Vacancy } from "@/domain/models.js";
+import { AllVacanciesPolicy } from "@/domain/search/FullCardPolicy.js";
+import SearchCache from "@/application/search/SearchCache.js";
+import { VacancyCollector } from "@/application/search/VacancyCollector.js";
+import { CoverStage, type StageResult } from "@/application/cover/CoverStage.js";
+import { CoverPlan, CoverProgress } from "@/application/cover/CoverPlan.js";
+import type { CoverContext } from "@/application/cover/CoverContext.js";
 
 /** 1. Последний дайджест; пусто — конвейер останавливается с исходом empty. */
 export class LoadDigestStage extends CoverStage {

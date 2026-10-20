@@ -1,6 +1,6 @@
 // Команда reset: сбросить историю, кэш и дайджесты.
-import resetData, { formatResetSummary } from "../../../application/reset.js";
-import { resetDeps } from "../../../composition.js";
+import resetData, { formatResetSummary } from "@/application/reset.js";
+import { resetDeps } from "@/composition.js";
 
 async function reset() {
   const summary = await resetData(resetDeps);

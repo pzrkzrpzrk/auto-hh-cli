@@ -2,7 +2,7 @@
 // Ключи страниц в кэше разведены префиксом, иначе проходы перезаписывали бы страницы друг друга.
 //   config.search.area        — регионы, где берём ЛЮБЫЕ вакансии;
 //   config.search.remote_area — регионы, где берём ТОЛЬКО удалёнку (schedule=remote).
-import type { SearchParams } from "./types.js";
+import type { SearchParams } from "@/domain/search/types.js";
 
 export class SearchBucket {
   constructor(

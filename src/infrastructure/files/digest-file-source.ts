@@ -2,9 +2,9 @@
 // Fallback для `digest show`, когда MongoDB недоступна: чтение файлов живёт здесь,
 // а не в сценарии.
 import fs from "fs";
-import { DIGEST_DIR } from "../config/paths.js";
-import { listDigestFiles } from "./digest-files.js";
-import type { DigestFileSource } from "../../domain/digest/ports.js";
+import { DIGEST_DIR } from "@/infrastructure/config/paths.js";
+import { listDigestFiles } from "@/infrastructure/files/digest-files.js";
+import type { DigestFileSource } from "@/domain/digest/ports.js";
 
 class FileDigestSource implements DigestFileSource {
   latestContents(): string[] {

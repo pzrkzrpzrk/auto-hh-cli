@@ -1,6 +1,6 @@
 // Команда config: показать текущую конфигурацию.
-import { configProvider } from "../../../composition.js";
-import { showConfig } from "../../../application/config-view.js";
+import { configProvider } from "@/composition.js";
+import { showConfig } from "@/application/config-view.js";
 
 async function configCmd() {
   const cfg = showConfig({ config: configProvider });

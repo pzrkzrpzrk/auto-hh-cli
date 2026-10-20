@@ -1,11 +1,11 @@
 // Контекст прогона отклика: план, который стадии собирают по шагам.
 // Один mutable-объект вместо десятка параметров между функциями прежнего runApply.
-import type { DigestEntry } from "../../domain/models.js";
-import type { ApplyDeps } from "./ApplyDeps.js";
-import type { ApplySummary } from "./ApplySummary.js";
-import type { DigestSelection } from "./DigestSelection.js";
-import type { Pacing } from "./Pacing.js";
-import type { SkipRule } from "./SkipRules.js";
+import type { DigestEntry } from "@/domain/models.js";
+import type { ApplyDeps } from "@/application/apply/ApplyDeps.js";
+import type { ApplySummary } from "@/application/apply/ApplySummary.js";
+import type { DigestSelection } from "@/application/apply/DigestSelection.js";
+import type { Pacing } from "@/application/apply/Pacing.js";
+import type { SkipRule } from "@/application/apply/SkipRules.js";
 
 export interface ApplyContext {
   readonly deps: ApplyDeps;

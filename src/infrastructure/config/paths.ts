@@ -17,7 +17,7 @@ export const REJECTED_DIR = path.join(DATA_DIR, 'rejected');
 
 // Имя папки для вакансий без региона и санитизация сегментов пути — общие утилиты
 // (shared/path-utils.ts): их использует и раскладка data/, и доменный рендер резюме.
-import { UNKNOWN_REGION, sanitizeSegment } from "../../shared/path-utils.js";
+import { UNKNOWN_REGION, sanitizeSegment } from "@/shared/path-utils.js";
 export { UNKNOWN_REGION, sanitizeSegment };
 
 

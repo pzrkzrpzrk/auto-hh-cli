@@ -4,8 +4,8 @@ import {
   listResumesForCli,
   registerResumeByName,
   loadResumeForShow,
-} from "../../../application/resume.js";
-import { resumeDeps } from "../../../composition.js";
+} from "@/application/resume.js";
+import { resumeDeps } from "@/composition.js";
 
 async function cmdResumeList() {
   const outcome = await listResumesForCli(resumeDeps);

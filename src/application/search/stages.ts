@@ -1,11 +1,11 @@
 // Фазы поиска (Chain of Responsibility): страницы выдачи → файл → полные карточки.
 // Ошибки файла и карточек не валят поиск — данные уже в кэше; страницы валят (как раньше).
-import type { SearchEntry } from "../../domain/models.js";
-import { fmtSalary } from "../collect.js";
-import { SkipSeenPolicy } from "../../domain/search/FullCardPolicy.js";
-import { SearchStage, type StageResult } from "./SearchStage.js";
-import type { SearchContext } from "./SearchContext.js";
-import log from "../../shared/logger.js";
+import type { SearchEntry } from "@/domain/models.js";
+import { fmtSalary } from "@/application/collect.js";
+import { SkipSeenPolicy } from "@/domain/search/FullCardPolicy.js";
+import { SearchStage, type StageResult } from "@/application/search/SearchStage.js";
+import type { SearchContext } from "@/application/search/SearchContext.js";
+import log from "@/shared/logger.js";
 
 // Единый литерал строки выдачи для файла — те же поля, что у элемента cachePages
 // (id/name/employer/area/salary/alternate_url), см. mapSearchItem в адаптере hh/client.ts.

@@ -1,8 +1,8 @@
 // Сценарий планировщика: запуск пайплайна (search → digest → cover) по cron-расписанию.
 // Сами шаги приходят из presentation (application не зависит от команд), печать — тоже там.
-import { getNextDate } from "../shared/cron.js";
-import log from "../shared/logger.js";
-import type { ConfigProvider, Scheduler } from "../domain/ports.js";
+import { getNextDate } from "@/shared/cron.js";
+import log from "@/shared/logger.js";
+import type { ConfigProvider, Scheduler } from "@/domain/ports.js";
 
 export type PipelineStep = (opts?: Record<string, any>) => Promise<any>;
 
