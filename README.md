@@ -200,7 +200,8 @@ npm start           # или: npm run ui, npx auto-hh, npx auto-hh ui (алиа�
 | --- | --- |
 | `npm start` | Открыть интерактивное меню (то же, что `npx auto-hh`) |
 | `npm run ui` | То же меню явной командой: `npx auto-hh ui` (алиасы: `menu`, `interactive`) |
-| `npm run build` | Компиляция TS в JS (не обязательна) |
+| `npm run build` | Проверка границ слоёв + компиляция TS в JS (не обязательна для запуска) |
+| `npm run arch` | Проверить правила зависимостей слоёв (`dependency-cruiser`) |
 | `npm run migrate:up` | Применить миграции MongoDB |
 | `npm run migrate:down` | Откатить последнюю миграцию |
 | `npm run migrate:create` | Создать новую миграцию |
@@ -383,18 +384,25 @@ npm start           # или: npm run ui, npx auto-hh, npx auto-hh ui (алиа�
 │  │  ├─ digest.ts              # фасад: buildDigest / showDigest / actualizeDigests
 │  │  ├─ digest/                # ООП-дайджест: политика, конвейер 7 стадий, сервис судейства,
 │  │  │                         #   сценарии показа и актуализации, стратегии ИИ
-│  │  ├─ cover.ts               # сопроводительные (весь дайджест или один id)
-│  │  ├─ apply.ts               # цикл откликов через Playwright
+│  │  ├─ config-view.ts         # просмотр config.json через ConfigProvider
+│  │  ├─ cover.ts               # runCover() — обёртка над CoverScenario
+│  │  ├─ cover/                 # ООП-письма: фасад, режимы «одна вакансия»/«дайджест»,
+│  │  │                         #   конвейер 7 стадий, Value Object со счётчиками
+│  │  ├─ apply.ts               # runApply() — обёртка над ApplyScenario
+│  │  ├─ apply/                 # ООП-отклик: фасад, конвейер 5 стадий плана, исполнитель цикла,
+│  │  │                         #   стратегии latest/all и паузы, цепочка правил пропуска,
+│  │  │                         #   Value Object со счётчиками ok/fail/skipped
 │  │  ├─ grade.ts               # загрузка резюме + оценка
-│  │  ├─ resume.ts              # резюме: list / register / show
-│  │  ├─ resume-download.ts     # скачивание резюме с hh.ru (+PDF)
+│  │  ├─ resume.ts              # резюме: list / register / show (порт ResumeFiles)
+│  │  ├─ resume-download.ts     # скачивание резюме с hh.ru (порты ResumeSource, ResumeFiles)
 │  │  ├─ schedule.ts            # прогон пайплайна по cron
-│  │  ├─ history.ts             # история откликов (выборки)
-│  │  └─ reset.ts               # сброс файлов и коллекций
+│  │  ├─ history.ts             # история откликов (порт HistoryStore)
+│  │  └─ reset.ts               # сброс данных (порт DataJanitor)
 │  ├─ domain/                   # правила и модели, без I/O
 │  │  ├─ models.ts              # Vacancy, Resume, Verdict, DigestEntry, HhResume*
-│  │  ├─ ports.ts               # CacheStore, HistoryStore, SearchDeps, ResumeSource,
-│  │  │                         #   SourceProvider, AiProvider
+│  │  ├─ ports.ts               # CacheStore, HistoryStore, DataJanitor, ResumeFiles,
+│  │  │                         #   SearchReportWriter, AppConfig, ConfigProvider, Logger,
+│  │  │                         #   SearchDeps, ResumeSource, SourceProvider, AiProvider
 │  │  ├─ resume-block.ts / actualize.ts / adapt-resume.ts
 │  │  ├─ resume-markdown.ts / grade-resume.ts
 │  │  ├─ search/                # VO (SearchQuery, SearchBucket, PageKey) и порт VacancySource
@@ -406,11 +414,15 @@ npm start           # или: npm run ui, npx auto-hh, npx auto-hh ui (алиа�
 │  │  ├─ ai/client.ts           # единый OpenAI-совместимый клиент
 │  │  ├─ mongo/                 # db, cache-store, digest-store, history-store, resume-store,
 │  │  │                         #   digest-repository, judgement-cache, cover-letter-cache, resume-registry
-│  │  ├─ files/                 # resume-loader, search-output, digest-files, digest-file-source, resume-file-source
-│  │  ├─ playwright/            # browser, apply-steps (действия на странице)
-│  │  └─ config/                # config, env, paths, apply-config
-│  ├─ shared/                   # logger, concurrency, retry, text-utils, time, cron, path-utils, format
-│  └─ composition.ts            # сборка зависимостей: источники hh.ru, ИИ, хранилища
+│  │  ├─ files/                 # resume-loader, resume-files, data-janitor, search-output,
+│  │  │                         #   search-report-writer, digest-files, digest-file-source
+│  │  ├─ logging/logger.ts      # адаптер LogSink: data/app.log + DEBUG
+│  │  ├─ scheduling/node-cron.ts # адаптер Scheduler (единственный import node-cron)
+│  │  ├─ playwright/            # browser, apply-steps, application-gateway (порты отклика)
+│  │  └─ config/                # config (FileConfigProvider), env, paths, apply-config
+│  ├─ shared/                   # logger-фасад, logging, batches, retry, text-utils, time,
+│  │                            #   cron, path-utils, format
+│  └─ composition.ts            # сборка зависимостей: источники hh.ru, ИИ, хранилища, closeResources()
 ├─ scripts/                    # вспомогательные скрипты (judge-only, fill-cover-letters, …)
 ├─ migrations/                 # миграции MongoDB
 ├─ migrate-mongo-config.js     # настройки migrate-mongo (берёт MONGODB_URI из .env)
@@ -418,6 +430,10 @@ npm start           # или: npm run ui, npx auto-hh, npx auto-hh ui (алиа�
 ```
 
 Шаг `digest` собран как конвейер стадий (`application/digest/`): политика прогона → кэш → фильтр → ИИ-судья → отбор → запись; тексты консоли — в `presentation/cli/format/digest-report.ts`. Подробнее — `docs/architecture.md`, раздел «Паттерны дайджеста (этап 7)».
+
+Шаг `apply` устроен так же (`application/apply/`): `ApplyScenario` (фасад) собирает план стадиями «дайджест → архив → лимит → письма → история», затем `ApplicationRunner` ведёт цикл откликов внутри сессии браузера. Выбор дайджеста (`latest`/`all`), паузы и правила пропуска вынесены в стратегии и цепочку правил. Подробнее — `docs/architecture.md`, раздел «Паттерны отклика (этап 8)».
+
+Шаг `cover` (`application/cover/`) выбирает стратегию режима: одна вакансия или весь последний дайджест. В режиме дайджеста конвейер стадий проходит «дайджест → лимит → кэш писем → описания вакансий → выбор → генерация пачками → запись», а `CoverPlan`/`CoverProgress` отвечают за счётчики и тексты логов. Подробнее — `docs/architecture.md`, раздел «Паттерны писем (этап 8)».
 
 ---
 

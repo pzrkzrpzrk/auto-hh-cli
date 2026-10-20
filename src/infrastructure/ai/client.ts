@@ -8,6 +8,13 @@ import { positiveIntFromEnv } from "../config/env.js";
 const DEFAULT_MODEL = 'glm-4.7-flash';
 const DEFAULT_MAX_TOKENS = 32768;
 
+// Настройки повторов читает адаптер (shared/retry больше не знает про env).
+const RETRY_DEFAULTS = {
+  attempts: positiveIntFromEnv('AI_RETRY_ATTEMPTS', 5),
+  baseDelayMs: positiveIntFromEnv('AI_RETRY_BASE_MS', 1000),
+  maxDelayMs: positiveIntFromEnv('AI_RETRY_MAX_MS', 30000),
+};
+
 let client: OpenAI | null = null;
 let lastConfig: any = null;
 
@@ -56,7 +63,7 @@ class OpenAiProvider implements AiProvider {
         messages: messages as any,
         ...(json ? { response_format: { type: 'json_object' } } : {}),
       }),
-      label ? { label } : {},
+      label ? { ...RETRY_DEFAULTS, label } : RETRY_DEFAULTS,
     );
 
     return {

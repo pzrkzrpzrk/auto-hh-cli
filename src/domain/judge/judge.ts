@@ -1,7 +1,7 @@
-import log from "../../shared/logger.js";
 import { buildResumeBlock } from "../resume-block.js";
 import type { AiProvider } from "../ports.js";
 import { stripHtml, parseJSON } from "../../shared/text-utils.js";
+import { errorMessage } from "../../shared/errors.js";
 import { adaptResumeForVacancy } from "../adapt-resume.js";
 import type { Vacancy, Resume, Verdict, JudgeOpts } from "../models.js";
 import { buildSystemText } from "./system-text.js";
@@ -89,10 +89,10 @@ async function judgeVacancy(ai: AiProvider | null, resume: Resume, vacancy: Vaca
     if (!text) return null;
     const parsed = parseJSON(text);
     const verdict = normalizeVerdict(verdictList(parsed)[0] ?? {});
-    log.debug(`judge ${vacancy.id}: score=${verdict.score} fit=${verdict.fit} in=${resp.usage.prompt} out=${resp.usage.completion}`);
+    opts.logger?.debug(`judge ${vacancy.id}: score=${verdict.score} fit=${verdict.fit} in=${resp.usage.prompt} out=${resp.usage.completion}`);
     return verdict;
   } catch (err) {
-    log.warn(`judge failed for ${vacancy.id}: ${err.message}`);
+    opts.logger?.warn(`judge failed for ${vacancy.id}: ${errorMessage(err)}`);
     return null;
   }
 }
@@ -140,7 +140,7 @@ async function judgeVacanciesBatch(ai: AiProvider | null, resume: Resume, vacanc
     if (!text) return null;
     const parsed = parseJSON(text);
 
-    log.debug(`judge batch ${vacancies.length}: in=${resp.usage.prompt || 0} out=${resp.usage.completion || 0}`);
+    opts.logger?.debug(`judge batch ${vacancies.length}: in=${resp.usage.prompt || 0} out=${resp.usage.completion || 0}`);
 
     const map = new Map();
     for (const v of verdictList(parsed)) {
@@ -149,7 +149,7 @@ async function judgeVacanciesBatch(ai: AiProvider | null, resume: Resume, vacanc
     }
     return map;
   } catch (err) {
-    log.warn(`judge batch failed (${vacancies.length} items): ${err.message}`);
+    opts.logger?.warn(`judge batch failed (${vacancies.length} items): ${errorMessage(err)}`);
     return null;
   }
 }

@@ -1,102 +1,19 @@
-// Сценарий отклика: загрузка дайджеста, проверка писем и авторизации, цикл откликов.
-// Работа со страницей — infrastructure/playwright/apply-steps.ts, настройки — apply-config.ts.
-// Команда только запускает сценарий и выставляет код возврата.
-import { openBrowser, PROFILE } from "../infrastructure/playwright/browser.js";
-import log from "../shared/logger.js";
-import history from "../infrastructure/mongo/history-store.js";
-import { getDigestsByDate, getAllDigests } from "../infrastructure/mongo/digest-store.js";
-import { withCoverLetters } from "../infrastructure/mongo/cache-store.js";
-import { sleep, rand, dateKey } from "../shared/time.js";
-import { HEADLESS, MIN_DELAY, MAX_DELAY } from "../infrastructure/config/apply-config.js";
-import { applyToVacancy, ensureLoggedIn } from "../infrastructure/playwright/apply-steps.js";
+// Сценарий отклика: точка входа для команды и обратная совместимость runApply().
+// Вся оркестрация — ApplyScenario (фасад) + конвейер стадий в application/apply/.
+import { ApplyScenario } from "./apply/ApplyScenario.js";
+import type { ApplyDeps, ApplyOutcome } from "./apply/ApplyDeps.js";
 
-/** Итог сценария: команда выставляет exitCode только при неудачной авторизации. */
-export type ApplyOutcome =
-  | { kind: 'login' }
-  | { kind: 'not-logged-in' }
-  | { kind: 'done'; ok: number; fail: number; skipped: number };
+// Совместимость: composition root и команда импортируют типы из этого модуля.
+export type { ApplyDeps, ApplyOutcome, ApplySettings } from "./apply/ApplyDeps.js";
 
-async function loadDigest(type: string) {
-  if (type === 'all') {
-    log.info('Loading all digests');
-    return getAllDigests('digest');
-  }
-  return getDigestsByDate('digest', dateKey());
+/**
+ * Отклик на вакансии дайджеста.
+ * opts: { type?: 'latest' | 'all'; limit?: number; login?: boolean } — те же флаги, что у команды.
+ */
+export async function runApply(
+  opts: Record<string, any> = {},
+  deps: ApplyDeps,
+): Promise<ApplyOutcome> {
+  return new ApplyScenario(deps).run(opts);
 }
 
-async function loginFlow() {
-  log.info(`Launching headful browser, profile: ${PROFILE}`);
-  log.info('Залогиньтесь на hh.ru вручную, потом просто закройте браузер.');
-  const { page } = await openBrowser({ headless: false });
-  await page.goto('https://hh.ru/account/login', { waitUntil: 'domcontentloaded' });
-  await new Promise(() => {}); // бесконечное ожидание — браузер жив, пока не закроют.
-}
-
-export async function runApply(opts: Record<string, any> = {}): Promise<ApplyOutcome> {
-  if (opts.login) {
-    await loginFlow();
-    return { kind: 'login' };
-  }
-
-  const type = opts.type || 'latest';
-  const loaded = await loadDigest(type);
-  // Актуализированные (шаг `digest actualize`) вакансии пропускаем: их уже нет в поиске.
-  const entries = loaded.filter(e => !e.archived);
-  if (loaded.length !== entries.length) {
-    log.info(`Недоступных пропущено: ${loaded.length - entries.length}`);
-  }
-
-  if (opts.limit && Number.isFinite(opts.limit) && opts.limit > 0) {
-    entries.splice(opts.limit);
-    log.info(`Limit applied: ${opts.limit} vacancies`);
-  }
-  log.info(`${entries.length} vacancies in digest`);
-
-  // Письма генерируются отдельным шагом (пункт меню «✉️ Письма для дайджеста») и лежат в cacheCoverLetters.
-  const planned = await withCoverLetters(entries);
-  const withoutLetter = planned.filter(e => !e.coverLetter).length;
-  if (withoutLetter) {
-    log.warn(`${withoutLetter} вакансий без сопроводительного — пропускаю (сгенерируйте: пункт меню «✉️ Письма для дайджеста»)`);
-  }
-
-  const { ctx, page } = await openBrowser({ headless: HEADLESS });
-
-  // Проверка авторизации.
-  if (!await ensureLoggedIn(page)) {
-    await ctx.close();
-    // process.exit() здесь оборвал бы finally в run() и незаписанные данные в Mongo.
-    return { kind: 'not-logged-in' };
-  }
-
-  let ok = 0, fail = 0, skipped = 0;
-  for (const entry of planned) {
-    if (!entry.coverLetter) {
-      log.warn(`Skip ${entry.id}: no cover letter`);
-      skipped++;
-      continue;
-    }
-    const state = await history.load();
-    const rec = state.applied[entry.id];
-    if (rec && !rec.digestOnly) {
-      log.info(`Skip ${entry.id}: already applied`);
-      continue;
-    }
-    try {
-      const res = await applyToVacancy(page, entry);
-      if (res.ok) {
-        await history.markApplied(entry.id, { via: 'playwright', url: entry.url });
-        ok++;
-      } else {
-        fail++;
-      }
-    } catch (err) {
-      log.warn(`Apply failed for ${entry.id}: ${err.message}`);
-      fail++;
-    }
-    await sleep(rand(MIN_DELAY, MAX_DELAY));
-  }
-
-  log.info(`Done. ok=${ok}, fail=${fail}, skipped=${skipped}`);
-  await ctx.close();
-  return { kind: 'done', ok, fail, skipped };
-}

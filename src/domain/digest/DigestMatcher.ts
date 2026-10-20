@@ -1,9 +1,14 @@
 // Domain Service отбора: кто попадает в дайджест, а кто — в rejected.
-// Раньше это была функция selectAccepted в application/digest.ts: правило отбора,
-// логи и break по лимиту были перемешаны. Теперь правило читает политику и не делает I/O.
-import log from "../../shared/logger.js";
+// Правило не делает I/O и не логирует: факты для логов возвращаются событиями,
+// а печатает их стадия (application/digest/stages.ts).
 import { fmtSalary } from "../../shared/format.js";
-import type { AcceptedCandidate, DigestCandidate, DigestSelection, RejectedEntry } from "./DigestCandidate.js";
+import type {
+  AcceptedCandidate,
+  DigestCandidate,
+  DigestSelection,
+  DigestSelectionEvent,
+  RejectedEntry,
+} from "./DigestCandidate.js";
 import type { DigestPolicy } from "./DigestPolicy.js";
 import type { JudgementSet } from "./JudgementSet.js";
 
@@ -17,24 +22,25 @@ export class DigestMatcher {
   select(candidates: DigestCandidate[], judgements: JudgementSet): DigestSelection {
     const accepted: AcceptedCandidate[] = [];
     const rejected: RejectedEntry[] = [];
+    const events: DigestSelectionEvent[] = [];
 
     for (const { full, verdict } of candidates) {
       if (accepted.length >= this.policy.maxRun) break;
 
       let score: number | null = null;
-      let reason = '';
+      let reason: string | null = '';
       let comment: string | null = null;
 
       if (this.policy.useJudge) {
         const judgement = judgements.get(String(full.id));
         if (!judgement) {
-          log.warn(`No judgement for ${full.id}, falling back to template`);
+          events.push({ kind: 'no-judgement', id: String(full.id) });
         } else {
           score = judgement.score;
           reason = judgement.reason;
           comment = judgement.comment;
           if (!judgement.fit) {
-            log.info(`Claude rejected ${full.id} (score=${score}): ${reason}`);
+            events.push({ kind: 'rejected', id: String(full.id), score, reason });
             rejected.push({
               id: String(full.id),
               title: full.name,
@@ -48,13 +54,13 @@ export class DigestMatcher {
             });
             continue;
           }
-          log.info(`Claude approved ${full.id} (score=${score}): ${comment || reason}`);
+          events.push({ kind: 'approved', id: String(full.id), score, text: comment || reason });
         }
       }
 
       accepted.push({ full, verdict, score, reason, comment });
     }
 
-    return { accepted, rejected };
+    return { accepted, rejected, events };
   }
 }

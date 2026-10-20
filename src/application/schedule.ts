@@ -1,13 +1,19 @@
 // Сценарий планировщика: запуск пайплайна (search → digest → cover) по cron-расписанию.
 // Сами шаги приходят из presentation (application не зависит от команд), печать — тоже там.
-import cron from "node-cron";
-import { loadConfig } from "../infrastructure/config/config.js";
 import { getNextDate } from "../shared/cron.js";
 import log from "../shared/logger.js";
+import type { ConfigProvider, Scheduler } from "../domain/ports.js";
 
 export type PipelineStep = (opts?: Record<string, any>) => Promise<any>;
 
-export interface ScheduleDeps {
+export interface ScheduleRuntimeDeps {
+  /** Конфиг читается по явному пути из opts.config; сценарий не трогает env. */
+  config: ConfigProvider;
+  /** Планировщик: адаптер подставляет composition root. */
+  scheduler: Scheduler;
+}
+
+export interface ScheduleDeps extends ScheduleRuntimeDeps {
   /** Шаги пайплайна по именам из config.schedule.steps. */
   steps: Record<string, PipelineStep>;
 }
@@ -39,9 +45,13 @@ export async function runSchedule(
   deps: ScheduleDeps,
   report?: (event: ScheduleEvent) => void,
 ): Promise<ScheduleOutcome> {
-  const cfg = loadConfig();
+  const cfg = deps.config.load(opts.config);
   // Резюме из меню ui (если выбрано) — иначе шаги digest/cover возьмут дефолт из .env.
-  const stepOpts: Record<string, any> = opts.resume ? { resume: opts.resume } : {};
+  // Путь к конфигу передаём шагам, чтобы альтернативный файл действовал на весь прогон.
+  const stepOpts: Record<string, any> = {
+    ...(opts.resume ? { resume: opts.resume } : {}),
+    ...(opts.config ? { config: opts.config } : {}),
+  };
 
   if (!cfg.schedule?.cron) {
     return { kind: 'no-cron' };
@@ -50,13 +60,13 @@ export async function runSchedule(
   const expression = cfg.schedule.cron;
   const steps = resolveSteps(cfg);
 
-  if (!cron.validate(expression)) {
+  if (!deps.scheduler.validate(expression)) {
     return { kind: 'invalid-cron', expression };
   }
 
   const next = getNextDate(expression);
 
-  cron.schedule(expression, async () => {
+  deps.scheduler.schedule(expression, async () => {
     report?.({ type: 'pipeline-start', at: new Date().toISOString() });
 
     for (const step of steps) {

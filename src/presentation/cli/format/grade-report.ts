@@ -81,7 +81,7 @@ function buildMarkdown(result: Record<string, any>): string {
   return lines.join("\n");
 }
 
-function formatGrade(result: Record<string, any>): void {
+function formatGrade(result: Record<string, any> | null): void {
   if (!result) {
     console.log("Оценка не получена (проверьте API-ключ и RESUME_PATH)");
     return;

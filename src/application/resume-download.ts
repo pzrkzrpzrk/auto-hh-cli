@@ -2,13 +2,11 @@
 // Печать — в команде: сценарий отдаёт события фаз и итоговый массив результатов.
 // Источник резюме можно передать снаружи (меню уже открыло сессию) — тогда сценарий
 // её не закрывает: владелец браузера закрывает сам.
-import fs from "fs";
-import path from "path";
 import type { HhResumeSummary } from "../domain/models.js";
-import type { ResumeSource, SourceProvider } from "../domain/ports.js";
+import type { ResumeFiles, ResumeSource, SourceProvider } from "../domain/ports.js";
+import type { ResumeRegistry } from "../domain/digest/ports.js";
 import { renderResumeMarkdown, slugifyResumeName } from "../domain/resume-markdown.js";
-import { ensureResumesDir, loadResume, resumesDir } from "../infrastructure/files/resume-loader.js";
-import { registerResume } from "../infrastructure/mongo/resume-store.js";
+import { errorMessage, errorName } from "../shared/errors.js";
 import log from "../shared/logger.js";
 
 export interface ResumeDownloadOptions {
@@ -26,6 +24,10 @@ export interface ResumeDownloadOptions {
 export interface ResumeDownloadDeps {
   /** Фабрика с жизненным циклом: открыть источник → скачать → закрыть. */
   source: SourceProvider<ResumeSource>;
+  /** Файлы резюме на диске: каталог, запись .md, пути PDF. */
+  files: ResumeFiles;
+  /** Регистрация скачанного резюме в MongoDB. */
+  registry: ResumeRegistry;
 }
 
 export interface ResumeDownloadResult {
@@ -53,19 +55,19 @@ export async function downloadResumes(
   deps: ResumeDownloadDeps,
   report?: (event: ResumeDownloadEvent) => void,
 ): Promise<ResumeDownloadResult[]> {
-  const dir = ensureResumesDir();
+  deps.files.ensureDir();
   if (!process.env.RESUMES_DIR && process.env.RESUME_PATH) {
     log.warn('RESUME_PATH задан без RESUMES_DIR: скачанное резюме ляжет рядом с RESUME_PATH и не попадёт в список резюме. Задайте RESUMES_DIR, чтобы использовать его в меню.');
   }
 
   // Переданный источник принадлежит вызывающему (меню): закрывать его не нам.
-  if (opts.source) return downloadWith(opts.source, dir, opts, report);
-  return deps.source.withSource(source => downloadWith(source, dir, opts, report));
+  if (opts.source) return downloadWith(opts.source, deps, opts, report);
+  return deps.source.withSource(source => downloadWith(source, deps, opts, report));
 }
 
 async function downloadWith(
   source: ResumeSource,
-  dir: string,
+  deps: ResumeDownloadDeps,
   opts: ResumeDownloadOptions,
   report?: (event: ResumeDownloadEvent) => void,
 ): Promise<ResumeDownloadResult[]> {
@@ -108,20 +110,20 @@ async function downloadWith(
       const name = slugifyResumeName(data, item.hash);
       result.name = name;
 
-      const file = path.join(dir, `${name}.md`);
+      const file = deps.files.pathFor(name, 'md');
       result.file = file;
-      if (fs.existsSync(file) && !opts.overwrite) {
+      const saved = deps.files.save(name, renderResumeMarkdown(data), { overwrite: opts.overwrite });
+      if (!saved.saved) {
         result.skipped = true;
         report?.({ type: 'file-skipped', title: item.title, file });
       } else {
-        fs.writeFileSync(file, renderResumeMarkdown(data), "utf-8");
         report?.({ type: 'file-saved', title: item.title, file });
       }
 
       if (opts.pdf) {
-        const pdfFile = path.join(dir, "pdf", `${name}.pdf`);
+        const pdfFile = deps.files.pathFor(name, 'pdf');
         try {
-          if (fs.existsSync(pdfFile) && !opts.overwrite) {
+          if (deps.files.exists(pdfFile) && !opts.overwrite) {
             result.pdf = pdfFile;
             report?.({ type: 'pdf-skipped', file: pdfFile });
           } else {
@@ -130,25 +132,25 @@ async function downloadWith(
           }
         } catch (err) {
           // PDF — необязательная копия: .md уже сохранён, поэтому не валим результат.
-          if (err?.name === "LoginRequiredError") throw err;
-          log.warn(`PDF для «${item.title}» не скачан: ${err?.message || err}`);
+          if (errorName(err) === "LoginRequiredError") throw err;
+          log.warn(`PDF для «${item.title}» не скачан: ${errorMessage(err)}`);
         }
       }
 
       if (!result.skipped && !mongoUnavailable) {
         try {
-          const resume = loadResume(name);
-          if (resume) await registerResume(resume);
+          const resume = deps.files.load(name);
+          if (resume) await deps.registry.register(resume);
         } catch (err) {
           // MongoDB может быть не поднят — скачанное резюме от этого не страдает.
           mongoUnavailable = true;
-          log.warn(`Резюме ${name} скачано, но не зарегистрировано в MongoDB: ${err?.message || err}`);
+          log.warn(`Резюме ${name} скачано, но не зарегистрировано в MongoDB: ${errorMessage(err)}`);
         }
       }
     } catch (err) {
       // Истёкшую сессию не маскируем под ошибку одного резюме — пусть меню покажет причину.
-      if (err?.name === "LoginRequiredError") throw err;
-      result.error = err?.message || String(err);
+      if (errorName(err) === "LoginRequiredError") throw err;
+      result.error = errorMessage(err);
       report?.({ type: 'error', title: item.title, message: result.error });
     }
 
@@ -158,6 +160,6 @@ async function downloadWith(
   const saved = results.filter(r => !r.error && !r.skipped).length;
   const skipped = results.filter(r => r.skipped).length;
   const failed = results.filter(r => r.error).length;
-  report?.({ type: 'summary', saved, skipped, failed, dir: resumesDir() });
+  report?.({ type: 'summary', saved, skipped, failed, dir: deps.files.ensureDir() });
   return results;
 }

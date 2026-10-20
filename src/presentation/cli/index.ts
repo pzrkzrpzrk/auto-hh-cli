@@ -4,7 +4,7 @@
 // напрямую из cmd-*, поэтому отдельных подкоманд у CLI больше нет.
 import {  Command  } from "commander";
 import cmdUi from "./menu/menu.js";
-import { close as closeDb } from "../../infrastructure/mongo/db.js";
+import { closeResources } from "../../composition.js";
 
 const program = new Command();
 
@@ -34,7 +34,7 @@ program.action((command?: string) => {
   return cmdUi();
 });
 
-// Точка входа CLI: parseAsync + гарантированное закрытие MongoDB.
+// Точка входа CLI: parseAsync + гарантированное закрытие общих ресурсов (composition root).
 // Без этого монитор соединения держит event loop и процесс не завершается после команды.
 export async function run(argv: string[] = process.argv): Promise<void> {
   try {
@@ -43,7 +43,7 @@ export async function run(argv: string[] = process.argv): Promise<void> {
     console.error(`Ошибка: ${err?.message || err}`);
     process.exitCode = 1;
   } finally {
-    await closeDb().catch(() => {});
+    await closeResources().catch(() => {});
   }
 }
 

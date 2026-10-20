@@ -2,13 +2,13 @@ export interface Vacancy {
   id: number | string;
   name: string;
   description: string;
-  key_skills?: { name: string }[];
-  salary?: { from?: number; to?: number; currency?: string };
-  employer?: { name?: string };
-  area?: { name: string, id: number };
-  experience?: { name?: string };
-  schedule?: { name?: string };
-  employment?: { name?: string };
+  key_skills?: { name: string }[] | null;
+  salary?: { from?: number | null; to?: number | null; currency?: string | null } | null;
+  employer?: { name?: string | null; id?: number | string | null } | null;
+  area?: { name: string; id: number } | null;
+  experience?: { name?: string | null } | null;
+  schedule?: { name?: string | null } | null;
+  employment?: { name?: string | null } | null;
   [key: string]: unknown;
 }
 
@@ -23,9 +23,13 @@ export interface Verdict {
   coverLetter?: string;
 }
 
+import type { Logger } from "./logging.js";
+
 export interface JudgeOpts {
   minScore?: number;
   adaptResume?: boolean;
+  /** Куда писать диагностику: домен не импортирует logger. */
+  logger?: Logger;
   [key: string]: unknown;
 }
 
@@ -129,7 +133,7 @@ export interface DigestEntry {
   salary: string;
   url: string;
   publishedAt?: string | null;
-  score: number;
+  score: number | null;
   reason: string | null;
   comment: string | null;
   coverLetter: string;

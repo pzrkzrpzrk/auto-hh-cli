@@ -3,6 +3,7 @@
 // MongoDB, fs и разбор файлов живут в infrastructure, а связывает их composition root.
 import type { CacheStore } from "../ports.js";
 import type { DigestDoc, DigestEntry, Resume } from "../models.js";
+import type { Judgement } from "./JudgementSet.js";
 import type { RejectedEntry } from "./DigestCandidate.js";
 import type { DigestCacheSnapshot } from "./types.js";
 
@@ -38,23 +39,38 @@ export interface DigestRepository {
 
 /** Кэш вердиктов ИИ-судьи (коллекция cacheJudgements). */
 export interface JudgementCache {
-  save(judgements: Record<string, any>, resumeId?: string, date?: Date): Promise<void>;
+  save(judgements: Record<string, Judgement>, resumeId?: string, date?: Date): Promise<void>;
 }
 
-/** Письма из кэша, подклеиваемые к записям дайджеста при показе/отклике. */
+/** Письма из кэша, подклеиваемые к записям дайджеста при показе, генерации и отклике. */
 export interface CoverLetterCache {
-  attach<T extends { id: string | number; coverLetter?: string }>(entries: T[]): Promise<T[]>;
+  /**
+   * Подклеить письма из кэша.
+   * force=true — считать, что писем нет ни в кэше, ни в записи (перегенерировать всё).
+   */
+  attach<T extends { id: string | number; coverLetter?: string }>(
+    entries: T[],
+    opts?: { force?: boolean },
+  ): Promise<T[]>;
+  /** Сохранить письмо (шаг cover): его читают digest show, cover и apply. */
+  save(vacancyId: string | number, letter: string): Promise<void>;
+}
+
+/** Зарегистрированное резюме из коллекции resumes — для пометки файлов на диске. */
+export interface RegisteredResume {
+  resumeId: string;
+  createdAt: Date;
 }
 
 /** Регистрация резюме в коллекции resumes (без неё не связать вердикты с резюме). */
 export interface ResumeRegistry {
   register(resume: Resume): Promise<void>;
+  /** Уже зарегистрированные резюме: дата регистрации нужна списку в CLI. */
+  listRegistered(): Promise<RegisteredResume[]>;
 }
 
-/** Чтение резюме с диска: файл по имени или путь из .env. */
-export interface ResumeProvider {
-  load(name?: string): Resume | null;
-}
+/** Чтение резюме с диска (порт объявлен в domain/ports.ts: им пользуются grade, cover, digest). */
+export type { ResumeProvider } from "../ports.js";
 
 /** Fallback-источник дайджеста: последние .md-файлы на диске. */
 export interface DigestFileSource {

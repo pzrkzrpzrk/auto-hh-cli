@@ -1,5 +1,5 @@
 import type { Resume } from "./models.js";
-import log from "../shared/logger.js";
+import type { Logger } from "./logging.js";
 import type { AiProvider } from "./ports.js";
 
 function safeJsonParse(text: string): any {
@@ -92,14 +92,14 @@ function buildSystemText(): string {
 
 // Резюме приходит готовым (загрузку с диска делает application/grade.ts):
 // у домена не остаётся ни файлов, ни путей — только правило оценки.
-async function gradeResume(ai: AiProvider | null, resume: Resume | null): Promise<Record<string, any> | null> {
+async function gradeResume(ai: AiProvider | null, resume: Resume | null, logger?: Logger): Promise<Record<string, any> | null> {
   if (!ai) {
-    log.warn("gradeResume: no API client (check API key)");
+    logger?.warn("gradeResume: no API client (check API key)");
     return null;
   }
 
   if (!resume) {
-    log.warn("gradeResume: resume not found (set RESUME_PATH)");
+    logger?.warn("gradeResume: resume not found (set RESUME_PATH)");
     return null;
   }
 
@@ -120,17 +120,17 @@ async function gradeResume(ai: AiProvider | null, resume: Resume | null): Promis
 
     const text = resp.text;
     if (!text) {
-      log.warn("gradeResume: empty response");
+      logger?.warn("gradeResume: empty response");
       return null;
     }
 
     const parsed = safeJsonParse(text);
-    log.debug(
+    logger?.debug(
       `gradeResume: score=${parsed.overallScore} in=${resp.usage.prompt} out=${resp.usage.completion}`
     );
     return parsed;
   } catch (err: any) {
-    log.warn(`gradeResume failed: ${err.message}`);
+    logger?.warn(`gradeResume failed: ${err.message}`);
     return null;
   }
 }

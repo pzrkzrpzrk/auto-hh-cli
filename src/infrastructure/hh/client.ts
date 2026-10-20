@@ -14,7 +14,10 @@ import { openBrowser, assertProfileExists } from "../playwright/browser.js";
 import type { BrowserContext, Page } from "playwright";
 import { env } from "../config/config.js";
 import log from "../../shared/logger.js";
+import { errorMessage } from "../../shared/errors.js";
 import { sleep } from "../../shared/time.js";
+import type { Vacancy } from "../../domain/models.js";
+import type { SearchParams, SearchPageResult } from "../../domain/search/types.js";
 import {
   findResumeList,
   findResumeObject,
@@ -24,7 +27,19 @@ import {
 } from "./resume.js";
 import type { HhResumeData, HhResumeSummary } from "./resume.js";
 
-function decodeEntities(s) {
+// Сырой JSON страницы hh.ru: поля меняются вместе с вёрсткой, поэтому здесь
+// намеренно свободный тип — валидация и разбор идут ниже.
+type RawPageState = Record<string, any>;
+
+interface RawCompensation {
+  from?: number | null;
+  to?: number | null;
+  currencyCode?: string | null;
+  gross?: boolean;
+  noCompensation?: boolean;
+}
+
+function decodeEntities(s: unknown): string {
   if (!s) return '';
   return String(s)
     .replace(/&lt;/g, '<')
@@ -35,7 +50,7 @@ function decodeEntities(s) {
     .replace(/&amp;/g, '&');
 }
 
-function mapCompensation(c) {
+function mapCompensation(c: RawCompensation | null | undefined) {
   if (!c) return null;
   if (c.noCompensation) return null;
   if (!c.from && !c.to) return null;
@@ -48,7 +63,7 @@ function mapCompensation(c) {
 }
 
 // Краткая запись (как в search response старого API).
-function mapSearchItem(v) {
+function mapSearchItem(v: Record<string, any>) {
   return {
     id: String(v.vacancyId),
     name: v.name,
@@ -64,12 +79,12 @@ function mapSearchItem(v) {
 
 // Справочники кодов («FULL», «FIVE_ON_TWO_OFF», «moreThan6») → человекочитаемый текст.
 // Лежат в initialState.vacancyFieldsDictionary как [{ id, text }].
-function buildFieldsDictionary(dict) {
-  const out = {};
+function buildFieldsDictionary(dict: Record<string, unknown> | null | undefined): Record<string, Map<string, string>> {
+  const out: Record<string, Map<string, string>> = {};
   if (!dict) return out;
   for (const [key, list] of Object.entries(dict)) {
     if (!Array.isArray(list)) continue;
-    const map = new Map();
+    const map = new Map<string, string>();
     for (const item of list) {
       if (item && item.id != null) map.set(String(item.id), decodeEntities(item.text) || String(item.id));
     }
@@ -79,42 +94,49 @@ function buildFieldsDictionary(dict) {
 }
 
 // Код из справочника → текст («FULL» → «Полная занятость»); null, если код неизвестен.
-function translateCode(fields, key, code) {
+function translateCode(
+  fields: Record<string, Map<string, string>> | null | undefined,
+  key: string,
+  code: unknown,
+): string | null {
   if (code == null) return null;
   const map = fields?.[key];
   return (map && map.get(String(code))) || null;
 }
 
 // Первый код поля: строка | [{ id, text }] → строка.
-function firstCode(v) {
+function firstCode(v: unknown): string | number | null {
   if (Array.isArray(v)) return v.length ? (v[0]?.id ?? v[0]) : null;
-  return v?.id ?? v ?? null;
+  if (v && typeof v === 'object') return (v as { id?: string | number }).id ?? null;
+  return (v as string | number) ?? null;
 }
 
 // { id, text } | строка → текст.
-function objectName(v) {
+function objectName(v: unknown): string | null {
   if (v == null) return null;
   if (typeof v === 'string') return v;
-  return v.text ?? v.name ?? v.title ?? v.id ?? null;
+  if (typeof v !== 'object') return null;
+  const obj = v as Record<string, any>;
+  return obj.text ?? obj.name ?? obj.title ?? obj.id ?? null;
 }
 
 // keySkills новой карточки — массив строк (в старом API — [{ name }]).
-function toKeySkills(v) {
-  const list = v?.keySkill || v;
-  if (!Array.isArray(list)) return [];
+function toKeySkills(v: unknown): { name: string }[] {
+  const raw = v && typeof v === 'object' && 'keySkill' in v ? (v as Record<string, unknown>).keySkill : v;
+  const list = Array.isArray(raw) ? raw : [];
   return list
-    .map(k => (typeof k === 'string' ? k : (k.name || k.title || k.text || '')))
+    .map((k): string => (typeof k === 'string' ? k : String(k?.name || k?.title || k?.text || '')))
     .filter(Boolean)
     .map(name => ({ name }));
 }
 
 // Список кодов (формат работы). Переводить их в текст нельзя: коды («ON_SITE», «REMOTE»,
 // «HYBRID») разбирает filter.ts.
-function toCodeList(v) {
+function toCodeList(v: unknown): string[] {
   const list = Array.isArray(v) ? v : (v == null ? [] : [v]);
   return list
     .map(x => (typeof x === 'string' ? x : (x?.id ?? x?.code ?? x?.name ?? null)))
-    .filter(x => x != null)
+    .filter((x): x is string | number => x != null)
     .map(String);
 }
 
@@ -122,7 +144,7 @@ function toCodeList(v) {
 // в старом API — status.active. Неизвестный статус считаем НЕ архивным: иначе смена формы
 // ответа помечает архивом всю выдачу (ровно этот дефект и был: archived = !status?.active,
 // а поля active в новом payload нет → true для живых вакансий).
-function isArchived(v) {
+function isArchived(v: Record<string, any>): boolean {
   const st = v?.status;
   if (st) {
     if (typeof st.archived === 'boolean') return st.archived;
@@ -138,13 +160,13 @@ function isArchived(v) {
 // opts.translations — vacancyView.translations (в нём расшифровка workExperience);
 // opts.fields — справочник кодов из vacancyFieldsDictionary (buildFieldsDictionary).
 interface MapVacancyOpts {
-  idHint?: string | null;
+  idHint?: string | number | null;
   links?: { desktop?: string } | null;
   translations?: Record<string, any> | null;
   fields?: Record<string, Map<string, string>> | null;
 }
 
-function mapVacancyView(v, opts: MapVacancyOpts = {}) {
+function mapVacancyView(v: Record<string, any> | null, opts: MapVacancyOpts = {}): Vacancy | null {
   if (!v) return null;
   const rawId = v.vacancyId ?? v.id ?? opts.idHint ?? null;
   const fields = opts.fields || {};
@@ -163,7 +185,7 @@ function mapVacancyView(v, opts: MapVacancyOpts = {}) {
 
   return {
     id: String(rawId),
-    name: decodeEntities(v.name ?? v.title) || null,
+    name: decodeEntities(v.name ?? v.title),
     description: decodeEntities(v.description),
     employer: employer ? { name: employer.visibleName || employer.name, id: employer.id } : null,
     area: v.area ? { id: v.area['@id'] ?? v.area.id ?? v.area.regionId ?? null, name: v.area.name } : null,
@@ -211,6 +233,18 @@ class HHClient {
     this.headless = true;
   }
 
+  /** Страница открыта после init(): методы не проверяют null на каждом обращении. */
+  private get pg(): Page {
+    if (!this.page) throw new Error('Playwright page is not initialized: call init() first');
+    return this.page;
+  }
+
+  /** Контекст браузера — нужен только для скачивания PDF после init(). */
+  private get browserContext(): BrowserContext {
+    if (!this.ctx) throw new Error('Playwright context is not initialized: call init() first');
+    return this.ctx;
+  }
+
   async init(headless = true) {
     if (this.ctx && this.headless === headless) return;
     if (this.ctx) await this.close();
@@ -232,17 +266,17 @@ class HHClient {
   }
 
   async isCaptchaPage() {
-    const url = this.page.url();
+    const url = this.pg.url();
     if (/captcha/i.test(url)) return true;
-    return await this.page.evaluate(() => {
+    return await this.pg.evaluate(() => {
       return !!document.querySelector('[data-qa="account-captcha-picture"], img[src*="captcha"], form[action*="captcha"]');
     }).catch(() => false);
   }
 
-  async solveCaptchaInteractive(url) {
+  async solveCaptchaInteractive(url: string) {
     log.warn('Captcha detected — reopening browser in headful mode. Solve it in the window, then press Enter here.');
     await this.init(false);
-    await this.page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 }).catch(() => {});
+    await this.pg.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 }).catch(() => {});
     await new Promise<void>(resolve => {
       process.stdout.write('Press Enter after solving captcha... ');
       process.stdin.once('data', () => resolve());
@@ -252,8 +286,8 @@ class HHClient {
   }
 
   // Читает JSON из template#HH-Lux-InitialState на уже открытой странице.
-  async readInitialState() {
-    const json = await this.page.evaluate(() => {
+  async readInitialState(): Promise<RawPageState | null> {
+    const json = await this.pg.evaluate(() => {
       const tpl = document.querySelector('template#HH-Lux-InitialState');
       return tpl ? tpl.innerHTML : null;
     });
@@ -261,13 +295,13 @@ class HHClient {
     try {
       return JSON.parse(json);
     } catch (err) {
-      log.warn(`Не удалось разобрать initial state: ${err.message}`);
+      log.warn(`Не удалось разобрать initial state: ${errorMessage(err)}`);
       return null;
     }
   }
 
   // Сохраняет сырое состояние страницы для отладки разметки (HH_DUMP_STATE=1).
-  dumpState(state, url) {
+  dumpState(state: unknown, url: string) {
     try {
       const dir = path.join(process.cwd(), 'data');
       if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
@@ -276,17 +310,20 @@ class HHClient {
       fs.writeFileSync(file, JSON.stringify(state, null, 2), 'utf-8');
       log.info(`Initial state сохранён для отладки: ${file}`);
     } catch (err) {
-      log.warn(`Не удалось сохранить initial state: ${err.message}`);
+      log.warn(`Не удалось сохранить initial state: ${errorMessage(err)}`);
     }
   }
 
   // Открывает url, парсит JSON из template#HH-Lux-InitialState.
-  async fetchInitialState(url, { _retry = false, dump = false } = {}) {
+  async fetchInitialState(
+    url: string,
+    { _retry = false, dump = false }: { _retry?: boolean; dump?: boolean } = {},
+  ): Promise<RawPageState> {
     await this.init(this.headless);
     await sleep(this.delay);
-    const resp = await this.page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    const resp = await this.pg.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
     // Редирект на логин — это не «сломанная вёрстка», а истёкшая сессия профиля.
-    if (/\/account\/login/i.test(this.page.url())) throw new LoginRequiredError();
+    if (/\/account\/login/i.test(this.pg.url())) throw new LoginRequiredError();
     if (!resp || !resp.ok()) {
       const status = resp?.status() || 0;
       throw new Error(`HTTP ${status} ${url}`);
@@ -308,7 +345,7 @@ class HHClient {
     return data;
   }
 
-  async searchVacancies(params) {
+  async searchVacancies(params: SearchParams): Promise<SearchPageResult> {
     const sp = new URLSearchParams();
     if (params.text) sp.set('text', params.text);
     if (params.area != null) {
@@ -351,7 +388,7 @@ class HHClient {
   // (ниже — фолбэки для прежних форм). Без разворачивания обёртки карточка выходила пустой:
   // id «undefined», name undefined и archived true (см. isArchived), из-за чего digest
   // отбрасывал живые вакансии с причиной «archived».
-  async getVacancy(id) {
+  async getVacancy(id: string | number): Promise<Vacancy | null> {
     const url = `https://hh.ru/vacancy/${id}`;
     const data = await this.fetchInitialState(url);
     const view = data?.vacancyView || null;
@@ -366,6 +403,7 @@ class HHClient {
       translations: view?.translations || null,
       fields: buildFieldsDictionary(data.vacancyFieldsDictionary),
     });
+    if (!full) return null;
     // Пустую/неразобранную карточку не отдаём: лучше null (шаги залогируют и пропустят),
     // чем мусорный документ с vacancyId «undefined» в cacheFull.
     if (!full.id || full.id === 'undefined' || !full.name) {
@@ -387,7 +425,7 @@ class HHClient {
       state = await this.fetchInitialState(url, { dump: true });
     } catch (err) {
       if (err instanceof LoginRequiredError) throw err;
-      log.warn(`Не удалось разобрать состояние ${url}: ${err.message} — пробую DOM`);
+      log.warn(`Не удалось разобрать состояние ${url}: ${errorMessage(err)} — пробую DOM`);
     }
 
     let items = state ? findResumeList(state) : [];
@@ -399,9 +437,9 @@ class HHClient {
   /** Фолбэк списка: ссылки на /resume/<hash> на уже открытой странице. */
   async listMyResumesFromDom(): Promise<HhResumeSummary[]> {
     // Страница могла дорисовать список после domcontentloaded — ждём недолго.
-    await this.page.waitForSelector('a[href*="/resume/"]', { timeout: 5000 }).catch(() => {});
+    await this.pg.waitForSelector('a[href*="/resume/"]', { timeout: 5000 }).catch(() => {});
 
-    const items = await this.page.evaluate(() => {
+    const items = await this.pg.evaluate(() => {
       const out = new Map();
       for (const link of document.querySelectorAll('a[href*="/resume/"]')) {
         const href = link.getAttribute('href') || '';
@@ -430,7 +468,7 @@ class HHClient {
       state = await this.fetchInitialState(url, { dump: true });
     } catch (err) {
       if (err instanceof LoginRequiredError) throw err;
-      log.warn(`Не удалось разобрать состояние ${url}: ${err.message} — пробую DOM`);
+      log.warn(`Не удалось разобрать состояние ${url}: ${errorMessage(err)} — пробую DOM`);
     }
 
     let data: HhResumeData | null = null;
@@ -440,7 +478,7 @@ class HHClient {
     }
 
     const fromDom = await this.getMyResumeFromDom(hash).catch(err => {
-      log.warn(`DOM-разбор резюме ${hash} не удался: ${err.message}`);
+      log.warn(`DOM-разбор резюме ${hash} не удался: ${errorMessage(err)}`);
       return null;
     });
 
@@ -459,16 +497,18 @@ class HHClient {
    */
   async getMyResumeFromDom(hash: string): Promise<HhResumeData | null> {
     // Блоки резюме могут дорисоваться позже; если их нет вовсе — сработает rawText.
-    await this.page.waitForSelector('[data-qa^="resume-block"], [data-qa="resume"], h1', { timeout: 5000 }).catch(() => {});
+    await this.pg.waitForSelector('[data-qa^="resume-block"], [data-qa="resume"], h1', { timeout: 5000 }).catch(() => {});
 
-    const raw = await this.page.evaluate(() => {
+    const raw = await this.pg.evaluate(() => {
       // Страницу капчи/входа нельзя выдавать за резюме — иначе сохранится мусор.
       if (document.querySelector('[data-qa="account-captcha-picture"], form[action*="captcha"]')) return null;
 
-      const text = (el) => (el ? (el.innerText || el.textContent || '').replace(/\s+/g, ' ').trim() : '');
-      const q = (sel, root = document) => root.querySelector(sel);
-      const all = (sel, root = document) => Array.from(root.querySelectorAll(sel));
-      const firstText = (root, selectors) => {
+      const text = (el: Element | null): string => (
+        el ? ((el as HTMLElement).innerText || el.textContent || '').replace(/\s+/g, ' ').trim() : ''
+      );
+      const q = (sel: string, root: ParentNode = document): Element | null => root.querySelector(sel);
+      const all = (sel: string, root: ParentNode = document): Element[] => Array.from(root.querySelectorAll(sel));
+      const firstText = (root: ParentNode, selectors: string[]): string => {
         for (const sel of selectors) {
           const el = q(sel, root);
           if (el) {
@@ -478,7 +518,7 @@ class HHClient {
         }
         return '';
       };
-      const unique = (list): string[] => Array.from(new Set(list.filter(Boolean)));
+      const unique = (list: string[]): string[] => Array.from(new Set(list.filter(Boolean)));
 
       const title = firstText(document, [
         '[data-qa="resume-block-title-position"]',
@@ -535,7 +575,7 @@ class HHClient {
       // Последний фолбэк: весь видимый текст резюме без навигации и кнопок.
       const root = q('[data-qa="resume"], [data-qa="resume-content"], main') || document.body;
       const noise = /^(скачать|редактировать|обновить|поделиться|вернуться|назад|откликнуться|показать контакты|hh\.ru)/i;
-      const rawText = (root.innerText || '')
+      const rawText = ((root as HTMLElement).innerText || '')
         .split('\n')
         .map(line => line.trim())
         .filter(line => line && !noise.test(line))
@@ -578,12 +618,12 @@ class HHClient {
    */
   async downloadResumePdf(hash: string, destPath: string): Promise<string | null> {
     await this.init(this.headless);
-    if (!this.page.url().includes(`/resume/${hash}`)) {
-      await this.page.goto(`https://hh.ru/resume/${hash}`, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    if (!this.pg.url().includes(`/resume/${hash}`)) {
+      await this.pg.goto(`https://hh.ru/resume/${hash}`, { waitUntil: 'domcontentloaded', timeout: 30000 });
     }
-    if (/\/account\/login/i.test(this.page.url())) throw new LoginRequiredError();
+    if (/\/account\/login/i.test(this.pg.url())) throw new LoginRequiredError();
 
-    const href = await this.page.evaluate(() => {
+    const href = await this.pg.evaluate(() => {
       const links = Array.from(document.querySelectorAll('a[href]')).map(link => ({
         href: link.getAttribute('href') || '',
         text: ((link as HTMLElement).innerText || link.textContent || '').toLowerCase(),
@@ -598,8 +638,8 @@ class HHClient {
       return null;
     }
 
-    const absolute = new URL(href, this.page.url()).toString();
-    const response = await this.ctx.request.get(absolute, { timeout: 60000 });
+    const absolute = new URL(href, this.pg.url()).toString();
+    const response = await this.browserContext.request.get(absolute, { timeout: 60000 });
     if (!response.ok()) throw new Error(`PDF: HTTP ${response.status()} ${absolute}`);
 
     const body = await response.body();

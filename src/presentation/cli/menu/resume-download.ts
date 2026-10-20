@@ -4,7 +4,8 @@
 import { checkbox, confirm } from "@inquirer/prompts";
 import { openResumeSource } from "../../../composition.js";
 import cmdResumeDownload from "../commands/cmd-resume-download.js";
-import { loadResume } from "../../../infrastructure/files/resume-loader.js";
+import { readResumeFile } from "../../../application/resume.js";
+import { resumeDeps } from "../../../composition.js";
 import type { UiContext } from "./resume.js";
 
 export async function runResumeDownload(ctx: UiContext) {
@@ -48,7 +49,7 @@ export async function runResumeDownload(ctx: UiContext) {
     });
     if (!makeActive) return;
 
-    const resume = loadResume(target.name);
+    const resume = readResumeFile(target.name, resumeDeps);
     if (!resume) {
       console.error(`Резюме «${target.name}» скачано, но не читается: проверьте RESUMES_DIR.`);
       return;

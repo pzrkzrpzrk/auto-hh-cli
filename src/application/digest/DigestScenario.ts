@@ -1,8 +1,5 @@
 // Сценарий сборки дайджеста (Facade): один вход для команды, внутри — конвейер стадий.
 // Команда больше не собирает политику, коллектор и сервисы руками.
-import { aiConcurrencyFromEnv } from "../../shared/concurrency.js";
-import { loadConfig } from "../../infrastructure/config/config.js";
-import { intFromEnv } from "../../infrastructure/config/env.js";
 import { DigestPolicy } from "../../domain/digest/DigestPolicy.js";
 import { DigestFilter } from "../../domain/digest/DigestFilter.js";
 import { JudgementSet } from "../../domain/digest/JudgementSet.js";
@@ -65,17 +62,15 @@ export class DigestScenario {
    * null — собирать нечего (пустой кэш или пустая выдача).
    */
   async build(opts: DigestRunOptions = {}): Promise<DigestBuildResult | null> {
-    if (opts.config) process.env.CONFIG_PATH = opts.config;
-
-    const cfg = loadConfig();
+    const cfg = this.deps.config.load(opts.config);
     const resume = this.deps.resumeFiles.load(opts.resume);
     const hasApiKey = Boolean(cfg.api?.apiKey || process.env.OPENAI_API_KEY || process.env.ANTHROPIC_API_KEY);
     // Все флаги прогона — в одном объекте (domain/digest/DigestPolicy.ts).
     const policy = DigestPolicy.from(cfg, opts, {
       hasResume: Boolean(resume),
       hasApiKey,
-      judgeBatchSize: intFromEnv('JUDGE_BATCH_SIZE', 10),
-      aiConcurrency: aiConcurrencyFromEnv(),
+      judgeBatchSize: this.deps.settings.judgeBatchSize,
+      aiConcurrency: this.deps.settings.aiConcurrency,
     });
     // Правила локального пре-фильтра собираются один раз (domain/digest/DigestFilter.ts).
     const filter = DigestFilter.from(cfg);

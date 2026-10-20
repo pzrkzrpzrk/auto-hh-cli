@@ -1,28 +1,105 @@
-// Порты хранилищ для доменного слоя (DIP).
-// Домен зависит от этих узких интерфейсов, а не от конкретных модулей store/ (MongoDB).
-// Реализации подставляет вызывающий код (CLI — временный composition root), поэтому
-// доменные шаги можно прогонять с подставными хранилищами, без базы.
-import type { HhResumeData, HhResumeSummary } from "./models.js";
-import type { SearchCacheSnapshot } from "./search/types.js";
+// Порты доменного слоя (DIP): хранилища, источники данных и файловый I/O.
+// Домен зависит от этих узких интерфейсов, а не от конкретных модулей store/ (MongoDB) или fs.
+// Реализации подставляет composition root, поэтому сценарии можно прогонять с подставными
+// портами — без базы, браузера и файловой системы.
+import type {
+  DigestEntry,
+  HhResumeData,
+  HhResumeSummary,
+  Resume,
+  SearchEntry,
+  SearchFileResult,
+  Vacancy,
+} from "./models.js";
+import type { DigestFilterRules } from "./digest/types.js";
+import type { SearchCacheSnapshot, SearchConfig } from "./search/types.js";
 import type { VacancySource } from "./search/VacancySource.js";
+
+export type { Logger } from "./logging.js";
+
+/** Планировщик cron: сценарий не зависит от node-cron. */
+export interface Scheduler {
+  /** Проверить cron-выражение. */
+  validate(expression: string): boolean;
+  /** Поставить задачу; колбэк может быть async. */
+  schedule(expression: string, fn: () => void | Promise<void>): void;
+}
+
+/**
+ * Конфигурация приложения — DTO из config.json. Описаны только секции, которые читают
+ * сценарии; остальные ключи остаются на месте и доступны политикам/адаптерам.
+ */
+export interface AppConfig {
+  api?: {
+    apiKey?: string;
+    baseUrl?: string;
+    model?: string;
+    [key: string]: unknown;
+  };
+  apply?: {
+    coverLetterTemplate?: string;
+    minClaudeScore?: number;
+    maxPerRun?: number;
+    dryRun?: boolean;
+    [key: string]: unknown;
+  };
+  adaptResume?: boolean;
+  search?: SearchConfig;
+  filter?: DigestFilterRules;
+  schedule?: {
+    cron?: string;
+    steps?: string[];
+    [key: string]: unknown;
+  };
+  [key: string]: unknown;
+}
+
+/**
+ * Порт конфигурации (DIP): сценарий просит загрузить config.json по явному пути,
+ * а не читает переменную CONFIG_PATH и диск сам. Путь по умолчанию выбирает адаптер.
+ */
+export interface ConfigProvider {
+  load(path?: string): AppConfig;
+}
 
 /**
  * История откликов и просмотров — домену нужны только эти две операции:
  * узнать, что уже просмотрено (шаг сбора карточек), и пометить просмотренным.
  */
 export interface HistoryStore {
-  load(): Promise<{ applied: Record<string, any>; seen: Record<string, string> }>;
+  load(): Promise<HistoryState>;
   markSeen(vacancyId: string | number): Promise<void>;
   /** Отметка «взято в дайджест/отклик»: digest пишет digestOnly, apply — via=playwright. */
-  markApplied(vacancyId: string | number, meta: Record<string, any>): Promise<void>;
+  markApplied(vacancyId: string | number, meta: HistoryMeta): Promise<void>;
+}
+
+/** Метаданные отклика: их пишут digest (digestOnly) и apply (via), читает `history`. */
+export interface HistoryMeta {
+  title?: string;
+  employer?: string | null;
+  url?: string | null;
+  score?: number | null;
+  digestOnly?: boolean;
+  via?: string;
+  /** ISO-дата отметки; её добавляет хранилище при чтении. */
+  at?: string;
+  [key: string]: unknown;
+}
+
+/** Состояние истории: отклики по id и время последнего просмотра по id. */
+export interface HistoryState {
+  applied: Record<string, HistoryMeta>;
+  seen: Record<string, string>;
 }
 
 /** Кэш поиска: чтение снимка (cachePages/cacheFull) и запись страниц и карточек. */
 export interface CacheStore {
   /** Снимок кэша за дату (по умолчанию — сегодня) и, при необходимости, по резюме. */
   load(date?: Date, resumeId?: string): Promise<SearchCacheSnapshot>;
-  savePage(state: any, pageNum: number | string, date?: Date): Promise<void>;
-  saveFullVacancy(vacancy: any, date?: Date): Promise<void>;
+  savePage(state: SearchCacheSnapshot, pageNum: number | string, date?: Date): Promise<void>;
+  saveFullVacancy(vacancy: Vacancy, date?: Date): Promise<void>;
+  /** Полные карточки по id (cacheFull): карта vacancyId → вакансия. Нужна шагу cover. */
+  getFullByVacancyIds(vacancyIds: (string | number)[]): Promise<Record<string, Vacancy>>;
 }
 
 /** Зависимости шагов сбора вакансий. */
@@ -31,9 +108,66 @@ export interface CollectDeps {
   history: HistoryStore;
 }
 
-/** Зависимости сценария поиска: хранилища + источник вакансий с жизненным циклом. */
+// --- Файловый I/O сценариев ------------------------------------------------
+
+/** Итог сброса данных: очищенные коллекции, файлы артефактов и кэш-файлы. */
+export interface ResetSummary {
+  mongo: { collection: string; deleted: number }[];
+  files: string[];
+  cache: string[];
+}
+
+/**
+ * Очистка данных CLI: файлы в data/ и коллекции MongoDB.
+ * Раскладка каталогов и список коллекций — детали адаптера, а не сценария.
+ */
+export interface DataJanitor {
+  clearAll(): Promise<ResetSummary>;
+}
+
+/** Файл резюме на диске: имя без расширения и имя файла с расширением. */
+export interface ResumeFile {
+  name: string;
+  filename: string;
+}
+
+/** Файлы резюме: список, чтение и запись скачанного с hh.ru. */
+export interface ResumeFiles {
+  /** Каталог резюме, созданный при необходимости (для отчёта о сохранении). */
+  ensureDir(): string;
+  /** Доступные файлы резюме. */
+  list(): ResumeFile[];
+  /** Резюме по имени (без расширения) либо резюме по умолчанию. */
+  load(name?: string): Resume | null;
+  /** Путь файла резюме: `md` — Markdown, `pdf` — копия в подкаталоге pdf/. */
+  pathFor(name: string, kind?: 'md' | 'pdf'): string;
+  /** true, если файл уже существует. */
+  exists(file: string): boolean;
+  /** Записать .md; saved=false — файл уже был и overwrite выключен. */
+  save(name: string, markdown: string, opts?: { overwrite?: boolean }): { file: string; saved: boolean };
+}
+
+/**
+ * Чтение резюме с диска: сценарии (grade, cover, digest) просят файл по имени,
+ * а путь по умолчанию (RESUME_PATH / RESUMES_DIR) выбирает адаптер.
+ */
+export interface ResumeProvider {
+  load(name?: string): Resume | null;
+}
+
+/** Запись выдачи поиска в .md: путь, формат и дедупликация — в адаптере. */
+export interface SearchReportWriter {
+  write(entries: SearchEntry[], opts?: { date?: string; query?: string }): Promise<SearchFileResult[]>;
+}
+
+/** Зависимости сценария поиска: хранилища, конфиг, источник и файловые артефакты. */
 export interface SearchDeps extends CollectDeps {
+  config: ConfigProvider;
   source: SourceProvider<VacancySource>;
+  /** Сброс данных перед поиском (`search --reset`). */
+  janitor: DataJanitor;
+  /** Куда стадия поиска пишет выдачу за день. */
+  reportWriter: SearchReportWriter;
 }
 
 // --- Источники hh.ru ------------------------------------------------------
@@ -54,6 +188,37 @@ export interface ResumeSource {
  */
 export interface SourceProvider<T> {
   withSource<R>(fn: (source: T) => Promise<R>): Promise<R>;
+}
+
+// --- Отклик на вакансии ---------------------------------------------------
+
+/** Итог одного отклика: reason нужен только для счётчика и лога сценария. */
+export interface ApplyResult {
+  ok: boolean;
+  reason?: string;
+  note?: string;
+}
+
+/**
+ * Сессия отклика: браузер уже открыт, сценарий просит только «проверь вход» и «откликнись».
+ * Как и ResumeSource, скрывает страницу, селекторы и ручные подтверждения.
+ */
+export interface ApplicationSession {
+  ensureLoggedIn(): Promise<boolean>;
+  apply(entry: DigestEntry): Promise<ApplyResult>;
+}
+
+/**
+ * Провайдер сессии отклика (RAII): открыть браузер → работа → закрыть.
+ * Тот же приём, что SourceProvider: сценарий не знает ни про Playwright, ни про порядок закрытия.
+ */
+export interface ApplicationGateway {
+  withSession<R>(fn: (session: ApplicationSession) => Promise<R>): Promise<R>;
+}
+
+/** Ручной вход: headful-браузер, который живёт, пока пользователь его не закроет. */
+export interface LoginGateway {
+  login(): Promise<void>;
 }
 
 // --- ИИ-провайдер ---------------------------------------------------------

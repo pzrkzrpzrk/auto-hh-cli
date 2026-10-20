@@ -2,6 +2,7 @@
 import fs from "fs";
 import path from "path";
 import { intFromEnv } from "./env.js";
+import type { AppConfig, ConfigProvider } from "../../domain/ports.js";
 
 // Личный список компаний из .env (через запятую). Пустая переменная = null,
 // тогда работает список из config.json → filter.excludedCompanies.
@@ -21,14 +22,13 @@ function excludedCompaniesFromEnv(): string[] | null {
   return out.length ? out : null;
 }
 
-function loadConfig() {
-  const configPath = process.env.CONFIG_PATH || './config.json';
-  const absPath = path.resolve(configPath);
+/** Прочитать и разобрать один файл конфигурации (без кэша). */
+function readConfig(absPath: string): AppConfig {
   if (!fs.existsSync(absPath)) {
     throw new Error(`Config not found: ${absPath}`);
   }
   const raw = fs.readFileSync(absPath, 'utf-8');
-  const cfg = JSON.parse(raw);
+  const cfg = JSON.parse(raw) as AppConfig;
 
   // Личный блэклист компаний держим в .env, чтобы он не попадал в git.
   const excludedCompanies = excludedCompaniesFromEnv();
@@ -37,6 +37,34 @@ function loadConfig() {
   }
 
   return cfg;
+}
+
+/**
+ * Адаптер конфигурации: путь приходит параметром, `CONFIG_PATH` — только дефолт.
+ * Один экземпляр кэширует результат по абсолютному пути, поэтому повторные вызовы
+ * в рамках прогона не читают диск заново и не делят состояние через env.
+ */
+export class FileConfigProvider implements ConfigProvider {
+  private readonly cache = new Map<string, AppConfig>();
+
+  load(configPath?: string): AppConfig {
+    const requested = configPath?.trim() || process.env.CONFIG_PATH || './config.json';
+    const absPath = path.resolve(requested);
+    const cached = this.cache.get(absPath);
+    if (cached) return cached;
+
+    const cfg = readConfig(absPath);
+    this.cache.set(absPath, cfg);
+    return cfg;
+  }
+}
+
+/** Один провайдер на процесс: config.json читается один раз на путь. */
+export const configProvider: ConfigProvider = new FileConfigProvider();
+
+/** Совместимая обёртка: явный путь важнее `CONFIG_PATH`. */
+function loadConfig(configPath?: string): AppConfig {
+  return configProvider.load(configPath);
 }
 
 function env() {
