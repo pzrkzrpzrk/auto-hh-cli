@@ -2,17 +2,17 @@
 // Сценарий application/apply.ts видит только «войди» и «откликнись» — Playwright и
 // селекторы остаются деталью этого файла.
 import type { Page } from "playwright";
-import { openBrowser, PROFILE } from "./browser.js";
-import { applyToVacancy, ensureLoggedIn } from "./apply-steps.js";
-import { HEADLESS } from "../config/apply-config.js";
-import log from "../../shared/logger.js";
+import { openBrowser, PROFILE } from "@/infrastructure/playwright/browser.js";
+import { applyToVacancy, ensureLoggedIn } from "@/infrastructure/playwright/apply-steps.js";
+import { HEADLESS } from "@/infrastructure/config/apply-config.js";
+import log from "@/shared/logger.js";
 import type {
   ApplicationGateway,
   ApplicationSession,
   ApplyResult,
   LoginGateway,
-} from "../../domain/ports.js";
-import type { DigestEntry } from "../../domain/models.js";
+} from "@/domain/ports.js";
+import type { DigestEntry } from "@/domain/models.js";
 
 /** Открытая сессия: страница уже есть, сценарию нужны только два действия. */
 class PlaywrightApplicationSession implements ApplicationSession {

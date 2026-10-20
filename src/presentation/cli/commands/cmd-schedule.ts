@@ -1,10 +1,10 @@
 // Команда schedule: тонкая оболочка над application/schedule.ts.
 // Здесь только состав шагов (команды пайплайна) и печать фаз расписания.
-import { runSchedule, type ScheduleEvent } from "../../../application/schedule.js";
-import { scheduleDeps } from "../../../composition.js";
-import search from "./cmd-search.js";
-import digest from "./cmd-digest.js";
-import cover from "./cmd-cover.js";
+import { runSchedule, type ScheduleEvent } from "@/application/schedule.js";
+import { scheduleDeps } from "@/composition.js";
+import search from "@/presentation/cli/commands/cmd-search.js";
+import digest from "@/presentation/cli/commands/cmd-digest.js";
+import cover from "@/presentation/cli/commands/cmd-cover.js";
 
 // Шаги пайплайна: ключ — имя в config.schedule.steps.
 const STEPS = {

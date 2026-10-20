@@ -1,17 +1,17 @@
 // Шаги меню: собрать ответы промптами и вызвать соответствующую команду.
 // Шаги ничего не решают сами — вся логика остаётся в cmd-*; ctx несёт состояние сессии (резюме).
 import { confirm, input, select, Separator } from "@inquirer/prompts";
-import cmdSearch from "../commands/cmd-search.js";
-import cmdApply from "../commands/cmd-apply.js";
-import cmdDigest from "../commands/cmd-digest.js";
-import cmdReset from "../commands/cmd-reset.js";
-import cmdCover from "../commands/cmd-cover.js";
-import cmdSchedule from "../commands/cmd-schedule.js";
-import cmdGradeResume from "../commands/cmd-grade-resume.js";
-import cmdResume from "../commands/cmd-resume.js";
-import { buildApplyOptions, buildCoverOptions, buildDigestOptions, buildSearchOptions } from "./options.js";
-import { askResumeName, describeActiveResume, pickResume, runPickActiveResume, type UiContext } from "./resume.js";
-import { runResumeDownload } from "./resume-download.js";
+import cmdSearch from "@/presentation/cli/commands/cmd-search.js";
+import cmdApply from "@/presentation/cli/commands/cmd-apply.js";
+import cmdDigest from "@/presentation/cli/commands/cmd-digest.js";
+import cmdReset from "@/presentation/cli/commands/cmd-reset.js";
+import cmdCover from "@/presentation/cli/commands/cmd-cover.js";
+import cmdSchedule from "@/presentation/cli/commands/cmd-schedule.js";
+import cmdGradeResume from "@/presentation/cli/commands/cmd-grade-resume.js";
+import cmdResume from "@/presentation/cli/commands/cmd-resume.js";
+import { buildApplyOptions, buildCoverOptions, buildDigestOptions, buildSearchOptions } from "@/presentation/cli/menu/options.js";
+import { askResumeName, describeActiveResume, pickResume, runPickActiveResume, type UiContext } from "@/presentation/cli/menu/resume.js";
+import { runResumeDownload } from "@/presentation/cli/menu/resume-download.js";
 
 /** Спрашивает неотрицательное число (0 = «как настроено» / без лимита). */
 async function askCount(message: string, def = "0"): Promise<number> {

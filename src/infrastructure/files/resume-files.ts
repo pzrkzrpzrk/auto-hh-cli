@@ -2,10 +2,10 @@
 // Раскладку каталога и имена файлов знает только он — сценарии работают с портом.
 import fs from "fs";
 import path from "path";
-import { ensureResumesDir, listResumes, loadResume, resumesDir } from "./resume-loader.js";
-import type { Resume } from "../../domain/models.js";
-import type { ResumeFile, ResumeFiles } from "../../domain/ports.js";
-import type { ResumeProvider } from "../../domain/digest/ports.js";
+import { ensureResumesDir, listResumes, loadResume, resumesDir } from "@/infrastructure/files/resume-loader.js";
+import type { Resume } from "@/domain/models.js";
+import type { ResumeFile, ResumeFiles } from "@/domain/ports.js";
+import type { ResumeProvider } from "@/domain/digest/ports.js";
 
 class FileResumeFiles implements ResumeFiles, ResumeProvider {
   ensureDir(): string {

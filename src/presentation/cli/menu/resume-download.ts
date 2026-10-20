@@ -2,11 +2,11 @@
 // Браузер открывается здесь один раз: список передаётся в команду, чтобы не
 // навигация по /applicant/resumes не повторялась.
 import { checkbox, confirm } from "@inquirer/prompts";
-import { openResumeSource } from "../../../composition.js";
-import cmdResumeDownload from "../commands/cmd-resume-download.js";
-import { readResumeFile } from "../../../application/resume.js";
-import { resumeDeps } from "../../../composition.js";
-import type { UiContext } from "./resume.js";
+import { openResumeSource } from "@/composition.js";
+import cmdResumeDownload from "@/presentation/cli/commands/cmd-resume-download.js";
+import { readResumeFile } from "@/application/resume.js";
+import { resumeDeps } from "@/composition.js";
+import type { UiContext } from "@/presentation/cli/menu/resume.js";
 
 export async function runResumeDownload(ctx: UiContext) {
   const session = openResumeSource();

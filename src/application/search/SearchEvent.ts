@@ -1,7 +1,7 @@
 // События фаз поиска: команда печатает их в том же порядке, в каком они происходили раньше.
-import type { SearchFileResult } from "../../domain/models.js";
-import type { VacancyListItem } from "../../domain/search/types.js";
-import type { FullCardsSummary } from "./VacancyCollector.js";
+import type { SearchFileResult } from "@/domain/models.js";
+import type { VacancyListItem } from "@/domain/search/types.js";
+import type { FullCardsSummary } from "@/application/search/VacancyCollector.js";
 
 export type SearchEvent =
   | { type: 'reset'; text: string }

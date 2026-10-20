@@ -1,7 +1,7 @@
 // Стратегия паузы между откликами: сценарию важно «подожди», а не как именно.
 // Боевой режим — случайная пауза из env; в проверках подставляется Null Object без ожидания.
-import { rand, sleep } from "../../shared/time.js";
-import type { ApplySettings } from "./ApplyDeps.js";
+import { rand, sleep } from "@/shared/time.js";
+import type { ApplySettings } from "@/application/apply/ApplyDeps.js";
 
 export interface Pacing {
   pause(): Promise<void>;

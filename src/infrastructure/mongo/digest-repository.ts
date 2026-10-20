@@ -10,13 +10,13 @@ import {
   writeActualRejected,
   writeDigest,
   writeRejected,
-} from "./digest-store.js";
-import type { DigestDoc, DigestEntry } from "../../domain/models.js";
+} from "@/infrastructure/mongo/digest-store.js";
+import type { DigestDoc, DigestEntry } from "@/domain/models.js";
 import type {
   DigestArtifactEntry,
   DigestKind,
   DigestRepository,
-} from "../../domain/digest/ports.js";
+} from "@/domain/digest/ports.js";
 
 class MongoDigestRepository implements DigestRepository {
   latest(): Promise<DigestDoc | null> {

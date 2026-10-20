@@ -1,6 +1,6 @@
 // Типы поиска вакансий: то, что сценарии получают от источника (hh.ru) и отдают в кэш.
 // Живут в домене, чтобы application не зависел от Playwright-адаптера.
-import type { Vacancy } from "../models.js";
+import type { Vacancy } from "@/domain/models.js";
 
 /** Элемент выдачи поиска — краткая карточка (id, name, employer, area, salary, url). */
 export interface VacancyListItem {

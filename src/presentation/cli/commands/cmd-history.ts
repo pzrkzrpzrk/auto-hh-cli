@@ -1,8 +1,8 @@
 // Команда history: история откликов из MongoDB (коллекция history).
 // Чтение и выборки — application/history.ts, здесь только печать.
-import { loadHistoryView } from "../../../application/history.js";
-import { historyDeps } from "../../../composition.js";
-import log from "../../../shared/logger.js";
+import { loadHistoryView } from "@/application/history.js";
+import { historyDeps } from "@/composition.js";
+import log from "@/shared/logger.js";
 
 async function cmdHistory(opts: Record<string, any> = {}) {
   const outcome = await loadHistoryView(historyDeps);

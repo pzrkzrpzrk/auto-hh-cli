@@ -1,11 +1,11 @@
 // Режим «одна вакансия»: карточка со страницы hh.ru → письмо → cacheCoverLetters.
 // Шаблон и адаптация резюме приходят из CoverConfig, поэтому сценарий не читает config.json.
-import log from "../../shared/logger.js";
-import { buildCoverLetter } from "../../domain/cover-letter/index.js";
-import type { AiProvider } from "../../domain/ports.js";
-import type { Resume } from "../../domain/models.js";
-import type { CoverConfig, CoverDeps, CoverOutcome, OnVacancy } from "./CoverDeps.js";
-import type { CoverMode } from "./CoverMode.js";
+import log from "@/shared/logger.js";
+import { buildCoverLetter } from "@/domain/cover-letter/index.js";
+import type { AiProvider } from "@/domain/ports.js";
+import type { Resume } from "@/domain/models.js";
+import type { CoverConfig, CoverDeps, CoverOutcome, OnVacancy } from "@/application/cover/CoverDeps.js";
+import type { CoverMode } from "@/application/cover/CoverMode.js";
 
 export class SingleVacancyMode implements CoverMode {
   constructor(

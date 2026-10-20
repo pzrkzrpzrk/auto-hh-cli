@@ -1,5 +1,5 @@
 // Настройки шага отклика из env: единая точка чтения для cmd-apply и его шагов.
-import { intFromEnv } from "./env.js";
+import { intFromEnv } from "@/infrastructure/config/env.js";
 
 // Кнопка отклика по умолчанию работает в видимом окне (headful): ручные подтверждения
 // и тестовые задания требуют браузера перед глазами. PW_HEADLESS=true — для отладки.

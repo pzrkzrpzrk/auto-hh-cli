@@ -1,7 +1,7 @@
 // Сборка параметров запроса выдачи (Builder): config.search + проход + страница.
-import { SearchQuery } from "../../domain/search/SearchQuery.js";
-import { SearchBucket } from "../../domain/search/SearchBucket.js";
-import type { SearchParams } from "../../domain/search/types.js";
+import { SearchQuery } from "@/domain/search/SearchQuery.js";
+import { SearchBucket } from "@/domain/search/SearchBucket.js";
+import type { SearchParams } from "@/domain/search/types.js";
 
 export class SearchRequestBuilder {
   private readonly params: SearchParams;

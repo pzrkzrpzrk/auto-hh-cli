@@ -1,8 +1,8 @@
 // Контекст прогона писем по дайджесту: план, который стадии собирают по шагам.
 // Один mutable-объект вместо десятка параметров между функциями прежнего coverDigest.
-import type { AiProvider } from "../../domain/ports.js";
-import type { DigestDoc, DigestEntry, Resume, Vacancy } from "../../domain/models.js";
-import type { CoverConfig, CoverDeps } from "./CoverDeps.js";
+import type { AiProvider } from "@/domain/ports.js";
+import type { DigestDoc, DigestEntry, Resume, Vacancy } from "@/domain/models.js";
+import type { CoverConfig, CoverDeps } from "@/application/cover/CoverDeps.js";
 
 /** Чем закончился прогон: ok — письма готовы, empty — генерировать нечего. */
 export type CoverOutcomeKind = 'ok' | 'empty';

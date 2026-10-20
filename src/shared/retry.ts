@@ -1,5 +1,5 @@
-import log from "./logger.js";
-import { errorMessage } from "./errors.js";
+import log from "@/shared/logger.js";
+import { errorMessage } from "@/shared/errors.js";
 
 const DEFAULT_ATTEMPTS = 5;
 const DEFAULT_BASE_DELAY_MS = 1000;

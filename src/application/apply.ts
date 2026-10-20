@@ -1,10 +1,10 @@
 // Сценарий отклика: точка входа для команды и обратная совместимость runApply().
 // Вся оркестрация — ApplyScenario (фасад) + конвейер стадий в application/apply/.
-import { ApplyScenario } from "./apply/ApplyScenario.js";
-import type { ApplyDeps, ApplyOutcome } from "./apply/ApplyDeps.js";
+import { ApplyScenario } from "@/application/apply/ApplyScenario.js";
+import type { ApplyDeps, ApplyOutcome } from "@/application/apply/ApplyDeps.js";
 
 // Совместимость: composition root и команда импортируют типы из этого модуля.
-export type { ApplyDeps, ApplyOutcome, ApplySettings } from "./apply/ApplyDeps.js";
+export type { ApplyDeps, ApplyOutcome, ApplySettings } from "@/application/apply/ApplyDeps.js";
 
 /**
  * Отклик на вакансии дайджеста.

@@ -1,8 +1,8 @@
 // Зависимости сценария отклика — только порты (DIP).
 // Playwright и MongoDB подставляет composition root, поэтому сценарий можно прогнать
 // с подставной сессией и хранилищами.
-import type { ApplicationGateway, HistoryStore, LoginGateway } from "../../domain/ports.js";
-import type { CoverLetterCache, DigestRepository } from "../../domain/digest/ports.js";
+import type { ApplicationGateway, HistoryStore, LoginGateway } from "@/domain/ports.js";
+import type { CoverLetterCache, DigestRepository } from "@/domain/digest/ports.js";
 
 /** Итог сценария: команда выставляет exitCode только при неудачной авторизации. */
 export type ApplyOutcome =

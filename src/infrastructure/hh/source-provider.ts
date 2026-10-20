@@ -1,7 +1,7 @@
 // Провайдер жизненного цикла источника (Factory + RAII):
 // создать адаптер → отдать сценарию → закрыть браузер в finally, даже при исключении.
-import HHClient from "./client.js";
-import type { SourceProvider } from "../../domain/ports.js";
+import HHClient from "@/infrastructure/hh/client.js";
+import type { SourceProvider } from "@/domain/ports.js";
 
 class HHSourceProvider<T extends { close(): Promise<void> }> implements SourceProvider<T> {
   constructor(private readonly create: (client: HHClient) => T) {}

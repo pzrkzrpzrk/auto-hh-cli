@@ -1,11 +1,11 @@
 // Порты подсистемы дайджеста (DIP/ISP).
 // Сценарий сборки, показа и актуализации зависит только от этих интерфейсов;
 // MongoDB, fs и разбор файлов живут в infrastructure, а связывает их composition root.
-import type { CacheStore } from "../ports.js";
-import type { DigestDoc, DigestEntry, Resume } from "../models.js";
-import type { Judgement } from "./JudgementSet.js";
-import type { RejectedEntry } from "./DigestCandidate.js";
-import type { DigestCacheSnapshot } from "./types.js";
+import type { CacheStore } from "@/domain/ports.js";
+import type { DigestDoc, DigestEntry, Resume } from "@/domain/models.js";
+import type { Judgement } from "@/domain/digest/JudgementSet.js";
+import type { RejectedEntry } from "@/domain/digest/DigestCandidate.js";
+import type { DigestCacheSnapshot } from "@/domain/digest/types.js";
 
 /** Какие артефакты дайджеста пишутся одинаковым кодом (digest.md и rejected.md). */
 export type DigestKind = 'digest' | 'rejected';
@@ -70,7 +70,7 @@ export interface ResumeRegistry {
 }
 
 /** Чтение резюме с диска (порт объявлен в domain/ports.ts: им пользуются grade, cover, digest). */
-export type { ResumeProvider } from "../ports.js";
+export type { ResumeProvider } from "@/domain/ports.js";
 
 /** Fallback-источник дайджеста: последние .md-файлы на диске. */
 export interface DigestFileSource {

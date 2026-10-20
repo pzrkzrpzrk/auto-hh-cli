@@ -1,15 +1,15 @@
 // Фасад сценария поиска: сброс → открытие источника → конвейер стадий.
 // Стадии ничего не знают друг о друге, порядок и «стоп» задаёт конвейер.
-import { formatResetSummary } from "../reset.js";
-import type { SearchDeps } from "../../domain/ports.js";
-import { SearchQuery } from "../../domain/search/SearchQuery.js";
-import SearchCache from "./SearchCache.js";
-import { VacancyCollector } from "./VacancyCollector.js";
-import { SearchPipeline } from "./SearchPipeline.js";
-import { CollectFullCardsStage, CollectPagesStage, ExportSearchFileStage } from "./stages.js";
-import type { SearchContext } from "./SearchContext.js";
-import type { SearchEvent } from "./SearchEvent.js";
-import log from "../../shared/logger.js";
+import { formatResetSummary } from "@/application/reset.js";
+import type { SearchDeps } from "@/domain/ports.js";
+import { SearchQuery } from "@/domain/search/SearchQuery.js";
+import SearchCache from "@/application/search/SearchCache.js";
+import { VacancyCollector } from "@/application/search/VacancyCollector.js";
+import { SearchPipeline } from "@/application/search/SearchPipeline.js";
+import { CollectFullCardsStage, CollectPagesStage, ExportSearchFileStage } from "@/application/search/stages.js";
+import type { SearchContext } from "@/application/search/SearchContext.js";
+import type { SearchEvent } from "@/application/search/SearchEvent.js";
+import log from "@/shared/logger.js";
 
 export class SearchScenario {
   private readonly pipeline: SearchPipeline;

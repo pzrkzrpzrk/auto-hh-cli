@@ -1,9 +1,9 @@
 // Стратегия выбора вакансий для отклика: сегодняшний дайджест или все сохранённые.
 // Заменяет ветку `if (type === 'all')` внутри сценария: у каждого режима свой класс,
 // а новый источник (например, дайджест за дату) добавляется ещё одной реализацией.
-import type { DigestEntry } from "../../domain/models.js";
-import type { DigestRepository } from "../../domain/digest/ports.js";
-import { dateKey } from "../../shared/time.js";
+import type { DigestEntry } from "@/domain/models.js";
+import type { DigestRepository } from "@/domain/digest/ports.js";
+import { dateKey } from "@/shared/time.js";
 
 export interface DigestSelection {
   /** Режим из флага `type` — нужен сценарию только для лога. */

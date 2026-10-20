@@ -1,7 +1,7 @@
 // Цепочка правил пропуска (Chain of Responsibility): почему вакансию не берём в отклик.
 // Раньше это были два if подряд в цикле; теперь правило — отдельный класс, и новое
 // условие (стоп-слово, лимит по компании) добавляется звеном цепочки.
-import type { DigestEntry } from "../../domain/models.js";
+import type { DigestEntry } from "@/domain/models.js";
 
 /** Решение правила: что писать в лог и считать ли пропуск в сводке. */
 export interface SkipDecision {

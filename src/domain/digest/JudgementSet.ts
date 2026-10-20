@@ -1,7 +1,7 @@
 // Набор вердиктов ИИ-судьи (Value Object).
 // Заменяет сырой `Map`, который сценарий собирал из cache.judgements и мутировал вручную:
 // теперь у набора явные операции — pending(), merge(), toSnapshot().
-import type { DigestCandidate } from "./DigestCandidate.js";
+import type { DigestCandidate } from "@/domain/digest/DigestCandidate.js";
 
 /** Вердикт судьи в том виде, в каком он лежит в cacheJudgements. */
 export interface Judgement {

@@ -1,6 +1,6 @@
 // Ключ страницы в кэше: префикс прохода + номер. Страница 0 всегда запрашивается заново
 // (на ней новые вакансии), остальные берутся из кэша.
-import type { SearchBucket } from "./SearchBucket.js";
+import type { SearchBucket } from "@/domain/search/SearchBucket.js";
 
 export class PageKey {
   constructor(

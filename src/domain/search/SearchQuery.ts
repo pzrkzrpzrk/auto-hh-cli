@@ -1,7 +1,7 @@
 // Запрос поиска как значение: инкапсулирует config.search и правила проходов/страниц.
 // Раньше это была функция searchBuckets(search) с мешком any в аргументах.
-import { SearchBucket } from "./SearchBucket.js";
-import type { SearchConfig } from "./types.js";
+import { SearchBucket } from "@/domain/search/SearchBucket.js";
+import type { SearchConfig } from "@/domain/search/types.js";
 
 export class SearchQuery {
   constructor(private readonly search: SearchConfig = {}) {}

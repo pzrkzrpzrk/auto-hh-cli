@@ -1,6 +1,6 @@
 // Типы сценария дайджеста: конфигурация, флаги запуска и снимок кэша.
 // Живут в домене, чтобы сценарий не зависел от формы config.json и Mongo-документов.
-import type { SearchCacheSnapshot } from "../search/types.js";
+import type { SearchCacheSnapshot } from "@/domain/search/types.js";
 
 /** Секция config.filter — правила локального пре-фильтра вакансий. */
 export interface DigestFilterRules {

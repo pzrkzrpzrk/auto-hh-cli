@@ -3,8 +3,8 @@
 // здесь только чистые функции, которыми пользуются digest, cover и печать.
 // fmtSalary переехал в shared/format.ts (им пользуется и домен), здесь — реэкспорт
 // для существующих импортов.
-import { fmtSalary } from "../shared/format.js";
-import type { SearchCacheSnapshot, VacancyListItem } from "../domain/search/types.js";
+import { fmtSalary } from "@/shared/format.js";
+import type { SearchCacheSnapshot, VacancyListItem } from "@/domain/search/types.js";
 
 // Плоский список собранных вакансий без дублей — вход для шага digest.
 function flattenCollected(cache: Pick<SearchCacheSnapshot, 'pages'>): VacancyListItem[] {

@@ -1,7 +1,7 @@
 // Хранилище истории откликов в MongoDB.
-import { connect, dbInstance } from "./db.js";
+import { connect, dbInstance } from "@/infrastructure/mongo/db.js";
 import { Collection, Document } from "mongodb";
-import type { HistoryMeta, HistoryState } from "../../domain/ports.js";
+import type { HistoryMeta, HistoryState } from "@/domain/ports.js";
 
 const COLLECTION = 'history';
 

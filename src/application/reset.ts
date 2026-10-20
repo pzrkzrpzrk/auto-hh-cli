@@ -1,8 +1,8 @@
 // Сброс истории, кэша и дайджестов: сценарий поверх порта DataJanitor.
 // Раскладку data/ и имена Mongo-коллекций знает адаптер (data-janitor).
-import type { DataJanitor, ResetSummary } from "../domain/ports.js";
+import type { DataJanitor, ResetSummary } from "@/domain/ports.js";
 
-export type { ResetSummary } from "../domain/ports.js";
+export type { ResetSummary } from "@/domain/ports.js";
 
 export interface ResetDeps {
   janitor: DataJanitor;

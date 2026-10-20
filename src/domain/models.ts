@@ -23,7 +23,7 @@ export interface Verdict {
   coverLetter?: string;
 }
 
-import type { Logger } from "./logging.js";
+import type { Logger } from "@/domain/logging.js";
 
 export interface JudgeOpts {
   minScore?: number;

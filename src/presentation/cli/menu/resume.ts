@@ -1,8 +1,8 @@
 // Резюме в меню: активное резюме сессии, подпись из .env и единый список choices.
 // Состояние сессии живёт в ctx (создаёт его ui/menu.ts) — модульных переменных здесь нет.
 import { input, select } from "@inquirer/prompts";
-import { listResumeFiles, readResumeFile } from "../../../application/resume.js";
-import { resumeDeps } from "../../../composition.js";
+import { listResumeFiles, readResumeFile } from "@/application/resume.js";
+import { resumeDeps } from "@/composition.js";
 
 // Значение «резюме не указано»: команда сама возьмёт RESUME_PATH или первый файл из RESUMES_DIR.
 const DEFAULT_RESUME = "__default__";

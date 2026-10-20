@@ -1,6 +1,6 @@
 // Адаптер порта CoverLetterCache: письма из cacheCoverLetters — чтение (с force) и запись.
-import { saveLetter, withCoverLetters } from "./cache-store.js";
-import type { CoverLetterCache } from "../../domain/digest/ports.js";
+import { saveLetter, withCoverLetters } from "@/infrastructure/mongo/cache-store.js";
+import type { CoverLetterCache } from "@/domain/digest/ports.js";
 
 class MongoCoverLetterCache implements CoverLetterCache {
   attach<T extends { id: string | number; coverLetter?: string }>(

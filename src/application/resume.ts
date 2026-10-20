@@ -1,9 +1,9 @@
 // Сценарий управления резюме: список файлов + регистрация + чтение для показа.
 // Печать и коды возврата — в команде: здесь только данные и обращения к портам.
-import type { ResumeFile, ResumeFiles } from "../domain/ports.js";
-import type { ResumeRegistry } from "../domain/digest/ports.js";
-import type { Resume } from "../domain/models.js";
-import log from "../shared/logger.js";
+import type { ResumeFile, ResumeFiles } from "@/domain/ports.js";
+import type { ResumeRegistry } from "@/domain/digest/ports.js";
+import type { Resume } from "@/domain/models.js";
+import log from "@/shared/logger.js";
 
 export interface ResumeDeps {
   /** Файлы резюме на диске. */

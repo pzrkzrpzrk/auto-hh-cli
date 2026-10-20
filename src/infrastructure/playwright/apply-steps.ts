@@ -2,14 +2,14 @@
 // ручное подтверждение. Здесь только Playwright и логи — оркестрация в cli/cmd-apply.ts.
 import fs from "fs";
 import path from "path";
-import log from "../../shared/logger.js";
-import { errorMessage } from "../../shared/errors.js";
+import log from "@/shared/logger.js";
+import { errorMessage } from "@/shared/errors.js";
 import type { Page } from "playwright";
-import type { DigestEntry } from "../../domain/models.js";
-import { intFromEnv } from "../config/env.js";
-import { sleep, rand } from "../../shared/time.js";
-import { DATA_DIR } from "../config/paths.js";
-import { MIN_DELAY, MAX_DELAY, TEST_MODE, TEST_TIMEOUT } from "../config/apply-config.js";
+import type { DigestEntry } from "@/domain/models.js";
+import { intFromEnv } from "@/infrastructure/config/env.js";
+import { sleep, rand } from "@/shared/time.js";
+import { DATA_DIR } from "@/infrastructure/config/paths.js";
+import { MIN_DELAY, MAX_DELAY, TEST_MODE, TEST_TIMEOUT } from "@/infrastructure/config/apply-config.js";
 
 // Селекторы отклика: hh.ru меняет разметку, поэтому их несколько (берём первый подошедший).
 const RESPONSE_BUTTON_SELECTORS = [

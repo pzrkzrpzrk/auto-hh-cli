@@ -1,7 +1,7 @@
 // Репозиторий кэша поиска (Repository): страницы выдачи (cachePages) и полные карточки (cacheFull).
 // Сценарии больше не мутируют объект кэша руками — они просят репозиторий, а он пишет в хранилище.
-import type { CacheStore } from "../../domain/ports.js";
-import type { SearchCacheSnapshot, Vacancy, VacancyListItem } from "../../domain/search/types.js";
+import type { CacheStore } from "@/domain/ports.js";
+import type { SearchCacheSnapshot, Vacancy, VacancyListItem } from "@/domain/search/types.js";
 
 class SearchCache {
   constructor(

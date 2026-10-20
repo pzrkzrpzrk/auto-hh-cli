@@ -1,7 +1,7 @@
 import OpenAI from "openai";
-import type { AiProvider, AiChatOptions, AiChatResult } from "../../domain/ports.js";
-import { retryOnTransient } from "../../shared/retry.js";
-import { positiveIntFromEnv } from "../config/env.js";
+import type { AiProvider, AiChatOptions, AiChatResult } from "@/domain/ports.js";
+import { retryOnTransient } from "@/shared/retry.js";
+import { positiveIntFromEnv } from "@/infrastructure/config/env.js";
 
 // Провайдер задаётся парой: config.json → api.baseUrl + api.model.
 // Дефолт — GLM-4.7-Flash (Z.ai): бесплатная, 200K контекста, 128K вывода.

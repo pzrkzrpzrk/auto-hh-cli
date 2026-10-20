@@ -1,10 +1,10 @@
 // Режим «весь последний дайджест»: конвейер стадий подготавливает план, догружает описания,
 // генерирует письма пачками и обновляет дайджест. Печать остаётся в команде.
-import type { AiProvider } from "../../domain/ports.js";
-import type { Resume } from "../../domain/models.js";
-import type { CoverConfig, CoverDeps, CoverOutcome } from "./CoverDeps.js";
-import type { CoverMode } from "./CoverMode.js";
-import { CoverPipeline } from "./CoverPipeline.js";
+import type { AiProvider } from "@/domain/ports.js";
+import type { Resume } from "@/domain/models.js";
+import type { CoverConfig, CoverDeps, CoverOutcome } from "@/application/cover/CoverDeps.js";
+import type { CoverMode } from "@/application/cover/CoverMode.js";
+import { CoverPipeline } from "@/application/cover/CoverPipeline.js";
 import {
   AttachLettersStage,
   EnsureCardsStage,
@@ -13,8 +13,8 @@ import {
   LoadDigestStage,
   PersistDigestStage,
   SelectItemsStage,
-} from "./stages.js";
-import type { CoverContext } from "./CoverContext.js";
+} from "@/application/cover/stages.js";
+import type { CoverContext } from "@/application/cover/CoverContext.js";
 
 export class DigestCoverMode implements CoverMode {
   private readonly pipeline = new CoverPipeline([

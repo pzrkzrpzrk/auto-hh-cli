@@ -1,12 +1,12 @@
-import type { Logger } from "../logging.js";
-import type { Resume, Vacancy } from "../models.js";
-import { buildResumeBlock } from "../resume-block.js";
-import type { AiProvider } from "../ports.js";
-import { stripHtml, parseJSON } from "../../shared/text-utils.js";
-import { errorMessage } from "../../shared/errors.js";
-import { adaptResumeForVacancy } from "../adapt-resume.js";
-import { buildBatchSystemText, coverSignature } from "./system-text.js";
-import { chunk, runBatches } from "../../shared/batches.js";
+import type { Logger } from "@/domain/logging.js";
+import type { Resume, Vacancy } from "@/domain/models.js";
+import { buildResumeBlock } from "@/domain/resume-block.js";
+import type { AiProvider } from "@/domain/ports.js";
+import { stripHtml, parseJSON } from "@/shared/text-utils.js";
+import { errorMessage } from "@/shared/errors.js";
+import { adaptResumeForVacancy } from "@/domain/adapt-resume.js";
+import { buildBatchSystemText, coverSignature } from "@/domain/cover-letter/system-text.js";
+import { chunk, runBatches } from "@/shared/batches.js";
 
 /** Настройки генерации писем: env читает composition root, домен получает значения. */
 export interface CoverLetterOptions {

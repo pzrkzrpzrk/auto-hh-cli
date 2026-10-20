@@ -1,8 +1,8 @@
 // Сценарий оценки резюме: файлы и ИИ приходят портами из composition root.
 // Домен получает готовое резюме параметром и не знает ни про диск, ни про RESUMES_DIR.
-import { gradeResume } from "../domain/grade-resume.js";
-import type { AiProvider, ResumeFiles } from "../domain/ports.js";
-import type { Logger } from "../domain/logging.js";
+import { gradeResume } from "@/domain/grade-resume.js";
+import type { AiProvider, ResumeFiles } from "@/domain/ports.js";
+import type { Logger } from "@/domain/logging.js";
 
 /** Зависимости оценки: ленивый ИИ и файлы резюме. */
 export interface GradeDeps {

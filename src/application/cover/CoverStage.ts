@@ -1,6 +1,6 @@
 // Стадия конвейера писем (Template Method): общий каркас «включена → выполнить → ошибка».
 // Подкласс описывает только свою фазу плана и политику ошибки.
-import type { CoverContext } from "./CoverContext.js";
+import type { CoverContext } from "@/application/cover/CoverContext.js";
 
 export type StageResult = 'continue' | 'stop';
 

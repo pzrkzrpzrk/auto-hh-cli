@@ -1,9 +1,9 @@
 import fs from "fs";
 import path from "path";
-import { connect, dbInstance } from "./db.js";
-import { DigestEntry, DigestDoc } from "../../domain/models.js";
-import { DIGEST_DIR, REJECTED_DIR, UNKNOWN_REGION, ensureDir, regionDir } from "../config/paths.js";
-import { dateKey } from "../../shared/time.js";
+import { connect, dbInstance } from "@/infrastructure/mongo/db.js";
+import { DigestEntry, DigestDoc } from "@/domain/models.js";
+import { DIGEST_DIR, REJECTED_DIR, UNKNOWN_REGION, ensureDir, regionDir } from "@/infrastructure/config/paths.js";
+import { dateKey } from "@/shared/time.js";
 
 function toMarkdown(entries: any[], title: string, date = dateKey()): string {
   const gone = entries.filter(e => e.archived).length;

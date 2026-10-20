@@ -1,9 +1,9 @@
 // Файловый логгер — адаптер порта LogSink: единственное место с fs и LOG_FILE.
 // Импортируется composition root, который регистрирует sink в shared/logger.
 import fs from "fs";
-import { LOG_FILE, ensureDir } from "../config/paths.js";
-import { setLogSink } from "../../shared/logger.js";
-import type { LogSink } from "../../shared/logging.js";
+import { LOG_FILE, ensureDir } from "@/infrastructure/config/paths.js";
+import { setLogSink } from "@/shared/logger.js";
+import type { LogSink } from "@/shared/logging.js";
 
 function write(level: 'INFO' | 'WARN' | 'ERROR' | 'DEBUG', msg: string, meta?: unknown) {
   ensureDir();

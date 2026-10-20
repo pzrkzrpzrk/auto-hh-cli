@@ -1,8 +1,8 @@
 // Стадии подготовки плана отклика. Каждая — один шаг прежнего runApply,
 // с тем же порядком и текстами логов; I/O идёт через порты.
-import log from "../../shared/logger.js";
-import { ApplyStage, type StageResult } from "./ApplyStage.js";
-import type { ApplyContext } from "./ApplyContext.js";
+import log from "@/shared/logger.js";
+import { ApplyStage, type StageResult } from "@/application/apply/ApplyStage.js";
+import type { ApplyContext } from "@/application/apply/ApplyContext.js";
 
 /** 1. Дайджест выбранной стратегией: сегодняшний (latest) или все сохранённые (all). */
 export class LoadDigestStage extends ApplyStage {

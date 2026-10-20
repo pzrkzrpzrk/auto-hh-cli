@@ -1,20 +1,20 @@
 // Совместимый фасад шага digest: сборка, показ и актуализация.
 // Оркестрация — в application/digest/* (конвейер и сценарии); здесь только точки входа,
 // которые использует команда и внешние импорты.
-import type { DigestEntry } from "../domain/models.js";
-import { DigestScenario } from "./digest/DigestScenario.js";
-import type { DigestBuildResult } from "./digest/DigestScenario.js";
-import { DigestShowScenario } from "./digest/DigestShowScenario.js";
-import type { DigestShowOutcome } from "./digest/DigestShowScenario.js";
-import { ActualizeScenario } from "./digest/ActualizeScenario.js";
-import type { ActualizeResult } from "./digest/ActualizeScenario.js";
-import type { ActualizeDeps, DigestDeps, DigestShowDeps } from "./digest/DigestDeps.js";
+import type { DigestEntry } from "@/domain/models.js";
+import { DigestScenario } from "@/application/digest/DigestScenario.js";
+import type { DigestBuildResult } from "@/application/digest/DigestScenario.js";
+import { DigestShowScenario } from "@/application/digest/DigestShowScenario.js";
+import type { DigestShowOutcome } from "@/application/digest/DigestShowScenario.js";
+import { ActualizeScenario } from "@/application/digest/ActualizeScenario.js";
+import type { ActualizeResult } from "@/application/digest/ActualizeScenario.js";
+import type { ActualizeDeps, DigestDeps, DigestShowDeps } from "@/application/digest/DigestDeps.js";
 
 // Совместимость: команда и composition root импортируют типы из этого модуля.
-export type { ActualizeDeps, DigestDeps, DigestShowDeps } from "./digest/DigestDeps.js";
-export type { DigestBuildResult } from "./digest/DigestScenario.js";
-export type { DigestShowOutcome } from "./digest/DigestShowScenario.js";
-export type { ActualizeResult } from "./digest/ActualizeScenario.js";
+export type { ActualizeDeps, DigestDeps, DigestShowDeps } from "@/application/digest/DigestDeps.js";
+export type { DigestBuildResult } from "@/application/digest/DigestScenario.js";
+export type { DigestShowOutcome } from "@/application/digest/DigestShowScenario.js";
+export type { ActualizeResult } from "@/application/digest/ActualizeScenario.js";
 
 /**
  * Шаг digest: совместимая обёртка над сценарием (application/digest/DigestScenario.ts).

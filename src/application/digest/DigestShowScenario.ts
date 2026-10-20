@@ -1,7 +1,7 @@
 // Сценарий показа дайджеста (Facade): Mongo → письма из кэша; fallback — .md на диске.
 // Команда получает готовый исход и только печатает его.
-import type { DigestEntry } from "../../domain/models.js";
-import type { DigestShowDeps } from "./DigestDeps.js";
+import type { DigestEntry } from "@/domain/models.js";
+import type { DigestShowDeps } from "@/application/digest/DigestDeps.js";
 
 export type DigestShowOutcome =
   | { kind: 'mongo'; date: string; entries: DigestEntry[] }

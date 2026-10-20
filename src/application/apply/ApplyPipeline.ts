@@ -1,7 +1,7 @@
 // Конвейер подготовки плана отклика (Chain of Responsibility/Composite): стадии
 // идут по порядку, пока одна из них не попросит «стоп».
-import type { ApplyContext } from "./ApplyContext.js";
-import type { ApplyStage } from "./ApplyStage.js";
+import type { ApplyContext } from "@/application/apply/ApplyContext.js";
+import type { ApplyStage } from "@/application/apply/ApplyStage.js";
 
 export class ApplyPipeline {
   constructor(private readonly stages: ApplyStage[]) {}

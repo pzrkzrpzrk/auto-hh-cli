@@ -3,9 +3,9 @@
 // оценка — application/grade.ts (резюме читается там, домен файлов не знает).
 import { writeFileSync } from "fs";
 import { join } from "path";
-import { gradeDeps } from "../../../composition.js";
-import { gradeResumeFromFile } from "../../../application/grade.js";
-import { buildMarkdown, formatGrade } from "../format/grade-report.js";
+import { gradeDeps } from "@/composition.js";
+import { gradeResumeFromFile } from "@/application/grade.js";
+import { buildMarkdown, formatGrade } from "@/presentation/cli/format/grade-report.js";
 
 async function cmdGradeResume(opts: Record<string, any> = {}) {
   const result = await gradeResumeFromFile({ resume: opts.resume }, gradeDeps);

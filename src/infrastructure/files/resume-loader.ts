@@ -3,9 +3,9 @@
 import fs from "fs";
 import path from "path";
 import crypto from "crypto";
-import type { Resume } from "../../domain/models.js";
-import log from "../../shared/logger.js";
-import { DATA_DIR } from "../config/paths.js";
+import type { Resume } from "@/domain/models.js";
+import log from "@/shared/logger.js";
+import { DATA_DIR } from "@/infrastructure/config/paths.js";
 
 const DIR = process.env.RESUMES_DIR ? path.resolve(process.env.RESUMES_DIR) : null;
 const FILE = process.env.RESUME_PATH ? path.resolve(process.env.RESUME_PATH) : null;

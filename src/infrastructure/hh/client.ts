@@ -10,22 +10,22 @@
 // Возвращаемые объекты приведены к формату прежнего API hh.ru, чтобы остальной код не менять.
 import path from "path";
 import fs from "fs";
-import { openBrowser, assertProfileExists } from "../playwright/browser.js";
+import { openBrowser, assertProfileExists } from "@/infrastructure/playwright/browser.js";
 import type { BrowserContext, Page } from "playwright";
-import { env } from "../config/config.js";
-import log from "../../shared/logger.js";
-import { errorMessage } from "../../shared/errors.js";
-import { sleep } from "../../shared/time.js";
-import type { Vacancy } from "../../domain/models.js";
-import type { SearchParams, SearchPageResult } from "../../domain/search/types.js";
+import { env } from "@/infrastructure/config/config.js";
+import log from "@/shared/logger.js";
+import { errorMessage } from "@/shared/errors.js";
+import { sleep } from "@/shared/time.js";
+import type { Vacancy } from "@/domain/models.js";
+import type { SearchParams, SearchPageResult } from "@/domain/search/types.js";
 import {
   findResumeList,
   findResumeObject,
   isEmptyResume,
   mergeResume,
   normalizeResume,
-} from "./resume.js";
-import type { HhResumeData, HhResumeSummary } from "./resume.js";
+} from "@/infrastructure/hh/resume.js";
+import type { HhResumeData, HhResumeSummary } from "@/infrastructure/hh/resume.js";
 
 // Сырой JSON страницы hh.ru: поля меняются вместе с вёрсткой, поэтому здесь
 // намеренно свободный тип — валидация и разбор идут ниже.

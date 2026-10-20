@@ -1,7 +1,7 @@
 // Консольный репортер поиска (Observer): все тексты фаз живут здесь,
 // команда только подключает его к сценарию.
-import type { SearchEvent, SearchReporter } from "../../../application/search/SearchEvent.js";
-import { fmtSalary } from "../../../application/collect.js";
+import type { SearchEvent, SearchReporter } from "@/application/search/SearchEvent.js";
+import { fmtSalary } from "@/application/collect.js";
 
 const PREVIEW_LIMIT = 20;
 

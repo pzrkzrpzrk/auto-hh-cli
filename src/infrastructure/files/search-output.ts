@@ -3,9 +3,9 @@
 // для шагов digest/cover остаётся в Mongo (cachePages), здесь только просмотр и сравнение выдачи без базы.
 import fs from "fs";
 import path from "path";
-import { SearchEntry, SearchFileResult } from "../../domain/models.js";
-import { SEARCH_DIR, UNKNOWN_REGION, ensureDir, regionDir } from "../config/paths.js";
-import { dateKey } from "../../shared/time.js";
+import { SearchEntry, SearchFileResult } from "@/domain/models.js";
+import { SEARCH_DIR, UNKNOWN_REGION, ensureDir, regionDir } from "@/infrastructure/config/paths.js";
+import { dateKey } from "@/shared/time.js";
 
 // Формат — как у digest-store: блок на вакансию, разделитель `---`.
 // Заголовок и тело разделены: при дозаписи обновляется только счётчик, уже записанные

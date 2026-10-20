@@ -1,7 +1,7 @@
 // Порт источника вакансий (DIP): сценарии просят «поиск» и «карточку»,
 // а Playwright-адаптер hh.ru подставляет composition root.
-import type { Vacancy } from "../models.js";
-import type { SearchParams, SearchPageResult } from "./types.js";
+import type { Vacancy } from "@/domain/models.js";
+import type { SearchParams, SearchPageResult } from "@/domain/search/types.js";
 
 export interface VacancySource {
   /** Одна страница выдачи по параметрам запроса. */

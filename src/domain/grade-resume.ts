@@ -1,6 +1,6 @@
-import type { Resume } from "./models.js";
-import type { Logger } from "./logging.js";
-import type { AiProvider } from "./ports.js";
+import type { Resume } from "@/domain/models.js";
+import type { Logger } from "@/domain/logging.js";
+import type { AiProvider } from "@/domain/ports.js";
 
 function safeJsonParse(text: string): any {
   let cleaned = text.trim();

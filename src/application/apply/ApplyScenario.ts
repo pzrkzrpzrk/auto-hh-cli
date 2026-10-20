@@ -1,21 +1,21 @@
 // Сценарий отклика (Facade): ручной вход → стратегия выбора вакансий → конвейер
 // подготовки плана → сессия браузера (RAII) → исполнитель цикла.
 // Импортов infrastructure здесь нет: Playwright и MongoDB приходят портами из composition root.
-import type { ApplyDeps, ApplyOutcome } from "./ApplyDeps.js";
-import { ApplyPipeline } from "./ApplyPipeline.js";
-import { ApplySummary } from "./ApplySummary.js";
-import { ApplicationRunner } from "./ApplicationRunner.js";
-import { digestSelection } from "./DigestSelection.js";
-import { RandomPacing } from "./Pacing.js";
-import { applySkipRules } from "./SkipRules.js";
+import type { ApplyDeps, ApplyOutcome } from "@/application/apply/ApplyDeps.js";
+import { ApplyPipeline } from "@/application/apply/ApplyPipeline.js";
+import { ApplySummary } from "@/application/apply/ApplySummary.js";
+import { ApplicationRunner } from "@/application/apply/ApplicationRunner.js";
+import { digestSelection } from "@/application/apply/DigestSelection.js";
+import { RandomPacing } from "@/application/apply/Pacing.js";
+import { applySkipRules } from "@/application/apply/SkipRules.js";
 import {
   AttachLettersStage,
   FilterArchivedStage,
   LimitStage,
   LoadDigestStage,
   LoadHistoryStage,
-} from "./stages.js";
-import type { ApplyContext } from "./ApplyContext.js";
+} from "@/application/apply/stages.js";
+import type { ApplyContext } from "@/application/apply/ApplyContext.js";
 
 export class ApplyScenario {
   private readonly pipeline = new ApplyPipeline([

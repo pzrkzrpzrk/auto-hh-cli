@@ -1,9 +1,9 @@
 // Зависимости сценария писем — только порты (DIP).
 // config.json, MongoDB, диск и ИИ подставляет composition root, поэтому сценарий
 // можно прогнать с подставными портами, без базы и ключа.
-import type { AiProvider, CollectDeps, SourceProvider } from "../../domain/ports.js";
-import type { CoverLetterCache, DigestRepository, ResumeProvider } from "../../domain/digest/ports.js";
-import type { VacancySource } from "../../domain/search/VacancySource.js";
+import type { AiProvider, CollectDeps, SourceProvider } from "@/domain/ports.js";
+import type { CoverLetterCache, DigestRepository, ResumeProvider } from "@/domain/digest/ports.js";
+import type { VacancySource } from "@/domain/search/VacancySource.js";
 
 /** Настройки писем из config.json/env — читает composition root, сценарий их только использует. */
 export interface CoverConfig {
