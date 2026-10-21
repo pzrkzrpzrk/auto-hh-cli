@@ -1,5 +1,6 @@
 // Контекст прогона поиска: всё, что нужно стадиям конвейера.
 import type { AppConfig } from "@/domain/ports.js";
+import type { ResumeRef } from "@/domain/models.js";
 import type { VacancyListItem } from "@/domain/search/types.js";
 import type { SearchQuery } from "@/domain/search/SearchQuery.js";
 import type { SearchReportWriter } from "@/domain/ports.js";
@@ -11,10 +12,12 @@ export interface SearchContext {
   /** Флаги команды: config, reset и прочие, которые читают стадии. */
   readonly opts: Record<string, any>;
   readonly cfg: AppConfig;
+  /** Резюме, в чью папку пишется выдача; null — no-resume. */
+  readonly resume: ResumeRef | null;
   readonly query: SearchQuery;
   readonly cache: SearchCache;
   readonly collector: VacancyCollector;
-  /** Куда записать выдачу за день (порт скрывает data/search/ и формат .md). */
+  /** Куда записать выдачу за день (порт скрывает data/hh-parsing/<резюме>/search/ и формат .md). */
   readonly writer: SearchReportWriter;
   /** Куда сообщать о фазах (команда печатает). */
   readonly report: (event: SearchEvent) => void;

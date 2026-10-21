@@ -47,7 +47,7 @@ export class SingleVacancyMode implements CoverMode {
       if (!letter) return { kind: 'no-letter' } as CoverOutcome;
 
       // Ошибка кэша не отменяет письмо: команда его напечатает, шаг apply — нет.
-      await this.deps.letters.save(String(full.id), letter)
+      await this.deps.letters.save(String(full.id), letter, this.resume.id)
         .catch(err => log.warn(`saveLetter ${full.id}: ${err.message}`));
       return { kind: 'one', letter } as CoverOutcome;
     });

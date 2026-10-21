@@ -8,15 +8,15 @@ import { dateKey } from "@/shared/time.js";
 export interface DigestSelection {
   /** Режим из флага `type` — нужен сценарию только для лога. */
   readonly kind: 'latest' | 'all';
-  load(digests: DigestRepository): Promise<DigestEntry[]>;
+  load(digests: DigestRepository, resumeId?: string): Promise<DigestEntry[]>;
 }
 
-/** latest (по умолчанию): только сегодняшний дайджест. */
+/** latest (по умолчанию): только сегодняшний дайджест (опционально — одного резюме). */
 export class LatestDigestSelection implements DigestSelection {
   readonly kind = 'latest' as const;
 
-  load(digests: DigestRepository): Promise<DigestEntry[]> {
-    return digests.byDate(dateKey());
+  load(digests: DigestRepository, resumeId?: string): Promise<DigestEntry[]> {
+    return digests.byDate(dateKey(), resumeId);
   }
 }
 
@@ -24,8 +24,8 @@ export class LatestDigestSelection implements DigestSelection {
 export class AllDigestsSelection implements DigestSelection {
   readonly kind = 'all' as const;
 
-  load(digests: DigestRepository): Promise<DigestEntry[]> {
-    return digests.all();
+  load(digests: DigestRepository, resumeId?: string): Promise<DigestEntry[]> {
+    return digests.all(resumeId);
   }
 }
 

@@ -15,7 +15,7 @@ async function build(opts: Record<string, any> = {}) {
 
 // Шаг показа: последний дайджест + письма из кэша (fallback — .md файл).
 async function show(opts: Record<string, any> = {}) {
-  printDigestShow(await new DigestShowScenario(digestShowDeps).run(), opts);
+  printDigestShow(await new DigestShowScenario(digestShowDeps).run(opts), opts);
 }
 
 // Шаг актуализации: сценарий обновляет записи, печать итогов — в репорте.

@@ -2,11 +2,31 @@
 // которых нет в последней выдаче. Ничего не удаляет — перезаписывает .md по регионам
 // и пишет сводный снимок по всем прошлым датам в <today>/actual.md.
 import { computeActualization, mergeActualized } from "@/domain/actualize.js";
+import type { ActualizedDoc } from "@/domain/actualize.js";
 import { flattenCollected } from "@/application/collect.js";
 import log from "@/shared/logger.js";
 import type { DigestRunOptions } from "@/domain/digest/types.js";
+import type { ResumeRef } from "@/domain/models.js";
 import { ACTUALIZE_TARGETS } from "@/application/digest/ActualizeTarget.js";
 import type { ActualizeDeps } from "@/application/digest/DigestDeps.js";
+
+/** Резюме документа: null — legacy-документ без привязки (папка no-resume). */
+function refOf(doc: { resumeId?: string | null; resumeName?: string | null }): ResumeRef | null {
+  if (!doc.resumeId) return null;
+  return { id: doc.resumeId, name: doc.resumeName || doc.resumeId };
+}
+
+/** Документы разных резюме пишутся в разные папки — actual.md собирается по группе. */
+function groupByResume(docs: ActualizedDoc[]): { resume: ResumeRef | null; docs: ActualizedDoc[] }[] {
+  const groups = new Map<string, { resume: ResumeRef | null; docs: ActualizedDoc[] }>();
+  for (const doc of docs) {
+    const key = doc.resumeId || '';
+    const bucket = groups.get(key);
+    if (bucket) bucket.docs.push(doc);
+    else groups.set(key, { resume: refOf(doc), docs: [doc] });
+  }
+  return [...groups.values()];
+}
 
 export interface ActualizeResult {
   today: string;
@@ -49,12 +69,15 @@ export class ActualizeScenario {
       }
 
       const toWrite = updated.filter(d => d.changed);
-      // Сводный снимок по всем прошлым датам (кроме сегодня) — один файл <today>/actual.md.
-      const snapshot = mergeActualized(updated);
+      // Сводный снимок по всем прошлым датам (кроме сегодня) — свой actual.md на каждое резюме.
       if (!opts.dryRun) {
-        for (const d of toWrite) await this.deps.digest.save(target.kind, d.entries, d.date);
-        const actualFile = this.deps.digest.saveActual(target.kind, snapshot, today);
-        if (actualFile) snapshots.push(actualFile);
+        for (const d of toWrite) {
+          await this.deps.digest.save(target.kind, d.entries, d.date, refOf(d));
+        }
+        for (const group of groupByResume(updated)) {
+          const actualFile = this.deps.digest.saveActual(target.kind, mergeActualized(group.docs), today, group.resume);
+          if (actualFile) snapshots.push(actualFile);
+        }
       }
       log.info(`${target.label}: ${stats.dates} дат, ${stats.total} вакансий, недоступно ${stats.marked}, `
         + `обновлено дат ${toWrite.length}${opts.dryRun ? ' (dry-run)' : ''}`);

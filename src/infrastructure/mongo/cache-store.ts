@@ -106,6 +106,8 @@ export function getFullByVacancyIds(vacancyIds: (string | number)[]): Promise<Re
 
 // Запись вердиктов по карте vacancyId → judgement. Отдельная функция нужна адаптеру
 // JudgementCache: сценарию дайджеста не обязательно держать весь CacheDoc.
+// resumeId — измерение: дата + резюме + вакансия. Без резюме чистим только «нулевое» ведро,
+// иначе digest без резюме стирал бы вердикты всех остальных резюме за эту дату.
 export async function saveJudgementsMap(
   judgements: Record<string, Judgement>,
   resumeId?: string,
@@ -115,9 +117,7 @@ export async function saveJudgementsMap(
   const db = dbInstance();
   const key = dateKey(date);
   const coll = db.collection('cacheJudgements');
-  const filter: any = { date: key };
-  if (resumeId) filter.resumeId = resumeId;
-  await coll.deleteMany(filter);
+  await coll.deleteMany({ date: key, resumeId: resumeId || null });
   const docs = Object.entries(judgements || {}).map(([vid, j]) => ({
     date: key, resumeId: resumeId || null, vacancyId: vid, score: j.score, fit: j.fit,
     reason: j.reason, comment: j.comment,
@@ -129,31 +129,95 @@ export async function saveJudgements(state: CacheDoc, resumeId?: string, date?: 
   return saveJudgementsMap(state.judgements, resumeId, date);
 }
 
+/** Различные resumeId в кэше вердиктов — для проверки «сирот» в `resume list`. */
+export async function listJudgementResumeIds(): Promise<string[]> {
+  await connect();
+  const ids = await dbInstance().collection('cacheJudgements').distinct('resumeId');
+  return ids.filter((id: any): id is string => typeof id === 'string' && Boolean(id));
+}
+
+/** Сброс вердиктов одного резюме. Возвращает число удалённых документов. */
+export async function clearJudgementsByResume(resumeId: string): Promise<number> {
+  await connect();
+  const r = await dbInstance().collection('cacheJudgements').deleteMany({ resumeId });
+  return r.deletedCount ?? 0;
+}
+
 // Одно письмо: пишется шагом cover, читается `digest show` и `apply`.
-export async function saveLetter(vacancyId: string, letter: string, date?: Date): Promise<void> {
+// Ключ — резюме + вакансия: письма под разные резюме не перетирают друг друга.
+export async function saveLetter(vacancyId: string, letter: string, resumeId?: string): Promise<void> {
   await connect();
   await dbInstance().collection('cacheCoverLetters').updateOne(
-    { vacancyId: String(vacancyId) },
-    { $set: { date: dateKey(date), vacancyId: String(vacancyId), letter } },
+    { vacancyId: String(vacancyId), resumeId: resumeId || null },
+    {
+      $set: {
+        date: dateKey(),
+        vacancyId: String(vacancyId),
+        resumeId: resumeId || null,
+        letter,
+      },
+    },
     { upsert: true },
   );
 }
 
-export function getLettersByVacancyIds(vacancyIds: (string | number)[]): Promise<Record<string, string>> {
-  return findByIds('cacheCoverLetters', vacancyIds, 'letter') as Promise<Record<string, string>>;
+/**
+ * Письма по id вакансий. resumeId — строгий фильтр (письма именно этого резюме).
+ * Без фильтра legacy-письма (resumeId: null) сортируются первыми, чтобы письма
+ * с привязкой к резюме перекрывали их в итоговой карте.
+ */
+export async function getLettersByVacancyIds(
+  vacancyIds: (string | number)[],
+  resumeId?: string,
+): Promise<Record<string, string>> {
+  const ids = [...new Set(vacancyIds.map(String))];
+  const out: Record<string, string> = {};
+  if (!ids.length) return out;
+  await connect();
+  const filter: any = { vacancyId: { $in: ids } };
+  if (resumeId) filter.resumeId = resumeId;
+  const docs = await dbInstance().collection('cacheCoverLetters')
+    .find(filter)
+    .sort({ resumeId: 1, date: -1 })
+    .toArray();
+  for (const d of docs) if (d.letter) out[String(d.vacancyId)] = d.letter;
+  return out;
+}
+
+/** Различные resumeId в кэше писем — для проверки «сирот» в `resume list`. */
+export async function listLetterResumeIds(): Promise<string[]> {
+  await connect();
+  const ids = await dbInstance().collection('cacheCoverLetters').distinct('resumeId');
+  return ids.filter((id: any): id is string => typeof id === 'string' && Boolean(id));
+}
+
+/** Сброс писем одного резюме. Возвращает число удалённых документов. */
+export async function clearLettersByResume(resumeId: string): Promise<number> {
+  await connect();
+  const r = await dbInstance().collection('cacheCoverLetters').deleteMany({ resumeId });
+  return r.deletedCount ?? 0;
 }
 
 // Единственное место логики «подклеить письма из кэша к записям дайджеста».
 // force=true — считать, что писем нет ни в кэше, ни в записи (перегенерировать всё).
-export async function withCoverLetters<T extends { id: string | number; coverLetter?: string }>(
-  entries: T[],
-  opts: { force?: boolean } = {},
-): Promise<T[]> {
-  const letters = await getLettersByVacancyIds(entries.map(e => e.id)).catch(() => ({} as Record<string, string>));
-  return entries.map(e => ({
-    ...e,
-    coverLetter: opts.force ? '' : (letters[String(e.id)] || e.coverLetter || ''),
-  }));
+// resumeId — брать только письма этого резюме (шаги cover/apply). Письмо в самой записи
+// (coverLetter) тоже учитывается только если помечено тем же резюме.
+export async function withCoverLetters<
+  T extends { id: string | number; coverLetter?: string; coverLetterResumeId?: string | null },
+>(entries: T[], opts: { force?: boolean; resumeId?: string } = {}): Promise<T[]> {
+  const letters = await getLettersByVacancyIds(entries.map(e => e.id), opts.resumeId)
+    .catch(() => ({} as Record<string, string>));
+  return entries.map(e => {
+    // Письмо в записи отбрасываем только если оно явно помечено другим резюме.
+    // Legacy-письма (без пометки) остаются доступны — иначе после обновления
+    // пришлось бы перегенерировать все письма заново.
+    const foreign = Boolean(opts.resumeId && e.coverLetterResumeId && e.coverLetterResumeId !== opts.resumeId);
+    const fromEntry = foreign ? '' : (e.coverLetter || '');
+    return {
+      ...e,
+      coverLetter: opts.force ? '' : (letters[String(e.id)] || fromEntry),
+    };
+  });
 }
 
 export async function clear(): Promise<string[]> {

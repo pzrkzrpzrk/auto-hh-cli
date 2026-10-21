@@ -26,6 +26,9 @@ export interface ActualizedDoc {
   date: string;
   entries: DigestEntry[];
   changed: boolean;
+  /** Резюме документа: от него зависят папка на диске и ключ в Mongo. */
+  resumeId?: string | null;
+  resumeName?: string | null;
 }
 
 // Возраст записи в днях относительно today по publishedAt; null — даты нет/невалидна.
@@ -79,7 +82,13 @@ export function computeActualization(
     stats.marked += marked;
     stats.unmarked += entries.length - marked;
     if (changed) stats.changedDates++;
-    out.push({ date: doc.date, entries: next, changed });
+    out.push({
+      date: doc.date,
+      entries: next,
+      changed,
+      resumeId: doc.resumeId ?? null,
+      resumeName: doc.resumeName ?? null,
+    });
   }
 
   return { docs: out, stats };

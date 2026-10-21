@@ -57,7 +57,12 @@ export class ApplicationRunner {
         this.summary.markFailed();
         return;
       }
-      await this.deps.history.markApplied(entry.id, { via: 'playwright', url: entry.url });
+      await this.deps.history.markApplied(entry.id, {
+        via: 'playwright',
+        url: entry.url,
+        // Фиксируем, под каким резюме отправлено: history показывает имя из реестра.
+        resumeId: entry.coverLetterResumeId ?? entry.resumeId ?? null,
+      });
       this.summary.markApplied();
     } catch (err: any) {
       log.warn(`Apply failed for ${entry.id}: ${err.message}`);

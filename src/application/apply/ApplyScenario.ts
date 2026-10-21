@@ -28,14 +28,26 @@ export class ApplyScenario {
 
   constructor(private readonly deps: ApplyDeps) {}
 
-  /** opts: { login?: boolean; type?: 'latest' | 'all'; limit?: number } — флаги команды. */
+  /** opts: { login?: boolean; type?: 'latest' | 'all'; limit?: number; resume?: string } — флаги команды. */
   async run(opts: Record<string, any> = {}): Promise<ApplyOutcome> {
     if (opts.login) {
       await this.deps.login.login();
       return { kind: 'login' };
     }
 
-    const ctx = this.createContext(opts);
+    // Явно выбранное резюме ограничивает и дайджест, и письма; без него — все резюме.
+    let resumeId: string | null = null;
+    if (opts.resume) {
+      try {
+        const resume = this.deps.resumeFiles.load(opts.resume);
+        if (!resume) return { kind: 'no-resume', name: String(opts.resume) };
+        resumeId = resume.id;
+      } catch {
+        return { kind: 'no-resume', name: String(opts.resume) };
+      }
+    }
+
+    const ctx = this.createContext(opts, resumeId);
     await this.pipeline.run(ctx);
 
     // Браузер открывает и закрывает адаптер: сценарию остаётся цикл откликов.
@@ -45,11 +57,12 @@ export class ApplyScenario {
     );
   }
 
-  private createContext(opts: Record<string, any>): ApplyContext {
+  private createContext(opts: Record<string, any>, resumeId: string | null): ApplyContext {
     return {
       deps: this.deps,
       opts,
       selection: digestSelection(opts.type || 'latest'),
+      resumeId,
       skipRules: applySkipRules(),
       pacing: new RandomPacing(this.deps.settings),
       summary: new ApplySummary(),

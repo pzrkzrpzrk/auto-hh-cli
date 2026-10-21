@@ -7,6 +7,7 @@ import type {
   HhResumeData,
   HhResumeSummary,
   Resume,
+  ResumeRef,
   SearchEntry,
   SearchFileResult,
   Vacancy,
@@ -81,6 +82,8 @@ export interface HistoryMeta {
   score?: number | null;
   digestOnly?: boolean;
   via?: string;
+  /** Резюме, под которым реально отправлено сопроводительное (для join с реестром). */
+  resumeId?: string | null;
   /** ISO-дата отметки; её добавляет хранилище при чтении. */
   at?: string;
   [key: string]: unknown;
@@ -119,10 +122,17 @@ export interface ResetSummary {
 
 /**
  * Очистка данных CLI: файлы в data/ и коллекции MongoDB.
- * Раскладка каталогов и список коллекций — детали адаптера, а не сценария.
+ * Раскладку каталогов и список коллекций — детали адаптера, а не сценария.
  */
 export interface DataJanitor {
+  /** Полный сброс: история, кэш, дайджесты всех резюме (+ legacy-каталоги). */
   clearAll(): Promise<ResetSummary>;
+  /**
+   * Сброс данных одного резюме: его папка в data/hh-parsing, его дайджесты/rejected,
+   * вердикты, письма и отклики. Общий кэш страниц/карточек — только по флагу
+   * includeSearchCache (нужен шагу `search --reset`, который сразу перезапишет кэш).
+   */
+  clearResume(resume: ResumeRef, opts?: { includeSearchCache?: boolean }): Promise<ResetSummary>;
 }
 
 /** Файл резюме на диске: имя без расширения и имя файла с расширением. */
@@ -157,7 +167,8 @@ export interface ResumeProvider {
 
 /** Запись выдачи поиска в .md: путь, формат и дедупликация — в адаптере. */
 export interface SearchReportWriter {
-  write(entries: SearchEntry[], opts?: { date?: string; query?: string }): Promise<SearchFileResult[]>;
+  /** resume — чья папка в data/hh-parsing; без него выдача попадает в no-resume. */
+  write(entries: SearchEntry[], opts?: { date?: string; query?: string; resume?: ResumeRef | null }): Promise<SearchFileResult[]>;
 }
 
 /** Зависимости сценария поиска: хранилища, конфиг, источник и файловые артефакты. */
@@ -166,8 +177,10 @@ export interface SearchDeps extends CollectDeps {
   source: SourceProvider<VacancySource>;
   /** Сброс данных перед поиском (`search --reset`). */
   janitor: DataJanitor;
-  /** Куда стадия поиска пишет выдачу за день. */
+  /** Куда стадия поиска пишет выдачу за день (папка выбранного резюме). */
   reportWriter: SearchReportWriter;
+  /** Резюме нужно только для выбора папки артефактов; текст поиску не нужен. */
+  resumeFiles: ResumeProvider;
 }
 
 // --- Источники hh.ru ------------------------------------------------------

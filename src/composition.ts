@@ -76,13 +76,8 @@ export const searchDeps: SearchDeps = {
   source: vacancySource,
   janitor: dataJanitor,
   reportWriter: searchReportWriter,
+  resumeFiles,
 };
-
-/** Зависимости истории откликов: только порт HistoryStore. */
-export const historyDeps: HistoryDeps = { history };
-
-/** Зависимости сброса данных: только порт DataJanitor. */
-export const resetDeps: ResetDeps = { janitor: dataJanitor };
 
 /** Кэш вердиктов судьи: один адаптер на все сценарии, где судья сохраняет ответы. */
 const judgementCache = new MongoJudgementCache();
@@ -93,8 +88,19 @@ const coverLetterCache = new MongoCoverLetterCache();
 const resumeRegistry = new MongoResumeRegistry();
 const digestFileSource = new FileDigestSource();
 
-/** Зависимости сценария резюме: файлы на диске + регистрация в MongoDB. */
-export const resumeDeps: ResumeDeps = { files: resumeFiles, registry: resumeRegistry };
+/** Зависимости истории откликов: порт истории + реестр резюме для имён. */
+export const historyDeps: HistoryDeps = { history, resumes: resumeRegistry };
+
+/** Зависимости сброса данных: janitor + файлы резюме для точечного сброса. */
+export const resetDeps: ResetDeps = { janitor: dataJanitor, resumeFiles };
+
+/** Зависимости сценария резюме: файлы, реестр и кэши для проверки «сирот». */
+export const resumeDeps: ResumeDeps = {
+  files: resumeFiles,
+  registry: resumeRegistry,
+  judgements: judgementCache,
+  letters: coverLetterCache,
+};
 
 /** Зависимости сценария сборки дайджеста. */
 export const digestDeps: DigestDeps = {
@@ -113,11 +119,13 @@ export const digestDeps: DigestDeps = {
   digestFiles: digestFileSource,
   coverLetters: coverLetterCache,
 };
-/** Зависимости показа дайджеста: Mongo-репозиторий, письма и .md-fallback. */
+/** Зависимости показа дайджеста: Mongo-репозиторий, письма, файлы и реестр резюме. */
 export const digestShowDeps: DigestShowDeps = {
   digest: digestRepository,
   coverLetters: coverLetterCache,
   files: digestFileSource,
+  resumeFiles,
+  resumes: resumeRegistry,
 };
 
 /** Зависимости актуализации: конфиг, кэш поиска и репозиторий дайджестов. */
@@ -157,13 +165,14 @@ export const coverDeps: CoverDeps = {
  */
 const applicationGateway = new PlaywrightApplicationGateway();
 
-/** Зависимости шага отклика: дайджест, письма, история и сессия браузера. */
+/** Зависимости шага отклика: дайджест, письма, история, резюме и сессия браузера. */
 export const applyDeps: ApplyDeps = {
   digests: digestRepository,
   letters: coverLetterCache,
   history,
   gateway: applicationGateway,
   login: applicationGateway,
+  resumeFiles,
   settings: { minDelayMs: MIN_DELAY, maxDelayMs: MAX_DELAY },
 };
 

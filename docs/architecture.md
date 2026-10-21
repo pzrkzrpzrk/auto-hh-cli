@@ -382,6 +382,23 @@ sequenceDiagram
 
 `application/cover.ts` остался совместимой обёрткой `runCover(vacancyId, opts, deps, onVacancy)`; `cmd-cover.ts` и `composition.ts` не менялись.
 
+### Резюме как измерение данных (2026-10-21)
+
+| Что | Ключ / путь | Где код |
+|---|---|---|
+| Папки артефактов | `data/hh-parsing/<name> - <resumeId>/{search,digests,rejected}`; без резюме — `no-resume` | `infrastructure/config/paths.ts` |
+| Дайджест / rejected | Mongo `{date, resumeId}` + поля `resumeName`, `updatedAt` | `infrastructure/mongo/digest-store.ts` |
+| Вердикты ИИ | `{date, resumeId, vacancyId}` | `infrastructure/mongo/cache-store.ts` |
+| Письма | `{resumeId, vacancyId}` | `infrastructure/mongo/cache-store.ts` |
+| Реестр резюме | `resumes`: `resumeId`, `name`, `filename`, `contentHash`, `createdAt`, `updatedAt` | `infrastructure/mongo/resume-store.ts` |
+| Запись дайджеста | `resumeId` (кто судил), `coverLetterResumeId` (под кого письмо) | `domain/models.ts` |
+| Отклики | `history.meta.resumeId` | `application/apply/ApplicationRunner.ts` |
+
+- `search` / `digest` / `cover` принимают `opts.resume`; writer и репозиторий получают `ResumeRef` и сами выбирают папку на диске и ключ документа в Mongo.
+- `apply` группирует записи по `coverLetterResumeId → resumeId` и берёт письмо строго под это резюме; записи без резюме идут legacy-путём без фильтра.
+- Изменение содержимого (sha256 в реестре) при регистрации очищает вердикты и письма этого резюме — они относились к старому тексту (`RegisterResumeStage`).
+- `DataJanitor.clearResume` чистит папку резюме, `digest`/`rejected`, `cacheJudgements`, `cacheCoverLetters` и отклики этого резюме. Общий кэш `cachePages`/`cacheFull` — только по флагу `includeSearchCache` (шаг `search --reset`, который сразу перезапишет кэш).
+
 ---
 
 ## 5. Таблица переносов

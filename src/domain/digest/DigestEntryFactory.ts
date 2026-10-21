@@ -5,8 +5,11 @@ import type { DigestEntry } from "@/domain/models.js";
 import type { AcceptedCandidate } from "@/domain/digest/DigestCandidate.js";
 
 export class DigestEntryFactory {
-  /** Собирает записи для digest.md. Побочных эффектов нет — их выполняет стадия. */
-  create(accepted: AcceptedCandidate[]): DigestEntry[] {
+  /**
+   * Собирает записи для digest.md. Побочных эффектов нет — их выполняет стадия.
+   * resumeId фиксирует, под каким резюме вакансия отобрана (для apply/history/показа).
+   */
+  create(accepted: AcceptedCandidate[], opts: { resumeId?: string | null } = {}): DigestEntry[] {
     return accepted.map(({ full, score, reason, comment }) => ({
       id: String(full.id),
       title: full.name,
@@ -19,6 +22,7 @@ export class DigestEntryFactory {
       reason,
       comment,
       coverLetter: '',
+      resumeId: opts.resumeId ?? null,
     }));
   }
 }

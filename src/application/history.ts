@@ -1,9 +1,12 @@
 // Сценарий истории откликов: чтение состояния через порт HistoryStore и выборки для показа.
 // Печать (включая --json) — в команде: здесь только данные и ошибка чтения.
 import type { HistoryStore } from "@/domain/ports.js";
+import type { ResumeRegistry } from "@/domain/digest/ports.js";
 
 export interface HistoryDeps {
   history: HistoryStore;
+  /** Реестр резюме: превращает resumeId из meta в человекочитаемое имя. */
+  resumes: ResumeRegistry;
 }
 
 // Последние n записей по времени: Mongo не гарантирует порядок документов,
@@ -27,6 +30,8 @@ export interface HistorySnapshot {
   seen: [string, any][];
   /** Сколько всего вакансий в истории (просмотренные + отклики). */
   total: number;
+  /** resumeId → «имя (файл)» из реестра; отсутствующие id показываются как есть. */
+  resumeLabels: Record<string, string>;
 }
 
 export type HistoryOutcome =
@@ -50,9 +55,44 @@ export async function loadHistoryView(deps: HistoryDeps): Promise<HistoryOutcome
 
   const applied = lastByAt(appliedAll, 20, (m: any) => m.at);
   const seen = lastByAt(seenOnlyAll, 10, at => String(at));
+  const resumeLabels = await loadResumeLabels(state.applied, deps);
 
   return {
     kind: 'ok',
-    snapshot: { appliedMap: state.applied, appliedTotal: appliedAll.length, applied, seen, seenOnlyAll, total },
+    snapshot: {
+      appliedMap: state.applied,
+      appliedTotal: appliedAll.length,
+      applied,
+      seen,
+      seenOnlyAll,
+      total,
+      resumeLabels,
+    },
   };
+}
+
+/** join «resumeId → имя (файл)»: ошибка реестра не мешает показать историю. */
+async function loadResumeLabels(
+  applied: Record<string, any>,
+  deps: HistoryDeps,
+): Promise<Record<string, string>> {
+  const ids = [...new Set(
+    Object.values(applied)
+      .map(meta => (meta as any)?.resumeId)
+      .filter((id): id is string => typeof id === 'string' && Boolean(id)),
+  )];
+  if (!ids.length) return {};
+
+  const labels: Record<string, string> = {};
+  try {
+    const registered = await deps.resumes.listRegistered();
+    const byId = new Map(registered.map(r => [r.resumeId, r]));
+    for (const id of ids) {
+      const found = byId.get(id);
+      labels[id] = found ? `${found.name} (${found.filename})` : id;
+    }
+  } catch {
+    for (const id of ids) labels[id] = id;
+  }
+  return labels;
 }

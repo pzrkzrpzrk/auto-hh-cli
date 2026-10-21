@@ -52,6 +52,10 @@ export interface DigestShowDeps {
   digest: DigestRepository;
   coverLetters: CoverLetterCache;
   files: DigestFileSource;
+  /** Резюме из opts.resume: по нему выбирается документ и папка fallback-файлов. */
+  resumeFiles: ResumeProvider;
+  /** Имя резюме для заголовка: join по resumeId из документа. */
+  resumes: ResumeRegistry;
 }
 
 /** Минимальный набор для `digest actualize`. */

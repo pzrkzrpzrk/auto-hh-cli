@@ -18,7 +18,7 @@ import {
   runSearch,
   runSearchDigest,
 } from "@/presentation/cli/menu/steps.js";
-import { describeActiveResume, type UiContext } from "@/presentation/cli/menu/resume.js";
+import { currentResumeName, describeActiveResume, type UiContext } from "@/presentation/cli/menu/resume.js";
 
 type MenuItem =
   | "search"
@@ -81,16 +81,16 @@ async function mainMenu(): Promise<MenuItem> {
 
 async function dispatch(ctx: UiContext, item: MenuItem) {
   switch (item) {
-    case "search": return runSearch();
+    case "search": return runSearch(ctx);
     case "searchDigest": return runSearchDigest(ctx);
     case "digest": return runDigest(ctx);
     case "letters": return runLetters(ctx);
-    case "apply": return runApply();
+    case "apply": return runApply(ctx);
     case "login": return cmdApply({ login: true });
     case "digestShow": {
       const json = await confirm({ message: "Вывести в JSON?", default: false });
       console.log();
-      return cmdDigest("show", { json });
+      return cmdDigest("show", { json, resume: currentResumeName(ctx) });
     }
     case "actualize": return runActualize();
     case "history": {
@@ -103,7 +103,7 @@ async function dispatch(ctx: UiContext, item: MenuItem) {
     case "cover": return runCover(ctx);
     case "schedule": return runSchedule(ctx);
     case "config": return cmdConfig();
-    case "reset": return runReset();
+    case "reset": return runReset(ctx);
     default: return undefined;
   }
 }
