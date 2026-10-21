@@ -1,10 +1,10 @@
-// Выдача поиска в Markdown: data/search/<ГГГГ-ММ-ДД>/<Регион>/search.md.
+// Выдача поиска в Markdown: data/hh-parsing/<имя - resumeId>/search/<ГГГГ-ММ-ДД>/<Регион>/search.md.
 // Файл накапливает за день только новые вакансии (дедуп по id) — по регионам отдельно; источник правды
 // для шагов digest/cover остаётся в Mongo (cachePages), здесь только просмотр и сравнение выдачи без базы.
 import fs from "fs";
 import path from "path";
-import { SearchEntry, SearchFileResult } from "@/domain/models.js";
-import { SEARCH_DIR, UNKNOWN_REGION, ensureDir, regionDir } from "@/infrastructure/config/paths.js";
+import type { ResumeRef, SearchEntry, SearchFileResult } from "@/domain/models.js";
+import { searchDir, UNKNOWN_REGION, ensureDir, regionDir } from "@/infrastructure/config/paths.js";
 import { dateKey } from "@/shared/time.js";
 
 // Формат — как у digest-store: блок на вакансию, разделитель `---`.
@@ -64,8 +64,12 @@ function regionOf(entry: SearchEntry): string {
  * не попадает. Файл накапливает выдачу за дату и не теряет ранее записанные строки. Список собирает
  * вызывающий (`flattenCollected(cache)` в cmd-search).
  */
-export function writeSearchResults(entries: SearchEntry[], opts: { date?: string; query?: string } = {}): SearchFileResult[] {
+export function writeSearchResults(
+  entries: SearchEntry[],
+  opts: { date?: string; query?: string; resume?: ResumeRef | null } = {},
+): SearchFileResult[] {
   const date = opts.date || dateKey();
+  const baseDir = searchDir(opts.resume);
 
   const groups = new Map<string, SearchEntry[]>();
   for (const e of entries) {
@@ -77,7 +81,7 @@ export function writeSearchResults(entries: SearchEntry[], opts: { date?: string
 
   const results: SearchFileResult[] = [];
   for (const [region, group] of groups) {
-    const dir = regionDir(SEARCH_DIR, date, region);
+    const dir = regionDir(baseDir, date, region);
     const md = path.join(dir, 'search.md');
     const exists = fs.existsSync(md);
     const old = exists ? fs.readFileSync(md, 'utf8') : '';

@@ -10,8 +10,10 @@ import cmdSchedule from "@/presentation/cli/commands/cmd-schedule.js";
 import cmdGradeResume from "@/presentation/cli/commands/cmd-grade-resume.js";
 import cmdResume from "@/presentation/cli/commands/cmd-resume.js";
 import { buildApplyOptions, buildCoverOptions, buildDigestOptions, buildSearchOptions } from "@/presentation/cli/menu/options.js";
-import { askResumeName, describeActiveResume, pickResume, runPickActiveResume, type UiContext } from "@/presentation/cli/menu/resume.js";
+import { askResumeName, currentResumeName, describeActiveResume, pickResume, runPickActiveResume, type UiContext } from "@/presentation/cli/menu/resume.js";
 import { runResumeDownload } from "@/presentation/cli/menu/resume-download.js";
+import { readResumeFile } from "@/application/resume.js";
+import { resumeDeps } from "@/composition.js";
 
 /** Спрашивает неотрицательное число (0 = «как настроено» / без лимита). */
 async function askCount(message: string, def = "0"): Promise<number> {
@@ -23,30 +25,31 @@ async function askCount(message: string, def = "0"): Promise<number> {
   return parseInt(raw.trim(), 10);
 }
 
-export async function runSearch() {
+export async function runSearch(ctx: UiContext) {
+  const resume = await pickResume(ctx, "Какое резюме использовать для поиска?");
   const reset = await confirm({
-    message: "Сбросить историю, кэш и дайджесты перед поиском? (необратимо)",
+    message: "Сбросить данные выбранного резюме (дайджесты, вердикты, письма, отклики) перед поиском? Кэш поиска тоже обновится — необратимо",
     default: false,
   });
 
   console.log();
-  await cmdSearch(buildSearchOptions({ reset }));
+  await cmdSearch(buildSearchOptions({ reset, resume }));
 }
 
 // Комбинированный шаг: собрать ответы промптами, затем прогнать search → digest подряд.
 // Промпты задаются до запуска, чтобы сам прогон шёл без участия пользователя; падение
 // поиска прерывает цепочку (ошибку покажет dispatch), дайджест на пустом кэше сам предупредит.
 export async function runSearchDigest(ctx: UiContext) {
+  const resume = await pickResume(ctx, "Какое резюме использовать для оценки?");
   const reset = await confirm({
-    message: "Сбросить историю, кэш и дайджесты перед поиском? (необратимо)",
+    message: "Сбросить данные выбранного резюме (дайджесты, вердикты, письма, отклики) перед поиском? Кэш поиска тоже обновится — необратимо",
     default: false,
   });
-  const resume = await pickResume(ctx, "Какое резюме использовать для оценки?");
   const useAi = await confirm({ message: "Использовать ИИ-судью?", default: true });
   const limit = await askCount("Максимум вакансий в дайджесте (0 — как в config.json):");
 
   console.log();
-  await cmdSearch(buildSearchOptions({ reset }));
+  await cmdSearch(buildSearchOptions({ reset, resume }));
   await cmdDigest("build", buildDigestOptions({ resume, useAi, limit }));
 }
 
@@ -79,7 +82,7 @@ export async function runLetters(ctx: UiContext) {
   await cmdCover(undefined, buildCoverOptions({ resume, force, limit }));
 }
 
-export async function runApply() {
+export async function runApply(ctx: UiContext) {
   const type = await select({
     message: "Откуда брать вакансии для отклика?",
     choices: [
@@ -92,7 +95,7 @@ export async function runApply() {
   const limit = await askCount("Сколько вакансий обработать (0 — без лимита):");
 
   console.log();
-  await cmdApply(buildApplyOptions({ type, limit }));
+  await cmdApply(buildApplyOptions({ type, limit, resume: currentResumeName(ctx) }));
 }
 
 export async function runResumeMenu(ctx: UiContext) {
@@ -158,15 +161,60 @@ export async function runSchedule(ctx: UiContext) {
   await cmdSchedule({ resume: ctx.activeResume?.name });
 }
 
-export async function runReset() {
+export async function runReset(ctx: UiContext) {
+  const scope = await select({
+    message: "Что сбросить?",
+    choices: [
+      { name: "только выбранное резюме (его данные и отклики)", value: "resume" },
+      { name: "всё: история, кэш и дайджесты всех резюме", value: "all" },
+      new Separator(),
+      { name: "← назад", value: "back" },
+    ],
+    default: "resume",
+  });
+  if (scope === "back") return;
+
+  if (scope === "all") {
+    const run = await confirm({
+      message: "Удалить ВСЁ (файлы + MongoDB)? Действие необратимо.",
+      default: false,
+    });
+    if (!run) {
+      console.log("Сброс отменён.");
+      return;
+    }
+    console.log();
+    await cmdReset();
+    return;
+  }
+
+  // Точечный сброс: имя нужно конкретное, «как в .env» разворачиваем в файл по умолчанию.
+  const picked = await pickResume(ctx, "Данные какого резюме сбросить?");
+  const name = picked ?? readResumeFile(undefined, resumeDeps)?.name;
+  if (!name) {
+    console.error("Резюме не найдено — задайте RESUMES_DIR / RESUME_PATH.");
+    return;
+  }
+
+  let label = name;
+  try {
+    const resume = readResumeFile(name, resumeDeps);
+    if (!resume) throw new Error("not found");
+    label = `${resume.name} (${resume.filename})`;
+  } catch {
+    console.error(`Резюме «${name}» не найдено — проверьте RESUMES_DIR.`);
+    return;
+  }
+
   const run = await confirm({
-    message: "Удалить историю, кэш и дайджесты (файлы + MongoDB)? Действие необратимо.",
+    message: `Удалить дайджесты, rejected, вердикты, письма и отклики резюме «${label}»? Исходный файл резюме останется.`,
     default: false,
   });
   if (!run) {
     console.log("Сброс отменён.");
     return;
   }
+
   console.log();
-  await cmdReset();
+  await cmdReset({ resume: name });
 }

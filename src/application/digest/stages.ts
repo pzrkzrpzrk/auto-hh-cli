@@ -57,7 +57,22 @@ export class RegisterResumeStage extends DigestStage {
     }
 
     log.info(`Resume loaded: ${ctx.resumeId} (${ctx.resume.filename}, ${ctx.resume.type})`);
-    await ctx.deps.resumes.register(ctx.resume).catch(() => {});
+    try {
+      const { created, changed } = await ctx.deps.resumes.register(ctx.resume);
+      if (created) log.info(`Resume registered: ${ctx.resume.name} (${ctx.resumeId})`);
+      if (changed) {
+        // Содержимое файла изменилось под тем же resumeId: старые вердикты и письма
+        // относятся к другому тексту, поэтому чистим производные данные этого резюме.
+        const [judgements, letters] = await Promise.all([
+          ctx.deps.judgements.clearResume(ctx.resume.id).catch(() => 0),
+          ctx.deps.coverLetters.clearResume(ctx.resume.id).catch(() => 0),
+        ]);
+        log.warn(`Резюме «${ctx.resume.name}» изменилось — сброшено вердиктов: ${judgements}, писем: ${letters}`);
+      }
+    } catch (err: any) {
+      // MongoDB может быть недоступна — судейство от этого не зависит.
+      log.warn(`Resume registration skipped: ${err?.message || err}`);
+    }
     return 'continue';
   }
 }
@@ -140,7 +155,7 @@ export class SelectStage extends DigestStage {
       }
     }
 
-    const matched = new DigestEntryFactory().create(accepted);
+    const matched = new DigestEntryFactory().create(accepted, { resumeId: ctx.resumeId });
     // Отметка истории и лог Match — на стадии: домен остаётся без побочек.
     for (const candidate of accepted) {
       if (ctx.policy.tracksHistory) {
@@ -150,6 +165,7 @@ export class SelectStage extends DigestStage {
           url: (candidate.full.alternate_url as string) || '',
           score: candidate.score,
           digestOnly: true,
+          resumeId: ctx.resumeId ?? null,
         });
       }
       log.info(`Match: ${candidate.full.name} @ ${candidate.full.employer?.name} -> ${candidate.full.alternate_url}`);
@@ -175,7 +191,7 @@ export class PersistStage extends DigestStage {
       return 'stop';
     }
 
-    const rejectedFiles = await ctx.deps.digest.save('rejected', ctx.rejected);
+    const rejectedFiles = await ctx.deps.digest.save('rejected', ctx.rejected, undefined, ctx.resume);
     if (rejectedFiles.length) {
       log.info(`Rejected saved: ${rejectedFiles.length} regions, ${ctx.rejected.length} vacancies -> ${rejectedFiles.join(', ')}`);
     }
@@ -185,7 +201,7 @@ export class PersistStage extends DigestStage {
       return 'stop';
     }
 
-    const files = await ctx.deps.digest.save('digest', ctx.matched);
+    const files = await ctx.deps.digest.save('digest', ctx.matched, undefined, ctx.resume);
     log.info(`Digest saved: ${files.length} regions, ${ctx.matched.length} vacancies -> ${files.join(', ')}`);
     ctx.report.on({ type: 'digest-saved', files, count: ctx.matched.length });
     return 'continue';

@@ -42,6 +42,15 @@ export interface Resume {
   filename: string;
 }
 
+/**
+ * Ссылка на резюме для раскладки артефактов и ключей кэша.
+ * name — имя файла без расширения (папка на диске), id — стабильный UUID.
+ */
+export interface ResumeRef {
+  name: string;
+  id: string;
+}
+
 // --- Резюме hh.ru ---------------------------------------------------------
 // Модель страницы резюме (разбор — в адаптере hh.ru).
 // Живёт в домене, потому что её использует рендер Markdown (domain/resume-markdown.ts)
@@ -123,6 +132,12 @@ export interface HhResumeSummary {
 export interface DigestDoc {
   date: string;
   entries: DigestEntry[];
+  /** Резюме, под которым собран дайджест (null/undefined — legacy-документ). */
+  resumeId?: string | null;
+  /** Имя файла резюме без расширения — нужно для папки на диске. */
+  resumeName?: string | null;
+  /** Время последней записи документа (ISO): tie-break для latest между резюме. */
+  updatedAt?: string | null;
 }
 
 export interface DigestEntry {
@@ -137,6 +152,10 @@ export interface DigestEntry {
   reason: string | null;
   comment: string | null;
   coverLetter: string;
+  /** Резюме, под которым вакансия отобрана и оценена (digest). */
+  resumeId?: string | null;
+  /** Резюме, под которым сгенерировано сопроводительное (cover). */
+  coverLetterResumeId?: string | null;
   // Актуализация (шаг `digest actualize`): помечается по наличию в последнем поиске.
   // archived — вакансии больше нет в выдаче; lastSeenAt — дата поиска, где встречалась последний раз.
   archived?: boolean;

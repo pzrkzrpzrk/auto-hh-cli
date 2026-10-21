@@ -39,6 +39,19 @@ export function describeActiveResume(ctx: UiContext): string {
 }
 
 /**
+ * Имя резюме для шагов без собственного промпта (apply, digest show):
+ * активное в сессии, иначе резюме по умолчанию из .env. undefined — резюме нет.
+ */
+export function currentResumeName(ctx: UiContext): string | undefined {
+  if (ctx.activeResume) return ctx.activeResume.name;
+  try {
+    return readResumeFile(undefined, resumeDeps)?.name;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * Единственное место сборки `choices` для резюме (D8: раньше список собирался дважды).
  * Порядок: «как в .env» → файлы из RESUMES_DIR (активное помечено) → ручной ввод.
  */

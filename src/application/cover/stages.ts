@@ -10,14 +10,14 @@ import { CoverStage, type StageResult } from "@/application/cover/CoverStage.js"
 import { CoverPlan, CoverProgress } from "@/application/cover/CoverPlan.js";
 import type { CoverContext } from "@/application/cover/CoverContext.js";
 
-/** 1. Последний дайджест; пусто — конвейер останавливается с исходом empty. */
+/** 1. Последний дайджест выбранного резюме; пусто — конвейер останавливается с исходом empty. */
 export class LoadDigestStage extends CoverStage {
   readonly name = 'load-digest';
 
   protected async execute(ctx: CoverContext): Promise<StageResult> {
-    ctx.digest = await ctx.deps.digests.latest().catch(() => null);
+    ctx.digest = await ctx.deps.digests.latest(ctx.resume.id).catch(() => null);
     if (!ctx.digest || !ctx.digest.entries.length) {
-      log.warn('Дайджест пуст — сначала соберите его: пункт меню «🧠 Собрать дайджест» (нужна MongoDB)');
+      log.warn('Дайджест для выбранного резюме пуст — сначала соберите его: пункт меню «🧠 Собрать дайджест» (нужна MongoDB)');
       ctx.outcome = 'empty';
       return 'stop';
     }
@@ -43,8 +43,11 @@ export class AttachLettersStage extends CoverStage {
 
   protected async execute(ctx: CoverContext): Promise<StageResult> {
     // Ошибка кэша не должна отменять генерацию: работаем с исходными записями.
-    const withLetters = await ctx.deps.letters.attach(ctx.entries, { force: Boolean(ctx.opts.force) })
-      .catch(() => ctx.entries);
+    // Берём только письма этого резюме: смена резюме = письма генерируются заново.
+    const withLetters = await ctx.deps.letters.attach(ctx.entries, {
+      force: Boolean(ctx.opts.force),
+      resumeId: ctx.resume.id,
+    }).catch(() => ctx.entries);
     for (const entry of withLetters) {
       if (entry.coverLetter) ctx.letters.set(String(entry.id), entry.coverLetter);
     }
@@ -110,7 +113,7 @@ export class GenerateLettersStage extends CoverStage {
         for (const [id, letter] of partial.entries()) {
           ctx.letters.set(id, letter);
           // Частичное сохранение: прерванный прогон не теряет готовые письма.
-          await ctx.deps.letters.save(id, letter)
+          await ctx.deps.letters.save(id, letter, ctx.resume.id)
             .catch(err => log.warn(`saveLetter ${id}: ${err.message}`));
         }
       },
@@ -133,17 +136,23 @@ export class PersistDigestStage extends CoverStage {
 
   protected async execute(ctx: CoverContext): Promise<StageResult> {
     const digest = ctx.digest!;
-    const updated: DigestEntry[] = digest.entries.map(entry => ({
-      ...entry,
-      coverLetter: ctx.letters.get(String(entry.id)) || entry.coverLetter || '',
-    }));
+    const resumeId = ctx.resume.id;
+    const updated: DigestEntry[] = digest.entries.map(entry => {
+      const own = ctx.letters.get(String(entry.id));
+      return {
+        ...entry,
+        coverLetter: own || entry.coverLetter || '',
+        // Отмечаем, под каким резюме письмо: apply выберет его без догадок.
+        coverLetterResumeId: own ? resumeId : (entry.coverLetterResumeId ?? null),
+      };
+    });
 
     const progress = new CoverProgress(updated.filter(entry => entry.coverLetter).length, updated.length);
     log.info(progress.toString());
     if (!progress.hasReady) return 'continue';
 
     // Ошибка записи не отменяет уже сгенерированные письма: они в cacheCoverLetters.
-    const files = await ctx.deps.digests.save('digest', updated, digest.date)
+    const files = await ctx.deps.digests.save('digest', updated, digest.date, ctx.resume)
       .catch(err => { log.warn(`Не удалось обновить дайджест: ${err.message}`); return null; });
     if (files?.length) log.info(`Digest updated with cover letters: ${files.join(', ')}`);
     return 'continue';

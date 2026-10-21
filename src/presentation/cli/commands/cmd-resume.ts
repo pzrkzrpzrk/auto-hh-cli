@@ -4,6 +4,7 @@ import {
   listResumesForCli,
   registerResumeByName,
   loadResumeForShow,
+  getResumeRegistration,
 } from "@/application/resume.js";
 import { resumeDeps } from "@/composition.js";
 
@@ -18,8 +19,24 @@ async function cmdResumeList() {
   for (const row of outcome.rows) {
     console.log(`  ${row.name} (${row.id})${row.registeredAt ? '' : ' (не зарегистрировано)'}`);
     console.log(`    Файл: ${row.filename}`);
-    if (row.registeredAt) console.log(`    Добавлено: ${row.registeredAt}`);
+    if (row.registeredAt) {
+      const updated = row.updatedAt && row.updatedAt !== row.registeredAt ? ` · изменено: ${row.updatedAt}` : '';
+      console.log(`    Добавлено: ${row.registeredAt}${updated}`);
+    }
+    if (row.contentChanged) {
+      console.log('    ⚠ файл изменился после регистрации — при следующем digest вердикты и письма этого резюме сбросятся');
+    }
     console.log();
+  }
+
+  if (!outcome.registryAvailable) {
+    console.log('⚠ MongoDB недоступна: статусы регистрации не получены (список файлов показан).\n');
+  }
+  if (outcome.missingIds.length) {
+    console.log(`⚠ В реестре есть резюме без файла: ${outcome.missingIds.join(', ')}\n`);
+  }
+  if (outcome.orphanIds.length) {
+    console.log(`⚠ В кэше есть данные для резюме вне реестра: ${outcome.orphanIds.join(', ')}\n`);
   }
 }
 
@@ -33,6 +50,8 @@ async function cmdResumeRegister(name: string) {
     console.error(`Resume "${outcome.name}" not found`);
     process.exit(1);
   }
+  const state = outcome.created ? 'зарегистрировано' : (outcome.changed ? 'обновлено (содержимое изменилось)' : 'без изменений');
+  console.log(`Резюме «${outcome.name}»: ${state} (id: ${outcome.id})`);
 }
 
 async function cmdResumeShow(name?: string) {
@@ -47,10 +66,14 @@ async function cmdResumeShow(name?: string) {
   }
 
   const resume = outcome.resume;
+  const registration = await getResumeRegistration(resume, resumeDeps);
   console.log(`\n=== Резюме: ${resume.name} ===`);
   console.log(`  id:      ${resume.id}`);
   console.log(`  файл:    ${resume.filename}`);
   console.log(`  тип:     ${resume.type}`);
+  console.log(`  реестр:  ${registration ? `добавлено ${registration.createdAt.toISOString().slice(0, 10)}` : 'не зарегистрировано'}`);
+  if (registration?.updatedAt) console.log(`  обновлено: ${registration.updatedAt.toISOString().slice(0, 10)}`);
+  if (registration?.contentChanged) console.log('  ⚠ содержимое изменилось после регистрации');
   console.log('');
 
   if (resume.type === 'pdf') {

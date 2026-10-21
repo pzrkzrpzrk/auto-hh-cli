@@ -26,10 +26,17 @@ export class SearchScenario {
   }
 
   async run(opts: Record<string, any> = {}): Promise<void> {
+    // Резюме нужно до сброса: папка артефактов и область reset зависят от него.
+    const resume = this.deps.resumeFiles.load(opts.resume);
+    const ref = resume ? { name: resume.name, id: resume.id } : null;
+
     // Сброс — до открытия источника, как и раньше (resetData вызывался до new HHClient).
+    // С выбранным резюме чистим только его данные (+ общий кэш поиска, который сейчас перезапишем).
     let didReset = false;
     if (opts.reset) {
-      const summary = await this.deps.janitor.clearAll();
+      const summary = ref
+        ? await this.deps.janitor.clearResume(ref, { includeSearchCache: true })
+        : await this.deps.janitor.clearAll();
       this.report({ type: 'reset', text: formatResetSummary(summary) });
       didReset = true;
     }
@@ -43,6 +50,7 @@ export class SearchScenario {
         const ctx: SearchContext = {
           opts,
           cfg,
+          resume: ref,
           query: new SearchQuery(cfg.search),
           cache,
           collector: new VacancyCollector(source, cache, this.deps.history),

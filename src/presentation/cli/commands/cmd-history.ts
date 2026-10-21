@@ -17,7 +17,7 @@ async function cmdHistory(opts: Record<string, any> = {}) {
     return;
   }
 
-  const { appliedMap, appliedTotal, applied, seen, seenOnlyAll, total } = outcome.snapshot;
+  const { appliedMap, appliedTotal, applied, seen, seenOnlyAll, total, resumeLabels } = outcome.snapshot;
 
   if (opts.json) {
     console.log(JSON.stringify({ applied: appliedMap, seenOnly: Object.fromEntries(seenOnlyAll) }, null, 2));
@@ -32,6 +32,9 @@ async function cmdHistory(opts: Record<string, any> = {}) {
       const m = meta as Record<string, any>;
       console.log(`  ${m.title || id} @ ${m.employer || '?'} [${m.score ?? '?'}/10]`);
       console.log(`    ${m.url || ''}`);
+      if (m.resumeId) {
+        console.log(`    Резюме: ${resumeLabels[m.resumeId] || m.resumeId}`);
+      }
     }
   } else {
     console.log('\nНет откликов.');

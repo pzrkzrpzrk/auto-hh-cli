@@ -42,7 +42,7 @@ export async function actualizeDigests(
 }
 
 /** Шаг показа: последний дайджест + письма; fallback — .md-файлы на диске. */
-export async function showDigest(deps: DigestShowDeps): Promise<DigestShowOutcome> {
-  return new DigestShowScenario(deps).run();
+export async function showDigest(deps: DigestShowDeps, opts: Record<string, any> = {}): Promise<DigestShowOutcome> {
+  return new DigestShowScenario(deps).run(opts);
 }
 

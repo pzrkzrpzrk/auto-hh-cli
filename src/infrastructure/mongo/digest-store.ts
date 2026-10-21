@@ -1,8 +1,8 @@
 import fs from "fs";
 import path from "path";
 import { connect, dbInstance } from "@/infrastructure/mongo/db.js";
-import { DigestEntry, DigestDoc } from "@/domain/models.js";
-import { DIGEST_DIR, REJECTED_DIR, UNKNOWN_REGION, ensureDir, regionDir } from "@/infrastructure/config/paths.js";
+import { DigestEntry, DigestDoc, ResumeRef } from "@/domain/models.js";
+import { digestDir, rejectedDir, UNKNOWN_REGION, ensureDir, regionDir } from "@/infrastructure/config/paths.js";
 import { dateKey } from "@/shared/time.js";
 
 function toMarkdown(entries: any[], title: string, date = dateKey()): string {
@@ -32,46 +32,124 @@ function toMarkdown(entries: any[], title: string, date = dateKey()): string {
   return lines.join('\n');
 }
 
-async function writeToMongo(collection: string, entries: any[], date = dateKey()): Promise<void> {
+// Документ дайджеста/rejected привязан к резюме: два резюме за одну дату не перезаписывают друг друга.
+async function writeToMongo(
+  collection: string,
+  entries: any[],
+  date = dateKey(),
+  resume?: ResumeRef | null,
+): Promise<void> {
   if (!entries.length) return;
   await connect();
+  const resumeId = resume?.id ?? null;
   await dbInstance().collection(collection).updateOne(
-    { date },
-    { $set: { date, entries } },
+    { date, resumeId },
+    {
+      $set: {
+        date,
+        resumeId,
+        resumeName: resume?.name ?? null,
+        updatedAt: new Date().toISOString(),
+        entries,
+      },
+    },
     { upsert: true },
   );
 }
 
-export async function getDigestsByDate(collection: string, date: string): Promise<DigestEntry[]> {
+// Слияние записей документов: дубли по вакансии (одна и та же вакансия в разных резюме)
+// схлопываются, приоритет — у более свежего документа (порядок docs задаёт вызывающий).
+function flattenDocs(docs: DigestDoc[]): DigestEntry[] {
+  const byId = new Map<string, DigestEntry>();
+  for (const doc of docs) {
+    for (const entry of doc.entries || []) {
+      const id = String(entry.id);
+      if (!byId.has(id)) byId.set(id, entry);
+    }
+  }
+  return [...byId.values()];
+}
+
+export async function getDigestsByDate(collection: string, date: string, resumeId?: string): Promise<DigestEntry[]> {
   await connect();
-  const doc = await dbInstance().collection<DigestDoc>(collection).findOne({ date }, { projection: { entries: 1 } });
-  return doc?.entries || [];
+  const filter: any = { date };
+  if (resumeId) filter.resumeId = resumeId;
+  if (resumeId) {
+    // Одно резюме — ровно один документ за дату; если его нет, работаем с legacy-документом
+    // (собранным до появления измерения «резюме»), чтобы старые дайджесты не пропадали.
+    const own = await dbInstance().collection<DigestDoc>(collection).findOne(filter, { projection: { entries: 1 } });
+    if (own) return own.entries || [];
+    const legacy = await dbInstance().collection<DigestDoc>(collection)
+      .findOne({ date, resumeId: null }, { projection: { entries: 1 } });
+    return legacy?.entries || [];
+  }
+  // Без резюме — все документы за дату (apply запускается без выбора резюме).
+  const docs = await dbInstance().collection<DigestDoc>(collection)
+    .find(filter, { projection: { entries: 1 } as any, sort: { updatedAt: -1 } })
+    .toArray();
+  return flattenDocs(docs);
 }
 
 // выводит все дайджесты без отклика
-export async function getAllDigests(collection: string): Promise<DigestEntry[]> {
+export async function getAllDigests(collection: string, resumeId?: string): Promise<DigestEntry[]> {
   await connect();
-  const docs = await dbInstance().collection<DigestDoc>(collection).find({}, { projection: { entries: 1 }, sort: { date: -1 } }).toArray();
-  return docs.flatMap(d => d.entries || []);
+  const filter: any = {};
+  if (resumeId) filter.resumeId = resumeId;
+  let docs = await dbInstance().collection<DigestDoc>(collection)
+    .find(filter, { projection: { entries: 1 } as any, sort: { date: -1, updatedAt: -1 } })
+    .toArray();
+  if (resumeId && !docs.length) {
+    // Нет данных под это резюме — отдаём legacy-документы (как до обновления).
+    docs = await dbInstance().collection<DigestDoc>(collection)
+      .find({ resumeId: null }, { projection: { entries: 1 } as any, sort: { date: -1 } })
+      .toArray();
+  }
+  return flattenDocs(docs);
 }
 
 // Все документы коллекции с датами — вход шага actualize. Свежие даты сверху.
-export async function listDigestDocs(collection: string): Promise<DigestDoc[]> {
+export async function listDigestDocs(collection: string, resumeId?: string): Promise<DigestDoc[]> {
   await connect();
+  const filter: any = {};
+  if (resumeId) filter.resumeId = resumeId;
   const docs = await dbInstance().collection<DigestDoc>(collection)
-    .find({}, { projection: { date: 1, entries: 1 }, sort: { date: -1 } })
+    .find(filter, { projection: { date: 1, entries: 1, resumeId: 1, resumeName: 1 } as any, sort: { date: -1 } })
     .toArray();
-  return docs.map(d => ({ date: d.date, entries: d.entries || [] }));
+  return docs.map(d => ({
+    date: d.date,
+    entries: d.entries || [],
+    resumeId: d.resumeId ?? null,
+    resumeName: d.resumeName ?? null,
+  }));
 }
 
 // Последний дайджест — вход шагов cover и apply. null: MongoDB недоступна или дайджестов нет.
-export async function getLatestDigest(): Promise<DigestDoc | null> {
+// Без resumeId — самый свежий документ среди всех резюме (tie-break по updatedAt).
+export async function getLatestDigest(resumeId?: string): Promise<DigestDoc | null> {
   await connect();
-  const docs = await dbInstance().collection<DigestDoc>('digest')
-    .find({}, { projection: { date: 1, entries: 1 }, sort: { date: -1 }, limit: 1 })
-    .toArray();
+  const coll = dbInstance().collection<DigestDoc>('digest');
+  const findLatest = (filter: any) => coll.find(filter, {
+    projection: { date: 1, entries: 1, resumeId: 1, resumeName: 1, updatedAt: 1 } as any,
+    sort: { date: -1, updatedAt: -1 },
+    limit: 1,
+  }).toArray();
+
+  const filter: any = {};
+  if (resumeId) filter.resumeId = resumeId;
+  let docs = await findLatest(filter);
+  if (!docs.length && resumeId) {
+    // Legacy-дайджест без привязки к резюме: показываем его, пока не пересобран под резюме.
+    docs = await findLatest({ resumeId: null });
+  }
   if (!docs.length) return null;
-  return { date: docs[0].date, entries: docs[0].entries || [] };
+  const doc = docs[0];
+  return {
+    date: doc.date,
+    entries: doc.entries || [],
+    resumeId: doc.resumeId ?? null,
+    resumeName: doc.resumeName ?? null,
+    updatedAt: doc.updatedAt ?? null,
+  };
 }
 
 // Регион вакансии — имя папки. Плейсхолдер '—' (area не пришёл) — как «Не указан».
@@ -107,17 +185,17 @@ function writeArtifacts(baseDir: string, entries: any[], date: string, fileName:
 
 // date позволяет перезаписать дайджест конкретного дня (используется шагом cover).
 // Возвращает пути файлов по регионам (пустой массив — писать нечего).
-export async function writeDigest(entries: any[], date = dateKey()): Promise<string[]> {
+export async function writeDigest(entries: any[], date = dateKey(), resume?: ResumeRef | null): Promise<string[]> {
   if (!entries.length) return [];
-  const files = writeArtifacts(DIGEST_DIR, entries, date, 'digest.md', 'Дайджест вакансий');
-  await writeToMongo('digest', entries, date);
+  const files = writeArtifacts(digestDir(resume), entries, date, 'digest.md', 'Дайджест вакансий');
+  await writeToMongo('digest', entries, date, resume);
   return files;
 }
 
-export async function writeRejected(entries: any[], date = dateKey()): Promise<string[]> {
+export async function writeRejected(entries: any[], date = dateKey(), resume?: ResumeRef | null): Promise<string[]> {
   if (!entries.length) return [];
-  const files = writeArtifacts(REJECTED_DIR, entries, date, 'rejected.md', 'Отклонённые вакансии');
-  await writeToMongo('rejected', entries, date);
+  const files = writeArtifacts(rejectedDir(resume), entries, date, 'rejected.md', 'Отклонённые вакансии');
+  await writeToMongo('rejected', entries, date, resume);
   return files;
 }
 
@@ -134,11 +212,11 @@ function writeActualFile(baseDir: string, entries: any[], date: string, title: s
 }
 
 // Сводный снимок актуальных вакансий дайджеста за дату (все прошлые даты, дедуп — в actualize).
-export function writeActualDigest(entries: any[], date = dateKey()): string | null {
-  return writeActualFile(DIGEST_DIR, entries, date, 'Дайджест вакансий (актуальные)');
+export function writeActualDigest(entries: any[], date = dateKey(), resume?: ResumeRef | null): string | null {
+  return writeActualFile(digestDir(resume), entries, date, 'Дайджест вакансий (актуальные)');
 }
 
 // Сводный снимок актуальных отклонённых вакансий за дату.
-export function writeActualRejected(entries: any[], date = dateKey()): string | null {
-  return writeActualFile(REJECTED_DIR, entries, date, 'Отклонённые вакансии (актуальные)');
+export function writeActualRejected(entries: any[], date = dateKey(), resume?: ResumeRef | null): string | null {
+  return writeActualFile(rejectedDir(resume), entries, date, 'Отклонённые вакансии (актуальные)');
 }

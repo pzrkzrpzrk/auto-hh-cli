@@ -51,7 +51,9 @@ export function printDigestShow(outcome: DigestShowOutcome, opts: Record<string,
     return;
   }
 
-  console.log(`\n=== Дайджест ${outcome.date} (${entries.length} вакансий) ===\n`);
+  console.log(`\n=== Дайджест ${outcome.date} (${entries.length} вакансий) ===`);
+  if (outcome.resumeLabel) console.log(`Резюме: ${outcome.resumeLabel}`);
+  console.log('');
   for (const e of entries) {
     console.log(`[${e.score ?? '?'}/10] ${e.title} @ ${e.employer}`);
     console.log(`      ${e.salary || '—'} | ${e.area || '—'}`);

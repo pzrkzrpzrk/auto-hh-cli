@@ -13,6 +13,8 @@ export interface ApplyContext {
   readonly opts: Record<string, any>;
   /** Стратегия выбора вакансий (latest/all). */
   readonly selection: DigestSelection;
+  /** Резюме из opts.resume; null — работать по дайджестам всех резюме. */
+  readonly resumeId: string | null;
   /** Голова цепочки правил пропуска. */
   readonly skipRules: SkipRule;
   /** Стратегия паузы между откликами. */

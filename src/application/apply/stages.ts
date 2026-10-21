@@ -1,6 +1,7 @@
 // Стадии подготовки плана отклика. Каждая — один шаг прежнего runApply,
 // с тем же порядком и текстами логов; I/O идёт через порты.
 import log from "@/shared/logger.js";
+import type { DigestEntry } from "@/domain/models.js";
 import { ApplyStage, type StageResult } from "@/application/apply/ApplyStage.js";
 import type { ApplyContext } from "@/application/apply/ApplyContext.js";
 
@@ -10,7 +11,7 @@ export class LoadDigestStage extends ApplyStage {
 
   protected async execute(ctx: ApplyContext): Promise<StageResult> {
     if (ctx.selection.kind === 'all') log.info('Loading all digests');
-    ctx.entries = await ctx.selection.load(ctx.deps.digests);
+    ctx.entries = await ctx.selection.load(ctx.deps.digests, ctx.resumeId ?? undefined);
     return 'continue';
   }
 }
@@ -49,13 +50,47 @@ export class AttachLettersStage extends ApplyStage {
   readonly name = 'attach-letters';
 
   protected async execute(ctx: ApplyContext): Promise<StageResult> {
-    ctx.planned = await ctx.deps.letters.attach(ctx.entries);
+    ctx.planned = await attachLetters(ctx);
     const withoutLetter = ctx.planned.filter(entry => !entry.coverLetter).length;
     if (withoutLetter) {
-      log.warn(`${withoutLetter} вакансий без сопроводительного — пропускаю (сгенерируйте: пункт меню «✉️ Письма для дайджеста»)`);
+      log.warn(`${withoutLetter} вакансий без сопроводительного — пропускаю (сгенерируйте: пункт меню «✉️ Письма для дайджеста» с тем же резюме)`);
     }
     return 'continue';
   }
+}
+
+/**
+ * Письмо ищется под резюме записи: coverLetterResumeId (кто писал) → resumeId (кто судил).
+ * Записи без резюме (legacy) получают письмо без фильтра — как раньше.
+ * Группировка по резюме не даёт подставить письмо, сгенерированное под другое резюме.
+ */
+async function attachLetters(ctx: ApplyContext): Promise<DigestEntry[]> {
+  const byResume = new Map<string, DigestEntry[]>();
+  const legacy: DigestEntry[] = [];
+  for (const entry of ctx.entries) {
+    const key = entry.coverLetterResumeId || entry.resumeId || '';
+    if (!key) {
+      legacy.push(entry);
+      continue;
+    }
+    const bucket = byResume.get(key);
+    if (bucket) bucket.push(entry);
+    else byResume.set(key, [entry]);
+  }
+
+  const attached = new Map<string, DigestEntry>();
+  const merge = (rows: DigestEntry[]) => {
+    for (const row of rows) attached.set(String(row.id), row);
+  };
+
+  for (const [resumeId, group] of byResume) {
+    merge(await ctx.deps.letters.attach(group, { resumeId }).catch(() => group));
+  }
+  if (legacy.length) {
+    merge(await ctx.deps.letters.attach(legacy).catch(() => legacy));
+  }
+
+  return ctx.entries.map(entry => attached.get(String(entry.id)) || entry);
 }
 
 /** 5. История — один раз на прогон: полная выгрузка на каждой итерации ничего не даёт. */

@@ -11,7 +11,7 @@ import {
   writeDigest,
   writeRejected,
 } from "@/infrastructure/mongo/digest-store.js";
-import type { DigestDoc, DigestEntry } from "@/domain/models.js";
+import type { DigestDoc, DigestEntry, ResumeRef } from "@/domain/models.js";
 import type {
   DigestArtifactEntry,
   DigestKind,
@@ -19,30 +19,40 @@ import type {
 } from "@/domain/digest/ports.js";
 
 class MongoDigestRepository implements DigestRepository {
-  latest(): Promise<DigestDoc | null> {
-    return getLatestDigest();
+  latest(resumeId?: string): Promise<DigestDoc | null> {
+    return getLatestDigest(resumeId);
   }
 
-  byDate(date: string): Promise<DigestEntry[]> {
-    return getDigestsByDate('digest', date);
+  byDate(date: string, resumeId?: string): Promise<DigestEntry[]> {
+    return getDigestsByDate('digest', date, resumeId);
   }
 
-  all(): Promise<DigestEntry[]> {
-    return getAllDigests('digest');
+  all(resumeId?: string): Promise<DigestEntry[]> {
+    return getAllDigests('digest', resumeId);
   }
 
-  listDocs(kind: DigestKind): Promise<DigestDoc[]> {
-    return listDigestDocs(kind);
+  listDocs(kind: DigestKind, resumeId?: string): Promise<DigestDoc[]> {
+    return listDigestDocs(kind, resumeId);
   }
 
-  save(kind: DigestKind, entries: DigestArtifactEntry[], date?: string): Promise<string[]> {
-    return kind === 'digest' ? writeDigest(entries, date) : writeRejected(entries, date);
+  save(
+    kind: DigestKind,
+    entries: DigestArtifactEntry[],
+    date?: string,
+    resume?: ResumeRef | null,
+  ): Promise<string[]> {
+    return kind === 'digest' ? writeDigest(entries, date, resume) : writeRejected(entries, date, resume);
   }
 
-  saveActual(kind: DigestKind, entries: DigestArtifactEntry[], date: string): string | null {
+  saveActual(
+    kind: DigestKind,
+    entries: DigestArtifactEntry[],
+    date: string,
+    resume?: ResumeRef | null,
+  ): string | null {
     return kind === 'digest'
-      ? writeActualDigest(entries, date)
-      : writeActualRejected(entries, date);
+      ? writeActualDigest(entries, date, resume)
+      : writeActualRejected(entries, date, resume);
   }
 }
 
