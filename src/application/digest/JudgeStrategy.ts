@@ -11,6 +11,8 @@ import type { Resume, Vacancy } from "@/domain/models.js";
 export interface JudgeOptions {
   minScore: number;
   adaptResume: boolean;
+  /** Лимит символов на адаптированное резюме. */
+  adaptResumeBudget?: number;
   /** Диагностика домена: передаётся в judge* и пишется адаптером логгера. */
   logger?: Logger;
   [key: string]: unknown;

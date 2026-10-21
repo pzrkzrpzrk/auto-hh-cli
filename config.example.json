@@ -29,6 +29,7 @@
     "steps": ["search", "digest", "cover"]
   },
   "adaptResume": true,
+  "adaptResumeBudget": 3500,
   "apply": {
     "maxPerRun": 200,
     "dryRun": false,

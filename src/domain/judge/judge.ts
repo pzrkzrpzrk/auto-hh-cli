@@ -70,7 +70,9 @@ async function judgeVacancy(ai: AiProvider | null, resume: Resume, vacancy: Vaca
     text: `=== ВАКАНСИЯ ===\n${formatVacancyText(vacancy)}`,
   };
 
-  const adaptedText = opts.adaptResume ? adaptResumeForVacancy(resume, vacancy) : null;
+  const adaptedText = opts.adaptResume
+    ? adaptResumeForVacancy(resume, vacancy, { budgetChars: opts.adaptResumeBudget })
+    : null;
   const resumeBlock = buildResumeBlock(resume, adaptedText);
   const systemText = buildSystemText(minScore);
   const messages: any = [
@@ -104,15 +106,17 @@ async function judgeVacanciesBatch(ai: AiProvider | null, resume: Resume, vacanc
   if (!vacancies.length) return new Map();
 
   const minScore = opts.minScore ?? 7;
-  const adapt = opts.adaptResume;
+  // PDF адаптировать нельзя: иначе при adaptResume=true блок резюме не попадёт в промпт вовсе.
+  const textualResume = resume && resume.type === "text" && resume.text ? resume : null;
+  const adapt = Boolean(opts.adaptResume && textualResume);
 
   const systemText = buildSystemText(minScore) +
     `\n\nВ этом запросе подаётся СРАЗУ НЕСКОЛЬКО вакансий. Верни ОБЪЕКТ вида {"verdicts": [ ... ]} (не голый массив): по одной записи на вакансию, в том же порядке, что во входе.${adapt ? '\n\nДля каждой вакансии передано адаптированное под неё резюме — учитывай только его при оценке.' : ''}`;
 
   const vacanciesText = vacancies.map((v, i) => {
     let block = '';
-    if (adapt) {
-      const adapted = adaptResumeForVacancy(resume, v);
+    if (adapt && textualResume) {
+      const adapted = adaptResumeForVacancy(textualResume, v, { budgetChars: opts.adaptResumeBudget });
       if (adapted) {
         block += `=== АДАПТИРОВАННОЕ РЕЗЮМЕ (вакансия #${i + 1}) ===\n${adapted}\n\n`;
       }

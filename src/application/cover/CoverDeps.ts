@@ -10,6 +10,8 @@ export interface CoverConfig {
   coverLetterTemplate?: string;
   /** Адаптировать резюме под каждую вакансию (config.adaptResume !== false). */
   adaptResume: boolean;
+  /** Лимит символов на адаптированное резюме (config.adaptResumeBudget). */
+  adaptResumeBudget: number;
   /** Сколько вакансий уходит в один запрос к ИИ (COVER_BATCH_SIZE). */
   batchSize: number;
   /** Профиль соискателя (APPLICANT_PROFILE). */
