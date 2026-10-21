@@ -16,6 +16,8 @@ export interface CoverLetterOptions {
   signature?: string;
   /** Сколько пачек писем выполняется одновременно (env AI_CONCURRENCY). */
   concurrency?: number;
+  /** Лимит символов на адаптированное резюме (config.adaptResumeBudget). */
+  adaptResumeBudget?: number;
   logger?: Logger;
 }
 
@@ -46,9 +48,13 @@ async function buildWithClaude(
   const description = stripHtml(vacancy.description).slice(0, 1000);
   const skills = (vacancy.key_skills || []).map(s => s.name).join(', ');
 
-  const adaptedResume = adaptResume && resume ? adaptResumeForVacancy(resume, vacancy) : null;
+  const adaptedResume = adaptResume
+    ? adaptResumeForVacancy(resume, vacancy, { budgetChars: options.adaptResumeBudget })
+    : null;
+  // buildResumeBlock сам решает, что показать: адаптированный текст, PDF или полное резюме.
+  const resumeBlock = adaptResume ? buildResumeBlock(resume, adaptedResume) : null;
 
-  const userMsg = `${adaptedResume ? `=== МОЁ РЕЗЮМЕ (релевантное) ===\n${adaptedResume}\n\n` : ''}Вакансия: ${vacancy.name}
+  const userMsg = `${resumeBlock ? `${resumeBlock.text}\n\n` : ''}Вакансия: ${vacancy.name}
 Компания: ${vacancy.employer?.name || '—'}
 Регион: ${vacancy.area?.name || '—'}
 Ключевые навыки: ${skills || '—'}
@@ -144,18 +150,23 @@ async function buildCoverLettersBatch(
 
   const profile = options.profile || DEFAULT_PROFILE;
   const logger = options.logger;
-  const resumeBlock = !adaptResume ? buildResumeBlock(resume) : null;
+  // PDF адаптировать нельзя — тогда резюме уходит общим блоком (имя файла), как при adaptResume=false.
+  const textualResume = resume && resume.type === 'text' && resume.text ? resume : null;
+  const adaptationPossible = Boolean(adaptResume && textualResume);
+  const resumeBlock = adaptationPossible ? null : buildResumeBlock(resume);
 
   const systemText = buildBatchSystemText(profile, options.signature) +
-    (adaptResume ? '\n\nДля каждой вакансии передано адаптированное под неё резюме — учитывай его при составлении письма, указывая релевантный опыт.' : '');
+    (adaptationPossible ? '\n\nДля каждой вакансии передано адаптированное под неё резюме — учитывай его при составлении письма, указывая релевантный опыт.' : '');
 
   const batchTexts = chunk(items, batchSize).map((batch, i) => ({
     idx: i + 1,
     batch,
     text: batch.map((it, idx) => {
       let block = '';
-      if (adaptResume && resume) {
-        const adapted = adaptResumeForVacancy(resume, it.vacancy);
+      if (adaptationPossible && textualResume) {
+        const adapted = adaptResumeForVacancy(textualResume, it.vacancy, {
+          budgetChars: options.adaptResumeBudget,
+        });
         if (adapted) {
           block += `=== РЕЗЮМЕ (релевантное для вакансии #${idx + 1}) ===\n${adapted}\n\n`;
         }

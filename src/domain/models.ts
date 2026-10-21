@@ -28,6 +28,8 @@ import type { Logger } from "@/domain/logging.js";
 export interface JudgeOpts {
   minScore?: number;
   adaptResume?: boolean;
+  /** Лимит символов на адаптированное резюме (config.adaptResumeBudget). */
+  adaptResumeBudget?: number;
   /** Куда писать диагностику: домен не импортирует logger. */
   logger?: Logger;
   [key: string]: unknown;

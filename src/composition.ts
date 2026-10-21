@@ -18,6 +18,7 @@ import FileSearchReportWriter from "@/infrastructure/files/search-report-writer.
 import { createAiProvider } from "@/infrastructure/ai/client.js";
 import { configProvider } from "@/infrastructure/config/config.js";
 import { intFromEnv } from "@/infrastructure/config/env.js";
+import { DEFAULT_ADAPT_BUDGET } from "@/domain/adapt-resume.js";
 import { DEFAULT_COVER_SIGNATURE } from "@/domain/cover-letter/system-text.js";
 import { close as closeDb } from "@/infrastructure/mongo/db.js";
 import NodeCronScheduler from "@/infrastructure/scheduling/node-cron.js";
@@ -141,6 +142,7 @@ function coverConfig(path?: string): CoverConfig {
   return {
     coverLetterTemplate: cfg.apply?.coverLetterTemplate,
     adaptResume: cfg.adaptResume !== false,
+    adaptResumeBudget: Math.max(500, Math.floor(Number(cfg.adaptResumeBudget)) || DEFAULT_ADAPT_BUDGET),
     batchSize: intFromEnv('COVER_BATCH_SIZE', 20, { min: 1 }),
     profile: process.env.APPLICANT_PROFILE || 'опытный разработчик',
     signature: process.env.COVER_SIGNATURE || DEFAULT_COVER_SIGNATURE,

@@ -45,6 +45,8 @@ export interface AppConfig {
     [key: string]: unknown;
   };
   adaptResume?: boolean;
+  /** Лимит символов на адаптированное резюме (по умолчанию DEFAULT_ADAPT_BUDGET). */
+  adaptResumeBudget?: number;
   search?: SearchConfig;
   filter?: DigestFilterRules;
   schedule?: {

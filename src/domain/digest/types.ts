@@ -27,6 +27,8 @@ export interface DigestConfig {
   };
   api?: { apiKey?: string; [key: string]: unknown };
   adaptResume?: boolean;
+  /** Лимит символов на адаптированное резюме. */
+  adaptResumeBudget?: number;
   search?: {
     area?: (string | number)[] | string | number;
     search_period?: number | string;

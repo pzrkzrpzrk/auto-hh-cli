@@ -122,6 +122,7 @@ export class GenerateLettersStage extends CoverStage {
         profile: ctx.cfg.profile,
         signature: ctx.cfg.signature,
         concurrency: ctx.cfg.concurrency,
+        adaptResumeBudget: ctx.cfg.adaptResumeBudget,
         logger: log,
       },
     );
