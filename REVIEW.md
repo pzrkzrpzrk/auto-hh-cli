@@ -1,231 +1,301 @@
-# Code Review: auto-hh-cli — рефакторинг по KISS/DRY
+# Code Review: auto-hh-cli — после миграции на SQLite и аудита Clean Architecture
 
-> Тикеты по этому ревью: [`docs/review/`](docs/review/README.md) — серия KISS/DRY (T-01…T-16) закрыта
-> и удалена из каталога; актуальные тикеты — аудит Clean Architecture (T-17…T-26).
+> **Актуально на 2026-10-28**, ветка `development`, коммит `0955ed7`.
+> Тикеты к отчёту — [`docs/review/`](docs/review/README.md).
 
-> Номера строк сверены с рабочим деревом на коммите `c58e6dc` (все 16 тикетов KISS/DRY проверены против
-> этого же состояния; файлы серии удалены после закрытия).
-
-> **Пути в отчёте — исторические** (дерево до архитектурного рефакторинга). Актуальная раскладка слоёв — [`docs/architecture.md`](docs/architecture.md).
+> **Что это за документ.** Перепроверка прошлого отчёта (KISS/DRY, дерево до архитектурного
+> рефакторинга, коммит `c58e6dc`) на текущем коде: что закрыто, что осталось и что появилось нового.
+> Пути и номера строк — по рабочему дереву на 2026-10-28; актуальная раскладка слоёв —
+> [`docs/architecture.md`](docs/architecture.md).
 
 - **Проект:** auto-hh-cli — CLI для поиска вакансий и откликов на hh.ru
-- **Стек:** TypeScript, Node.js (CJS, запуск через `tsx`), MongoDB (нативный драйвер), Playwright (persistent context), OpenAI-совместимый ИИ-клиент, `@inquirer/prompts`, `node-cron@4.2.1`
-- **Объём ревью:** весь `src/` (37 файлов, 3 548 строк), `package.json`, `tsconfig.json`, `config.json`, `.env.example`, `migrations/`, README
-- **Метод:** статический аудит, без прогона пайплайна (нет MongoDB, Playwright-профиля и ключа ИИ)
-- **Состояние на момент ревью:** `npx tsc --noEmit` → exit 0; тестов нет (`tests/`, `scripts/` в репозитории отсутствуют, хотя README на `scripts/` ссылается)
+- **Стек:** TypeScript 6 (`nodenext`, `strict`), Node.js ≥ 22.13, запуск через `tsx`; хранилище — встроенный
+  `node:sqlite` (`data/autohh.db`, адаптеры в `infrastructure/sqlite/`); Playwright (persistent context);
+  OpenAI-совместимый ИИ-клиент; `@inquirer/prompts`; `node-cron@4.2.1`; тесты — vitest,
+  границы слоёв — dependency-cruiser, линт — ESLint 10
+- **Объём ревью:** `src/` — 166 файлов, 10 559 строк (application 63/3 085, infrastructure 39/3 513,
+  domain 32/2 188, presentation 20/1 274, shared 11/310, `composition.ts` 189); `tests/` — 8 спеков,
+  538 строк, 46 тестов; `bin/auto-hh`, `package.json`, `tsconfig.json`, `.env.example`,
+  `config.example.json`, `README.md`, `docs/architecture.md`
+- **Метод:** статический аудит (`Select-String` по `src/`, чтение модулей) + штатные проверки проекта.
+  Живых прогонов `search`/`digest`/`cover`/`apply` нет: нужны сессия hh.ru, ключ ИИ и лимиты аккаунта
+
+| Проверка | Команда | Результат |
+|---|---|---|
+| Типы исходников | `npx tsc --noEmit` | exit 0 |
+| Границы слоёв | `npm run arch` | 0 нарушений (171 модуль, 648 зависимостей) |
+| Типы тестов | `npm run test:types` | exit 0 |
+| Тесты | `npx vitest run --reporter=dot` | 8 файлов, 46 тестов — все зелёные |
+| Smoke CLI | `node bin/auto-hh --version` / `--help` | `1.0.0`, help exit 0 |
 
 ## TL;DR
 
-Код читаемый и хорошо закомментированный, но за время эволюции (hh.ru API → Playwright-скрейпинг; поверх CLI-подкоманд добавлено меню `ui`, при этом сами подкоманды остались) накопилось **14 мест дублирования** и **~8 зон излишней сложности / мёртвого кода**. Аккуратный рефакторинг даёт **−250…−350 строк** без потери функциональности. Дополнительно найдено **4 функциональных риска**, не связанных со стилем (раздел IV) — их стоит закрыть независимо от рефакторинга.
+Дерево в рабочем состоянии: слои не протекают (`application` не импортирует `infrastructure` — 0
+совпадений), `strict` включён, проверки зелёные. Из 14 дублей KISS/DRY (D1–D14) двенадцать сняты
+полностью, D3 и D13 — частично: всё, что осталось, живёт в одном файле `domain/grade-resume.ts`.
+Из K1–K6 открыт K3 (самописный cron), K4–K6 закрыты частично. Функциональные риски F1–F4 сняты,
+кроме `process.exit` в `cmd-resume` (F1) и дрейфа документации (F3, F4).
 
-| Приоритет | Пункты | Почему |
+Осталось два содержательных долга в коде (R1, R2) и четыре средних (R3–R6); типизация и мелочи
+единообразия — P3. Новые тикеты: T-28…T-31; T-25 и T-26 по-прежнему открыты.
+
+| Приоритет | Пункт | Почему |
 |---|---|---|
-| **P0** | F1, F2, F3, F4, K5 | влияют на корректность/производительность, а не на вид кода |
-| **P1** | D1, D2, D3, D4, D6, D14, K1, K2 | 5-40 строк в 2-6 копиях каждая |
-| **P2** | K3, K4, D5, D7-D13 | удаляется/сокращается без изменения поведения |
-| **P3** | K6 | шум, затрудняет чтение и правки |
+| **P1** | R1. `domain/grade-resume` держит ИИ-вызов, промпт и свой JSON-парсер | единственное место, выпадающее из T-24/T-27: домен с I/O |
+| **P1** | R2. `cmd-resume` обрывает процесс `process.exit(1)` | в меню это убивает процесс и `finally` с закрытием SQLite |
+| **P2** | R3. Тесты покрывают ≈12 модулей из 166 | конвейеры search/apply/cover/digest держатся только на `tsc` |
+| **P2** | R4. Документация отстала от кода | README, `docs/architecture.md` и `tsconfig` описывают несуществующее |
+| **P2** | R5. Мёртвая поверхность конфигурации | `env()` отдаёт 6 неиспользуемых OAuth-полей |
+| **P2** | R6. Самописный cron вместо `getNextRun()` | свой парсер ошибается на диапазонах и day-of-week |
+| **P3** | R7. 134 `any` | хот-спот — `infrastructure/hh/resume.ts` (40) |
+| **P3** | R8. Мелочи единообразия | шум в диффах, дубли логгера и интерфейсов |
 
 ---
 
-## I. DRY — дублирование
+## I. Судьба прошлых находок (D1–D14, K1–K6, F1–F4)
 
-### D1. «Подклеить письма из кэша к записям дайджеста» — 3 копии
-- `src/cli/cmd-apply.ts:245-249`
-- `src/cli/cmd-cover.ts:74-79` (вариант с `opts.force`)
-- `src/cli/cmd-digest.ts:267-268`
+Сверка шла по текущему дереву: для каждого пункта искалось место, куда он переехал.
 
-Все три: `getLettersByVacancyIds(entries.map(e => e.id))` → merge `letters[String(e.id)] || e.coverLetter || ''`.
-**Предложение:** `store/cache-store.ts` → `withCoverLetters(entries, { force = false })`.
-
-### D2. «Догрузить отсутствующие полные карточки с hh.ru» — 3 копии
-- `src/cli/cmd-digest.ts:26-43` (внутри `filterLocally` :22-55)
-- `src/cli/cmd-cover.ts:88-111` (`coverDigest`)
-- `src/domain/collect.ts:49-97` (`collectFullVacancies` — с вариациями: статистика, `history.isSeen` на строке `cmd-digest.ts:28`)
-
-Общая суть: взять из кэша (`getFullByVacancyIds` / `cache.fullById`) → для отсутствующих `client.getVacancy(id)` → записать в `cache.fullById` и `saveFullVacancy` → `log.warn` при ошибке.
-**Предложение:** `domain/collect.ts` → `ensureFullVacancies(client, ids, cache, { skipSeen, onProgress })`, а `collectFullVacancies` сделать тонкой обёрткой.
-
-### D3. Два парсера ответа модели + два способа достать список
-- `src/text-utils.ts:5-10` — `parseJSON` (снимает фенсы ```` ``` ```` и `**`; fallback по `{`…`}` из описания ниже в коде **отсутствует**)
-- `src/domain/grade-resume.ts:9-31` — `safeJsonParse` (своя эвристика экранирования кавычек, срез управляющих символов); общий `parseJSON` **не** используется
-- Извлечение массива: `src/domain/judge/judge.ts:153` (`parsed.verdicts || []`) и `src/domain/cover-letter/cover-letter.ts:170` (`parsed.letters || []`)
-
-**Предложение:** один `parseJSON` (объединить обе стратегии) + `asList(parsed, key)`.
-
-### D4. Пул воркеров «пачки + concurrency» — 2 почти идентичные реализации
-- `src/cli/cmd-digest.ts:57-113` (`judgeWithClaude`)
-- `src/domain/cover-letter/cover-letter.ts:121-193` (`buildCoverLettersBatch`)
-
-Общий каркас: `chunk` → `nextBatchIdx` → `worker()` → `Promise.all(Array.from({ length: Math.min(CONCURRENCY, batches.length) }, ...))`, с `try/catch` на пачку и прогрессом.
-**Предложение:** новый `src/concurrency.ts`: `chunk(items, size)`, `runBatches(batches, concurrency, fn)`.
-
-### D5. Мапа «vacancy → запись дайджеста» объявлена дважды в одном файле
-- `src/cli/cmd-digest.ts:132-141` (для `rejected`, внутри `selectAccepted` :114-151)
-- `src/cli/cmd-digest.ts:159-170` (для `matched`, внутри `buildResults` :155-183)
-
-Одни и те же 11 полей. При этом `DigestEntry` уже есть в `src/types.ts:44-55` (и используется в `src/store/digest-store.ts:4` как тип Mongo-документа), но **эти литералы им не типизированы**.
-**Предложение:** `toDigestEntry(full, { score, reason, comment, coverLetter }) : DigestEntry`.
-
-### D6. Пути, дата и env-хелперы продублированы по всему проекту
-- резолв каталога данных (`path.join(__dirname, …, 'data')`) — **6 копий**, причём глубина `..` зависит от расположения файла (в `src/` — один, в `src/cli/` и `src/store/` — два), хотя результат один и тот же: `src/logger.ts:5`, `src/store/digest-store.ts:6`, `src/store/reset.ts:38`, `src/cli/cmd-digest.ts:284`, `src/cli/cmd-apply.ts:103`, `src/cli/cmd-history.ts:7`
-- `dateKey()` / `toISOString().slice(0, 10)` — 3 копии: `src/store/cache-store.ts:4-6`, `src/store/digest-store.ts:8-10`, `src/cli/cmd-apply.ts:29`
-- `loadConfig()` — 5 модулей, причём в трёх **на уровне импорта** (`src/domain/judge/judge.ts:10`, `src/domain/cover-letter/cover-letter.ts:9`, `src/domain/grade-resume.ts:7`) и повторно внутри (`cover-letter.ts:85` и `:114`; `src/cli/cmd-cover.ts:35` и `:143`); плюс `const apiConfig = loadConfig().api || {}` скопирован в те же 3 файла
-- `parseInt(process.env.X || 'def', 10)` — **10 мест**: `src/config.ts:24`, `src/clients/db.ts:7`, `src/cli/cmd-apply.ts:12,13,15,35,36,117`, `src/cli/cmd-cover.ts:119`, `src/cli/cmd-digest.ts:67`
-
-**Предложение:** `src/paths.ts` (`DATA_DIR`, `LOG_FILE`, `ensureDir`), один `dateKey()`, мемоизированный `loadConfig()` + `getApiConfig()`, `intFromEnv(name, def, { min })` в `src/env.ts`.
-
-### D7. Расширения резюме перечислены 3 раза
-`src/resume.ts:36` (regex), `src/resume.ts:43` (regex в `stripExt`), `src/resume.ts:50` (массив `['.md', '.txt', '.pdf']`).
-**Предложение:** `const RESUME_EXTS = ['.md', '.txt', '.pdf']` + `isResumeFile(name)`.
-
-### D8. Список резюме для выбора собирается дважды
-`src/cli/cmd-ui.ts:113-141` (`pickResume`) и `src/cli/cmd-ui.ts:142-180` (`runPickActiveResume`) — одинаковые `choices` с пометкой активного/незарегистрированного.
-**Предложение:** `resumeChoices({ markLabel })`.
-
-### D9. Форматирование ЗП переписано вместо готового
-`src/cli/cmd-cover.ts:15-20` дублирует `fmtSalary` из `src/domain/collect.ts:111-117`.
-**Предложение:** импортировать `fmtSalary`.
-
-### D10. Мелкие утилиты и вывод
-- `sleep` — 2 копии: `src/cli/cmd-apply.ts:17`, `src/clients/hh-client.ts:15`
-- `rand` — есть только в `src/cli/cmd-apply.ts:18` (перенести в общий модуль вместе с `sleep`)
-- Печать записи дайджеста: `printTop` (`src/cli/cmd-digest.ts:185-191`) и вывод в `show` (`src/cli/cmd-digest.ts:273-279`) форматируют одни и те же поля по-разному
-
-### D11. Поиск по id — один и тот же алгоритм
-`src/store/cache-store.ts:91-98` (`getFullByVacancyIds`) и `src/store/cache-store.ts:126-133` (`getLettersByVacancyIds`): dedupe → `$in` → `map`.
-**Предложение:** `findByIds(collection, ids, valueField)`.
-
-### D12. Дублирование внутри `applyToVacancy`
-`src/cli/cmd-apply.ts`: парсинг `PW_MIN/MAX_DELAY_MS` дважды (строки 12-13 **и** 35-36, то есть внутри цикла по вакансиям), блок «test required» дважды (70-83 и 152-164), `detectPostState` вызывается дважды с одинаковым разбором.
-**Предложение:** вынести `handleTestRequired(page)` и `ensureDraftSubmitted()`; env читать на уровне модуля (как в строках 12-15).
-
-### D13. Категории оценки резюме объявлены дважды
-`src/cli/cmd-grade-resume.ts:49-55` (Markdown) и `src/cli/cmd-grade-resume.ts:127-131` (консоль) — одни и те же 25/25/20/20/10 и одни и те же ключи, обходятся двумя разными циклами. Плюс промпт оценки (95 строк) лежит inline в `src/domain/grade-resume.ts:33-95`, тогда как у `judge` и `cover-letter` промпты вынесены в `system-text.ts`.
-**Предложение:** таблица `CATEGORIES = [{ key, title, max }]` + единый обход; промпт → `src/domain/grade-resume/system-text.ts`.
-
-### D14. Запуск Chromium и логин продублированы между `cmd-apply` и `hh-client`
-- `PROFILE` объявлен дважды: `src/cli/cmd-apply.ts:10` и `src/clients/hh-client.ts:13`
-- `chromium.launchPersistentContext(...)` с одинаковыми опциями: `src/cli/cmd-apply.ts:219-222`, `src/cli/cmd-apply.ts:255-258`, `src/clients/hh-client.ts:101-104`
-- `ctx.pages()[0] || await ctx.newPage()` — в `cmd-apply.ts` ×2 и `src/clients/hh-client.ts:106`
-- `ensureProfile()` (`src/cli/cmd-apply.ts:20-22`) нужен именно потому, что `cmd-apply` не переиспользует `HhClient`
-
-**Предложение:** один хелпер `openBrowser({ headless })` (или переиспользование `HhClient` в `cmd-apply`).
-
----
-
-## II. KISS — излишняя сложность
-
-- **K1. `src/cli/cmd-ui.ts` — 413 строк, 10+ обязанностей.** Внутри: сборка опций (`buildSearchOptions` :56, `buildDigestOptions` :61, `buildCoverOptions` :77, `buildApplyOptions` :84), описание окружения (:91, :104), выбор резюме (:113, :142, :181), счётчики (:197), шаги меню (:206-319) и список пунктов (:325-341), `mainMenu` (:320), `dispatch` (:346), `cmdUi` (:373), обработка Ctrl+C и `process.exitCode` (:400).
-  **Разбить:** `cli/ui/options.ts`, `cli/ui/resume.ts`, `cli/ui/steps.ts`, `cli/ui/menu.ts`.
-
-- **K2. `src/cli/cmd-apply.ts` — 303 строки, два «бога».** `apply()` (:228-302, 75 строк) и `applyToVacancy()` (:33-168, 136 строк) с большой вложенностью: проверка отклика → логин → нажатие кнопки → заполнение письма → тест → ручное подтверждение → случайная задержка.
-  **Разбить:** `ensureLoggedIn`, `findResponseButton`, `fillLetter`, `handleTestRequired`, `waitForManualSubmit`.
-
-- **K3. `src/cli/cmd-schedule.ts:24-60` — 37 строк ручного парсера cron**, хотя установлен `node-cron@4.2.1`, у которого есть `ScheduledTask.getNextRun(): Date | null` (`node_modules/node-cron/dist/cjs/tasks/scheduled-task.d.ts:33`). Самописный матчер к тому же неверно обрабатывает диапазоны и `*/n` со смещением в day-of-week.
-  **Заменить на:** создать задачу → `task.getNextRun()` (и печатать «следующий запуск» уже из него).
-
-- **K4. Мёртвый код (проверено grep'ом по всему репозиторию):**
-
-| Что | Где | Статус |
+| Пункт | Сейчас | Статус |
 |---|---|---|
-| `cmd-history` — источник данных | `src/cli/cmd-history.ts:7` (весь файл — 40 строк) | читает `data/history.json`, который **никто не пишет** (история — коллекция `history` в MongoDB) → и команда `history` (`src/cli/index.ts:50-54`), и пункт меню «🕓 История откликов» (`cmd-ui.ts:332`, dispatch :358) всегда печатают «No history yet.» |
-| `env()` — OAuth-поля | `src/config.ts:17-23` | `HH_CLIENT_ID/SECRET/REDIRECT_URI/ACCESS_TOKEN/REFRESH_TOKEN/RESUME_ID` не используются нигде; README сам зовёт их зарезервированными (README:383), а `src/oauth-server.js`, на который он ссылается, в репозитории нет. Реально нужны `userAgent` (:22) и `requestDelayMs` (:24) |
-| `Verdict.coverLetter` | `src/types.ts:21`, заполняется в `src/domain/judge/judge.ts:34` | всегда `''`, никем не читается (промпт сам требует пустую строку) |
-| `history.isApplied` | `src/store/history-store.ts:52-56` | нет ни одного вызова (только дефолтный экспорт на строке 64) — при этом оно ровно то, что нужно вместо `history.load()` в цикле (см. F1) |
-| Легаси-алиасы шага digest | `src/cli/cmd-digest.ts:295-306` | `SHOW_ACTIONS = ['show','last','latest','view']` (:295), ветка `typeof action === 'object'` (:299-302) и алиасы `make`/`create` (:306). Из меню достижимы только `build` (`cmd-ui.ts:222`) и `show` (`cmd-ui.ts:356`); ветка-объект недостижима ниоткуда (Commander всегда передаёт строку — `index.ts:41,48`), алиасы `last/latest/view/make/create` живы только через прямой вызов `auto-hh digest <alias>` |
-| Экспорт без потребителей | `src/cli/cmd-digest.ts:312` | `export { build as buildDigest, show as showDigest }` — никто не импортирует (проверено grep'ом по `src/`) |
-| Комментарий-блок | `src/domain/adapt-resume.ts:35-37` | закомментированный код |
-| `filter.requiredSkills` | `config.json:13` | не читается `src/domain/filter.ts` (там используются только `excludeArchived` :30, `excludedCompanies` :35, `excludedKeywords` :45, `minSalaryRub` :50, `locationRule` :61) |
-| `@ts-nocheck` | `src/clients/hh-client.ts:1` | 202 строки без проверки типов — единственный такой файл; `cmd-apply.ts` тоже без типов (`page`, `entry` — `any`) |
-| `src/apply-playwright.ts` (19 строк) | весь файл | легаси-обёртка «`node src/apply-playwright.js` = `auto-hh apply`»; сама зовёт `process.exit(0)`/`process.exit(1)` (:15, :18), из-за чего `finally { closeDb() }` не отрабатывает. Решение за владельцем: удалить (README уже помечает её легаси-точкой входа — README:441, :454) или переписать на `exitCode` — см. F1 |
-| `scripts/**/*.ts` в `include` | `tsconfig.json:15` | каталога `scripts/` в репозитории нет (см. F4) — мёртвая строка конфигурации |
-
-- **K5. Лишние round-trip'ы и работа в цикле:**
-  - `src/cli/cmd-apply.ts:278` — `await history.load()` **внутри** цикла по вакансиям: полная выгрузка коллекции на каждую вакансию. Лечится `history.isApplied(id)` (который уже есть, см. K4).
-  - `src/store/history-store.ts:39-50` (`markSeen`) — `findOne` + `updateOne`; достаточно одного `updateOne` с фильтром `{ vacancyId, status: { $ne: 'applied' } }`.
-  - `src/cli/cmd-digest.ts:33,38,47` — `markSeen` по одному документу на вакансию (в цикле до 1000 вакансий) → `bulkWrite`.
-  - `src/domain/cover-letter/cover-letter.ts:174-176` — `onBatch(result)` отдаёт **всю накопленную** карту, поэтому `coverDigest` (`src/cli/cmd-cover.ts:121-126`) при каждой новой пачке заново пишет в MongoDB письма всех предыдущих → передавать только новые.
-
-- **K6. Единообразие (не влияет на работу, мешает чтению):** смешаны импорты `"../logger"` и `"../logger.js"`; встречаются `import {  loadConfig  }`, `import  {getDigestsByDate, getAllDigests}`, `import {Vacancy}`. Файлы: `cmd-apply.ts:4-8`, `cmd-cover.ts:3-9`, `cmd-digest.ts:5-15`, `cmd-search.ts:3-8`, `cmd-schedule.ts:3-7`, `cmd-resume.ts:3-5`, `clients/hh-client.ts:9-11`, `domain/filter.ts:2`, `domain/judge/judge.ts:3-4`, `domain/cover-letter/cover-letter.ts:3-4`, `domain/grade-resume.ts:1-4`; плюс `index.ts:14` (`from "../clients/db"` без `.js`). Эталон — `src/cli/index.ts:3-13`. `tsc` это принимает (CJS), но лучше привести к `.js` везде и прогнать форматтер по `.editorconfig`.
-
----
-
-## III. Типовые пробелы
-
-- `src/types.ts:4` — `Vacancy.description: string` объявлен обязательным, но `mapSearchItem` (`src/clients/hh-client.ts:41-53`) его не возвращает; ошибка не видна только из-за `@ts-nocheck`. Реальная форма — `description?: string`.
-- `judge.ts`, `cover-letter.ts`, `collect.ts`, `cmd-digest.ts`, `cmd-apply.ts` активно используют `any` / `Record<string, any>`; `DigestEntry` и `Verdict` есть, но на границах не применяются.
-- `src/logger.ts` — `debug` управляется `process.env.DEBUG`, а `log.error` пишет через `console.log` (не `console.error`), то есть ошибки уезжают в stdout.
+| **D1** подклейка писем ×3 | порт `CoverLetterCache.attach` (`domain/ports.ts`, адаптер `infrastructure/sqlite/cover-letter-cache.ts`); вызовы — `application/cover/stages.ts:47`, `application/apply/stages.ts:87,90` | ✅ |
+| **D2** догрузка полных карточек ×3 | `application/search/VacancyCollector.ts:72-107` (`ensureFullCards`); переиспользуют `application/cover/stages.ts:75-79` и стадии digest | ✅ |
+| **D3** два парсера JSON | один `parseJSON` — `shared/text-utils.ts:5`; свой `safeJsonParse` остался в `domain/grade-resume.ts:5-28` | ⚠️ → R1 |
+| **D4** пул воркеров ×2 | `shared/batches.ts:6` (`chunk`) и `:42` (`runBatches`) — оба ИИ-шага ходят через них | ✅ |
+| **D5** мапа «vacancy → запись» ×2 | `domain/digest/DigestEntryFactory.ts` + VO `DigestCandidate` | ✅ |
+| **D6** пути/дата/env по всему проекту | `infrastructure/config/paths.ts`, `infrastructure/config/env.ts`, `shared/time.ts:14` (`dateKey`); домен больше не зовёт `loadConfig()` | ✅ |
+| **D7** расширения резюме ×3 | `infrastructure/files/resume-loader.ts:36` (`RESUME_EXTS`), `:40` (`isResumeFile`) | ✅ |
+| **D8** список резюме ×2 | `presentation/cli/menu/resume.ts` (`resumeChoices`) | ✅ |
+| **D9** форматирование ЗП | `shared/format.ts` (`fmtSalary`), реэкспорт из `application/collect.ts:12` | ✅ |
+| **D10** `sleep`/`rand`/`printTop` | `shared/time.ts:4,9`; печать дайджеста — `presentation/cli/format/digest-report.ts` | ✅ |
+| **D11** поиск по id ×2 | `infrastructure/sqlite/cache-store.ts:105` (`findByIds`, один на `cache_pages`/`cache_full`) | ✅ |
+| **D12** дубли внутри `applyToVacancy` | `application/apply/` (13 модулей) + `infrastructure/playwright/apply-steps.ts`; env читается один раз | ✅ |
+| **D13** категории оценки и промпт | категории — `presentation/cli/format/grade-report.ts`; промпт остался строкой в домене (`domain/grade-resume.ts:30-92`) | ⚠️ → R1 |
+| **D14** запуск Chromium и логин | `infrastructure/playwright/browser.ts` (`openBrowser`, `assertProfileExists`) | ✅ |
+| **K1** `cmd-ui.ts` на 413 строк | `presentation/cli/menu/`: `menu.ts` 143, `steps.ts` 194, `options.ts` 38, `resume.ts` 137, `resume-download.ts` 53 | ✅ |
+| **K2** `cmd-apply.ts` на 303 строки | `application/apply/` (сценарий, конвейер, 5 стадий, `ApplicationRunner`, стратегии) + `apply-steps.ts` 199 | ✅ |
+| **K3** самописный парсер cron | `shared/cron.ts:1-42` жив; `Scheduler` не отдаёт next run | ❌ → R6 |
+| **K4** мёртвый код | в основном вычищено; остались OAuth-поля в `env()`, ветка-объект `cmdDigest`, `scripts/**/*.ts` в `tsconfig` | ⚠️ → R2, R4, R5 |
+| **K5** лишние round-trip'ы | `history.load()` один раз на прогон (`application/apply/stages.ts:101`), `markSeen` — атомарный upsert (`history-store.ts:45-54`); остались поштучные `markSeen` (`application/digest/stages.ts:93,108,109`) | ⚠️ |
+| **K6** единообразие импортов | алиас `@/` и `.js` везде; остались `import {  Command  }` и дубль заголовка в `presentation/cli/index.ts:1-5` | ⚠️ → R8 |
+| **F1** `process.exit` внутри модулей | остался только в `presentation/cli/commands/cmd-resume.ts:47,51,61,65` | ⚠️ → R2 |
+| **F2** `cmd-history` всегда пуст | `application/history.ts` + `infrastructure/sqlite/history-store.ts` (таблица `history`) | ✅ |
+| **F3** профиль браузера в проекте | описан в `README.md:350,379`, но предупреждения «не копировать в бэкапы» нет | ⚠️ → R4 |
+| **F4** README расходится с кодом | дрейф остался: `README.md:439,448`, `docs/architecture.md:700` | ⚠️ → R4 |
 
 ---
 
-## IV. Функциональные риски (не про стиль)
+## II. Актуальные находки
 
-- **F1. `process.exit(1)` внутри модулей команд.** `src/cli/cmd-resume.ts:31,36,48,52` и `src/cli/cmd-schedule.ts:69,77` вызывают `process.exit(1)`. В режиме меню это убивает процесс целиком: не отработает `finally` в `run()` (`src/cli/index.ts:107-109` — закрытие MongoDB), и пользователь вылетает из приложения после одной неудачной команды, хотя теперь в CLI доступны и обычные подкоманды (`index.ts:23-97`), где цена та же. Остальные места ведут себя правильно — `process.exitCode = 1` (`cmd-ui.ts:400`, `cmd-cover.ts:42,148`, `cmd-digest.ts:309`, `cmd-apply.ts:267`, `index.ts:106`). Отдельно: `src/apply-playwright.ts:15,18` — легаси-обёртка, тоже обрывает процесс (см. K4). Нужен единый стиль: `exitCode` + `return`/`throw`.
-- **F2. `cmd-history` показывает всегда пусто** (см. K4): `data/history.json` никем не создаётся, хотя команда зарегистрирована (`index.ts:50-54`) и есть пункт меню. Либо переписать на `history-store.load()`, либо убрать команду/пункт меню.
-- **F3. `data/` в рабочем каталоге:** `git ls-files data` → 0 файлов, `.gitignore` содержит `data/` — то есть в git ничего не утечёт. Но каталог `data/browser-profile` с cookies сессии физически лежит в проекте; стоит явно предупредить в README, что его нельзя ни коммитить, ни копировать в бэкапы.
-- **F4. README расходится с кодом:** указан каталог `scripts/` (README:445) — его нет; файл `src/oauth-server.js` (README:383) — его тоже нет, а OAuth-переменные из этого раздела не читаются кодом. В дереве проекта `cmd-cover.ts` указан дважды (README:414 и :419). Легаси-точка входа `src/apply-playwright.ts` описана в README:441 и :454 — файл существует, но это обёртка, которую решено удалить/переписать (K4). Файл `data/history.json` в README **не** упоминается (проверено grep'ом) — он встречается только в коде: `src/cli/cmd-history.ts:7`, см. F2.
+### R1 (P1) Домен оценки резюме держит ИИ, промпт и свой JSON-парсер — единственное место, выпадающее из T-24/T-27
+
+`src/domain/grade-resume.ts` (139 строк) целиком построен по старому образцу:
+
+- `:5-28` — собственный `safeJsonParse`: фенсы, `**`, эвристика экранирования кавычек и срез
+  управляющих символов. Общий `parseJSON` (`shared/text-utils.ts:5`) не используется, хотя после D3
+  он умеет и фенсы, и фрагмент `{…}`.
+- `:30-92` — системный промпт строкой в домене (у `judge` и `cover-letter` после T-27 промпты живут
+  в Domain Services: `domain/judge/JudgePrompt.ts`, `domain/cover-letter/CoverLetterPrompt.ts`).
+- `:96` — `async function gradeResume(ai: AiProvider | null, resume, logger?)`: домен делает I/O,
+  ловит ошибки модели (`:133`) и возвращает `Record<string, any>`.
+- `:120` — `ai.chat({ messages, json: true, label: 'оценка резюме' })`.
+- `:98,103,124,129,134` — логирование из домена.
+
+Проверка: `Select-String` по `src/domain` на `AiProvider|ai\.chat\(|logger` даёт совпадения **только**
+в этом файле — остальной домен чистый. При этом `application/grade.ts` уже получает `AiProvider` и
+`ResumeFiles` портами и мог бы принять весь транспорт на себя.
+
+Почему это важно: два парсера JSON расходятся в поведении (фенсы и `**` обрабатываются одинаково,
+эвристика с кавычками — только в домене), инвариант «что считается оценкой» нельзя проверить без
+ключа ИИ, а правило «домен без побочек», закрытое в T-24/T-27, здесь обходится.
+
+**Предложение (T-28):** `domain/grade-resume/GradePrompt.ts` (Domain Service), VO `ResumeGrade`
+(разбор и clamp баллов), `application/grade/ResumeGradeService.ts` (вызов `ai.chat`, ошибки → `null`,
+логи с прежними текстами), общий `parseJSON`. Тесты: промпт, разбор ответа, «нет ключа».
+
+### R2 (P1) `cmd-resume` обрывает процесс и разговаривает на языке commander'а
+
+- `src/presentation/cli/commands/cmd-resume.ts:47,51,61,65` — `process.exit(1)` в ветках ошибок.
+  Команда вызывается **из меню** (`presentation/cli/menu/steps.ts:129,135`), поэтому `process.exit`
+  убивает процесс целиком: не отрабатывает `finally` в `run()` (`presentation/cli/index.ts:44-53`),
+  не закрывается SQLite (`closeResources()`), пользователь вылетает из приложения. Остальные команды
+  уже ведут себя правильно: `process.exitCode` в `cmd-digest.ts:43`, `cmd-schedule.ts:40,45`,
+  `presentation/cli/index.ts:36,49`.
+- `cmd-resume.ts:88-89` — `opts: Record<string, any>` и `const sub = opts._?.join(' ')`: интерфейс
+  остался от времён подкоманд commander (`_: ['list']` подставляет меню, `steps.ts:129,135`), хотя
+  подкоманд в CLI больше нет (`presentation/cli/index.ts:22-40`).
+- `cmd-resume.ts:14` — единственная английская строка в русском CLI
+  («No resumes found. Set RESUMES_DIR or RESUME_PATH.»).
+- `src/presentation/cli/commands/cmd-digest.ts:30-35` — ветка «`cmdDigest({ json: true })` = show»;
+  все вызовы передают строку (`menu.ts:93`, `steps.ts:53,62,73`), то есть ветка недостижима.
+  Там же `action: any` и алиасы `make/create/last/latest/view` (`:27-28,40`) — наследие подкоманд.
+
+**Предложение (T-29):** `process.exitCode = 1` + `return`; параметры `cmd-resume` — обычный объект
+`{ action?: 'list'|'register'|'show'; name?: string }`; ветку-объект и алиасы `cmdDigest` удалить.
+Проверка: `Get-ChildItem src -Recurse -Filter *.ts | Select-String -Pattern 'process\.exit\(1\)'` → пусто;
+прогон пункта меню «🧾 Резюме» с заведомо отсутствующим именем не должен закрывать меню.
+
+### R3 (P2) Тесты покрывают ≈12 модулей из 166
+
+46 тестов на 10 559 строк — это лучше, чем «тестов нет» в прошлом отчёте, но покрытие точечное.
+Спеки проверяют: `domain/actualize`, `domain/adapt-resume` (только `DEFAULT_ADAPT_BUDGET`),
+`domain/cover-letter/{config,CoverSignature,CoverTemplate,CoverLetterPrompt}`,
+`domain/digest/DigestPolicy`, `domain/judge/Verdict`, `application/judge/JudgeService`,
+`application/cover-letter/CoverLetterService`, `application/reset` (форматтер),
+`infrastructure/sqlite/db-janitor`.
+
+Не покрыто ничего из:
+
+| Слой | Модулей | Что именно не проверяется |
+|---|---|---|
+| `application/search` | 11 | `SearchScenario`, `SearchPipeline`, `PageIterator`, `VacancyCollector`, `SearchRequestBuilder` |
+| `application/apply` | 13 | `ApplyScenario`, `DigestSelection`, `SkipRules`, `Pacing`, `ApplicationRunner` |
+| `application/cover` | 12 | `CoverScenario`, стратегии `CoverMode`, `CoverPlan`, 7 стадий |
+| `application/digest` | 14 | `DigestScenario`, `DigestPipeline`, `DigestJudgeRunner`, `ActualizeScenario`, 7 стадий |
+| `application/` корень | 9 | `collect`, `config-view`, `grade`, `history`, `options`, `reset`, `resume`, `resume-download`, `schedule` |
+| `infrastructure/sqlite` | 12 | всё, кроме `db-janitor`: `cache-store`, `digest-store`, `history-store`, `resume-store`, `judgement-cache`, `cover-letter-cache`, `resume-registry` |
+| `infrastructure/hh`, `ai`, `files`, `playwright`, `config`, `logging`, `scheduling` | 26 | скрейпинг выдачи и карточек, разбор резюме, ретраи ИИ, артефакты `.md`, селекторы отклика, чтение env и конфига |
+| `presentation` | 20 | меню, команды, отчёты |
+
+Практический эффект: порядок стадий, тексты логов и решения «пропустить/откликнуться» держатся
+только на `tsc` и ручных прогонах. Регрессия в них ловится глазами владельца, а не тестом.
+
+**Предложение:** расширить **T-26** (уже открыт): по одному smoke-сценарию на `SearchScenario`,
+`DigestScenario`, `CoverScenario`, `ApplyScenario` на фейковых портах + `:memory:`-тесты
+`cache-store`/`digest-store`/`history-store`. Проверять исход и события, а не текст лога.
+
+### R4 (P2) Документация отстала от кода
+
+| Место | Что написано | Что на самом деле |
+|---|---|---|
+| `README.md:448` | `├─ scripts/ # вспомогательные скрипты (judge-only, fill-cover-letters, …)` | каталога `scripts/` нет; при этом `tsconfig.json:19` всё ещё включает `scripts/**/*.ts` |
+| `README.md:439` | `files/: resume-loader, resume-files, data-janitor, …` | `data-janitor.ts` нет — есть `file-janitor.ts`; не упомянуты `sqlite/db-janitor.ts` и `files/digest-artifacts.ts` |
+| `docs/architecture.md:700` | «Переменные окружения: … `MONGODB_*` …» | Mongo в проекте нет: `.env.example`, `README.md`, `src/` — 0 совпадений |
+| `docs/architecture.md:702` | «MongoDB: коллекции `cachePages`, `cacheFull`, …» как актуальное состояние | таблицы SQLite `cache_pages`, `cache_full`, … (`infrastructure/sqlite/schema.ts`) |
+| `docs/architecture.md:4-6` | «дата 2026-10-19, ветка `refactor/t24-domain-purity`, 154 файла, ≈10,26 тыс. строк» | 2026-10-28, `development`, 166 файлов, 10 559 строк |
+| `README.md:350,379` | профиль Chromium описан как данные | нет предупреждения «не копировать в бэкапы и не публиковать» (остаток F3) |
+
+**Предложение (T-31):** привести дерево и env-таблицу к коду, убрать `scripts/**/*.ts` из `tsconfig`,
+добавить предупреждение о `data/browser-profile`.
+
+### R5 (P2) Мёртвая поверхность конфигурации
+
+`infrastructure/config/config.ts:70-81` — `env()` отдаёт 8 полей, из которых используются два:
+
+```ts
+clientId: process.env.HH_CLIENT_ID,        // не читается нигде
+clientSecret: process.env.HH_CLIENT_SECRET, // не читается нигде
+redirectUri: …, accessToken: …, refreshToken: …, resumeId: …, // не читаются нигде
+userAgent: …, requestDelayMs: …             // ← только эти два (hh/client.ts:262-264)
+```
+
+OAuth-поля — остаток легаси-раздела README (`src/oauth-server.js` не существует с прошлого ревью).
+Там же `config.ts:65-68`: обёртка `loadConfig()` экспортируется, но не импортируется ни одним модулем
+(`composition.ts:19` берёт `configProvider`).
+
+**Предложение (T-31):** оставить `{ userAgent, requestDelayMs }`, `loadConfig()` удалить.
+
+### R6 (P2) Самописный cron остался
+
+`src/shared/cron.ts:1-42` — перебор минут на 48 часов вперёд с поддержкой `*`, `*/n`, `a-b`, `a,b`.
+Он не понимает `a-b/n` и `?`, не знает имён месяцев/дней, а `day-of-week` сравнивает с `Date.getDay()`
+(0 = воскресенье), тогда как в cron 0 и 7 — воскресенье, а `node-cron` это учитывает.
+
+Дополнительно: `application/schedule.ts:68` и `:91` считают «следующий запуск» дважды, а порт
+`Scheduler` (`domain/ports.ts:22-27`) не умеет отдавать next run — адаптер
+`infrastructure/scheduling/node-cron.ts` возвращает `cron.schedule(...)` в никуда и `getNextRun()` не
+пробрасывает, хотя библиотека его предоставляет.
+
+**Предложение (T-30):** добавить `nextRun(expression): Date | null` в порт и адаптер, удалить
+`shared/cron.ts`, тест — на фейковом `Scheduler`.
+
+### R7 (P3) Типизация: 134 `any`
+
+`strict: true` включён, но `any` остаётся на границах с внешним миром. Хот-споты:
+
+| Файл | `any` | Что именно |
+|---|---|---|
+| `infrastructure/hh/resume.ts` | 40 | разбор сырого initial state hh.ru |
+| `infrastructure/ai/client.ts` | 7 | ответы провайдера, ошибки ретраев |
+| `infrastructure/hh/client.ts` | 6 | `RawPageState`, карточка вакансии |
+| `infrastructure/sqlite/digest-store.ts` | 5 | `entries: any[]` в 5 функциях записи |
+| `infrastructure/files/digest-artifacts.ts` | 5 | вход рендера `.md` |
+| `application/history.ts` | 5 | `Record<string, any>` вместо `HistoryMeta` |
+
+Дешёвые победы (без риска для поведения):
+
+- `application/history.ts:22-30,46,56,76,81` — порт уже отдаёт `HistoryMeta`/`HistoryState`
+  (`domain/ports.ts:80,95`); заменить `any` на них.
+- `infrastructure/sqlite/digest-store.ts:22,159,166,174,179` — `entries: DigestEntry[]`.
+- `shared/text-utils.ts:5` — `parseJSON<T = unknown>(text: string): T | null` вместо `any`
+  (после T-28 все ИИ-шаги будут разбирать ответ через него).
+
+Остальное рационально закрывать внутри **T-25** (адаптеры hh.ru) и **T-26** (тесты фиксируют форму).
+
+### R8 (P3) Мелочи единообразия
+
+- `presentation/cli/index.ts:1-2` — один и тот же комментарий дважды; `:5` — `import {  Command  }`
+  с двойными пробелами (следы старого форматтера). Файл — лицо CLI, с него читают.
+- `shared/logger.ts:5-8` и `infrastructure/logging/logger.ts:8-14` — форматирование строки лога
+  (время МСК + JSON-meta) скопировано дважды; `shared/logger.ts:13` пишет `error` через `console.log`,
+  а не `console.error`, то есть ошибки уезжают в stdout.
+- `domain/logging.ts:2-7` и `shared/logging.ts:3-8` — два одинаковых интерфейса (`Logger`/`LogSink`).
+  Домену разрешено импортировать `shared` (`docs/architecture.md`, раздел 2), поэтому достаточно
+  `export type { LogSink as Logger }`.
+- `infrastructure/logging/logger.ts:25` — `setLogSink(fileLogSink)` выполняется на импорте модуля
+  (сайд-эффект), хотя комментарий рядом (`:2`) говорит «импортируется composition root, который
+  регистрирует sink». Либо явный вызов из `composition.ts`, либо честный комментарий.
+- `application/resume-download.ts:102,154,160` — переменная `mongoUnavailable` после миграции на SQLite.
+- `presentation/cli/commands/cmd-resume.ts:14` — английская строка в русском CLI (см. R2).
 
 ---
 
-## V. План рефакторинга (по этапам, каждый — отдельный коммит)
+## III. Что проверено и находкой не является
 
-**Этап 0 — гигиена (нулевой риск)**
-1. Импорты к `.js`, удаление артефактов форматирования (K6); прогон форматтера по `.editorconfig`.
-2. Удаление мёртвого кода из K4: OAuth-поля в `env()`, `Verdict.coverLetter`, закомментированный блок в `adapt-resume.ts`, легаси-алиасы `cmdDigest`, экспорт `buildDigest/showDigest`, `requiredSkills` из `config.json`. (`history.isApplied` **не** удалять — его надо переиспользовать.)
-3. Исправление `process.exit` → `exitCode` (F1).
+Чтобы не «починить» лишнее:
 
-**Этап 1 — общие утилиты (корень дублей)**
-4. `src/paths.ts` (`DATA_DIR`, `LOG_FILE`, `ensureDir`) → перевести logger, digest-store, reset, cmd-digest, cmd-apply, cmd-history.
-5. `src/env.ts`: `intFromEnv`, `boolFromEnv` → retry, ai-client, config, cmd-apply, cmd-cover, cmd-digest.
-6. `src/time.ts`: `sleep`, `rand`, `dateKey`.
-7. `text-utils.ts`: слить `parseJSON` и `safeJsonParse`, добавить `asList()`.
-8. `src/concurrency.ts`: `chunk()` + `runBatches()`; перевести `judgeWithClaude` и `buildCoverLettersBatch`.
-9. `resume.ts`: `RESUME_EXTS` + `isResumeFile()`; `config.ts`: мемоизация `loadConfig()` + `getApiConfig()`.
-
-**Этап 2 — `store/`**
-10. `withCoverLetters()` (D1) вместо 3 копий.
-11. `findByIds()` вместо `getFullByVacancyIds`/`getLettersByVacancyIds` (D11).
-12. `markSeen` одним запросом; батч-отметки в `cmd-digest`; `onBatch` только с новыми письмами (K5).
-13. `isApplied` — использовать в `cmd-apply` вместо `history.load()` в цикле (K5).
-
-**Этап 3 — `domain/`**
-14. `ensureFullVacancies()` (D2).
-15. `toDigestEntry()` + типизация `DigestEntry` (D5).
-16. `CATEGORIES` + вынос промпта в `domain/grade-resume/system-text.ts` (D13).
-17. `fmtSalary` в `cmd-cover`; `Vacancy.description` → опциональный (D9, III).
-
-**Этап 4 — CLI**
-18. Распил `cmd-ui.ts` (K1) и `cmd-apply.ts` (K2, D12).
-19. Общий `openBrowser()` (D14).
-20. `cmd-schedule.ts`: `getNextDate` → `task.getNextRun()` (K3).
-21. `cmd-history`: переписать на `history-store.load()` **или** убрать пункт меню (F2) — решение за владельцем.
-
-**Этап 5 — верификация и документация**
-22. `npx tsc --noEmit` после каждого этапа; точечные ручные прогоны безопасных пунктов меню.
-23. Синхронизация README: структура `src/` (в дереве дважды указан `cmd-cover.ts` — README:414 и :419), отсутствие каталога `scripts/` (README:445) и файла `src/oauth-server.js` (README:383), судьба легаси-точки входа `src/apply-playwright.ts` (README:441, :454), предупреждение о содержимом `data/browser-profile` (F3, F4).
-
-**Ожидаемый эффект:** −250…−350 строк, два (а не шесть) места резолва путей, один парсер JSON, один пул воркеров, `cmd-ui.ts`/`cmd-apply.ts` разбиты на модули по 80-150 строк, `tsc` остаётся чистым.
-
----
-
-## VI. Ограничения и как проверять
-
-- Автотестов нет, поэтому верификация возможна только `npx tsc --noEmit` + ручные прогоны. Рефакторинг обязателен маленькими коммитами.
-- Полный прогон требует MongoDB, Playwright-профиля с живой сессией hh.ru и ключа ИИ — в рамках ревью не выполнялся; всё выше найдено статическим анализом.
-- Безопасные для проверки точки: `config` (вывод конфига), `digest show` (чтение MongoDB), `cover` без ключа ИИ (ветка ошибки), отмена промптов (Ctrl+C).
-- Инварианты, которые рефакторинг **не должен** менять: формат диалогов меню, имена env-переменных, схемы Mongo-коллекций (`cachePages`, `cacheFull`, `cacheJudgements`, `cacheCoverLetters`, `history`, `digest`, `rejected`, `resumes`), формат `.md`-файлов дайджеста.
-
----
-
-## VII. Что проверено и отклонено как «мёртвый код»
-
-Чтобы не удалить лишнее, кандидаты проверялись grep'ом по всему репозиторию:
-
-| Символ | Результат |
+| Что | Почему это нормально |
 |---|---|
-| `checkAlreadyResponded` | **используется** — `src/cli/cmd-apply.ts:41` (определение на :178) |
-| `detectPostState` | **используется** — `src/cli/cmd-apply.ts:71,152` (определение на :170) |
-| `Verdict` | **используется** как тип — `src/domain/judge/judge.ts:7,14` |
-| `DigestEntry` / `DigestDoc` | **используются** как типы — `src/store/digest-store.ts:4,46-64` |
-| `isSeen` | **используется** — `src/cli/cmd-digest.ts:28` |
-| `isApplied` | **не используется** нигде → кандидат на переиспользование (K5), а не на удаление |
+| `catch (err: any)` в сценариях (`application/cover/CoverStage.ts:15`, `apply/ApplyStage.ts:15`, `apply/ApplicationRunner.ts:67`, `domain/grade-resume.ts:133`) | осознанная терпимость к форме ошибок ИИ/Playwright; типизация `unknown` + `errorMessage()` уже есть для тех мест, где текст важен |
+| `process.env` в `composition.ts:187-188` (`RESUMES_DIR`, `RESUME_PATH`) | решение composition root: сценарий получает готовый факт `layout`, а не env (T-21/T-22) |
+| Мутабельный sink `shared/logger.ts` + `setLogSink` | точка DI для логирования до создания composition root (логи импорта конфига); параметризация логгера — отдельная задача, не ревью |
+| `domain/adapt-resume.ts:75-76` (`mongo: 'mongodb'`) | алиас технологии в словаре навыков резюме, не легаси Mongo |
+| `infrastructure/sqlite/rows.ts` (`fromJson<T>`, `num`, `isoFromMs`) | набор уже единый: адаптеры строк не дублируют разбор JSON |
+| `application/collect.ts` (19 строк, реэкспорт `fmtSalary`) | сознательный фасад для прежних импортов; удалять вместе с последним потребителем |
+
+## IV. План и тикеты
+
+Открытые тикеты серии Clean Architecture ([`docs/review/`](docs/review/README.md)):
+
+| ID | Тикет | Приоритет | Статус |
+|---|---|---|---|
+| T-25 | Разбить `hh/client.ts` (737) и `hh/resume.ts` (664) | P2 | ☐ |
+| T-26 | Тесты на фейковых портах: сценарии `search`/`digest`/`cover`/`apply` + SQLite на `:memory:` | P2 | ☐ (расширен по R3) |
+| T-28 | `domain/grade-resume`: Domain Service + ИИ в `application` (R1) | P1 | ☐ новый |
+| T-29 | `presentation`: `exitCode` вместо `process.exit`, без commander-легаси (R2) | P1 | ☐ новый |
+| T-30 | `Scheduler.nextRun()` вместо самописного cron (R6) | P2 | ☐ новый |
+| T-31 | Документация и мёртвая конфигурация: README, `architecture.md`, `tsconfig`, `env()` (R4, R5) | P2 | ☐ новый |
+
+Порядок:
+
+1. **T-29** — маленький, снимает функциональный риск (процесс больше не умирает из меню).
+2. **T-28** — возвращает домен в рамки T-24/T-27, попутно убирает второй парсер JSON.
+3. **T-26** — фиксирует поведение сценариев перед распилом адаптеров.
+4. **T-25** — самый объёмный: `hh/client.ts` и `hh/resume.ts` делятся по ответственности
+   (сессия браузера / выдача / карточка / резюме), попутно типизация R7.
+5. **T-30**, **T-31** — по мере необходимости; друг от друга не зависят.
+
+## V. Ограничения и как проверять
+
+- Живые прогоны `search`/`digest`/`cover`/`apply`/`resume-download` **не выполнялись**: нужны сессия
+  hh.ru, ключ ИИ и расход лимита откликов. Всё выше найдено статическим анализом; замена —
+  `npx tsc --noEmit`, `npm run arch`, `npm run test:types`, адресные `npx vitest run`, smoke
+  `node bin/auto-hh --help`.
+- Безопасные для ручной проверки точки: `--help`/`--version`, пункт меню «🧾 Резюме» (list/show),
+  `config` (вывод конфига), ветка ошибки `cover` без ключа ИИ, отмена промптов (Ctrl+C).
+- Инварианты, которые рефакторинг **не должен** менять: имена env-переменных, схема SQLite
+  (`cache_pages`, `cache_full`, `cache_judgements`, `cache_cover_letters`, `history`, `digests`, `resumes`),
+  формат `.md`-дайджестов и `data/digests/<дата>/<Регион>/`, тексты меню и `log.*`-сообщений.
+- Линт — один раз в конце задачи (`npm run lint`), в промежуточных коммитах достаточно `tsc` и адресных
+  тестов (`.clinerules/verification.md`).
+
