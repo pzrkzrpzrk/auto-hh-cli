@@ -101,4 +101,11 @@ describe("CoverLetterPrompt", () => {
     expect(prompt.batchSystem(false)).not.toContain("передано адаптированное");
     expect(prompt.batchSystem(true)).toContain("передано адаптированное");
   });
+
+  it("блок адаптированного резюме пачки подписан номером вакансии", () => {
+    const prompt = new CoverLetterPrompt("backend");
+    expect(prompt.adaptedResumeBlock("## Опыт", 2)).toBe(
+      "=== РЕЗЮМЕ (релевантное для вакансии #2) ===\n## Опыт",
+    );
+  });
 });

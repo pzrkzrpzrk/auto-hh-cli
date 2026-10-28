@@ -111,5 +111,6 @@ describe("CoverLetterService.generateBatch", () => {
     const withAdaptation = new FakeAi(lettersForPrompt);
     await new CoverLetterService(withAdaptation, settings({ adaptResume: true })).generateBatch(resume, [items[0]]);
     expect(JSON.stringify(withAdaptation.calls[0].messages)).not.toContain("=== РЕЗЮМЕ СОИСКАТЕЛЯ ===");
+    expect(JSON.stringify(withAdaptation.calls[0].messages)).toContain("=== РЕЗЮМЕ (релевантное для вакансии #1) ===");
   });
 });

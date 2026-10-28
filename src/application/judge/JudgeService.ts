@@ -84,7 +84,7 @@ export class JudgeService {
       if (adapt && textualResume) {
         const adapted = adaptResumeForVacancy(textualResume, vacancy, { budgetChars: settings.adaptResumeBudget });
         if (adapted) {
-          block += `=== АДАПТИРОВАННОЕ РЕЗЮМЕ (вакансия #${index + 1}) ===\n${adapted}\n\n`;
+          block += `${prompt.adaptedResumeBlock(adapted, index + 1)}\n\n`;
         }
       }
       block += prompt.vacancySection(vacancy, index + 1);

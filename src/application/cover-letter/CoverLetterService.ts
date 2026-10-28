@@ -63,7 +63,7 @@ export class CoverLetterService {
             budgetChars: this.settings.adaptResumeBudget,
           });
           if (adapted) {
-            block += `=== РЕЗЮМЕ (релевантное для вакансии #${position + 1}) ===\n${adapted}\n\n`;
+            block += `${prompt.adaptedResumeBlock(adapted, position + 1)}\n\n`;
           }
         }
         block += prompt.vacancySection(item.vacancy, position + 1);
