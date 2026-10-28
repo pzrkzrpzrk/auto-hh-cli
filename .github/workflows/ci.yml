@@ -1,0 +1,54 @@
+# Проверки на каждый push: те же команды, что в .clinerules/verification.md.
+#
+# Сеть, hh.ru и ключи ИИ не нужны: тесты идут на фейковых портах и :memory:,
+# живые прогоны здесь принципиально не запускаются.
+name: CI
+
+on:
+  push:
+  workflow_dispatch:
+
+# Минимальные права: workflow только читает репозиторий.
+permissions:
+  contents: read
+
+# Новый push в ту же ветку отменяет предыдущий прогон.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Типы, границы, тесты, линт
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.x'
+          cache: npm
+
+      - name: Зависимости
+        run: npm ci --no-audit --no-fund
+
+      - name: Типы исходников
+        run: npx tsc --noEmit
+
+      - name: Типы тестов
+        run: npm run test:types
+
+      - name: Границы слоёв
+        run: npm run arch
+
+      - name: Тесты
+        run: npx vitest run --reporter=dot
+
+      - name: Линт
+        run: npm run lint
+
+      - name: Smoke CLI
+        run: node bin/auto-hh --version
