@@ -115,6 +115,8 @@
 
 ### R2 (P1) `cmd-resume` обрывает процесс и разговаривает на языке commander'а
 
+**Статус: ✅ закрыто в T-29** (`fa48c17`, `9e23a14`) — ниже описание находки на момент отчёта.
+
 - `src/presentation/cli/commands/cmd-resume.ts:47,51,61,65` — `process.exit(1)` в ветках ошибок.
   Команда вызывается **из меню** (`presentation/cli/menu/steps.ts:129,135`), поэтому `process.exit`
   убивает процесс целиком: не отрабатывает `finally` в `run()` (`presentation/cli/index.ts:44-53`),
@@ -272,7 +274,7 @@ OAuth-поля — остаток легаси-раздела README (`src/oauth
 | T-25 | Разбить `hh/client.ts` (737) и `hh/resume.ts` (664) | P2 | ☐ |
 | T-26 | Тесты на фейковых портах: сценарии `search`/`digest`/`cover`/`apply` + SQLite на `:memory:` | P2 | ☐ (расширен по R3) |
 | T-28 | `domain/grade-resume`: Domain Service + ИИ в `application` (R1) | P1 | ☐ новый |
-| T-29 | `presentation`: `exitCode` вместо `process.exit`, без commander-легаси (R2) | P1 | ☐ новый |
+| T-29 | `presentation`: `exitCode` вместо `process.exit`, без commander-легаси (R2) | P1 | ✅ `fa48c17`, `9e23a14` |
 | T-30 | `Scheduler.nextRun()` вместо самописного cron (R6) | P2 | ☐ новый |
 | T-31 | Документация и мёртвая конфигурация: README, `architecture.md`, `tsconfig`, `env()` (R4, R5) | P2 | ☐ новый |
 
