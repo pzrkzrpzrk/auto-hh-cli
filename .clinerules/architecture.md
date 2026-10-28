@@ -154,8 +154,6 @@ Get-ChildItem src/presentation -Recurse -Filter *.ts | Select-String -Pattern 'f
 
 | Что | Почему важно | Тикет |
 | --- | --- | --- |
-| `domain/grade-resume.ts` — ИИ, промпт и свой `safeJsonParse` в домене | нарушает правило «домен без I/O»; второй парсер JSON | T-28 |
-| `cmd-resume.ts` — `process.exit(1)` и `opts._` | процесс умирает из меню | T-29 |
 | `hh/client.ts` (737) и `hh/resume.ts` (664) | SRP адаптеров, 46 `any` на двоих | T-25 |
 | сценарии `search`/`apply`/`cover`/`digest` без тестов | регрессии ловятся глазами | T-26 |
 | `shared/cron.ts` — самописный парсер | ошибки на диапазонах и day-of-week | T-30 |

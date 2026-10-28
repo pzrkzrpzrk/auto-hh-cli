@@ -31,18 +31,18 @@
 ## TL;DR
 
 Дерево в рабочем состоянии: слои не протекают (`application` не импортирует `infrastructure` — 0
-совпадений), `strict` включён, проверки зелёные. Из 14 дублей KISS/DRY (D1–D14) двенадцать сняты
-полностью, D3 и D13 — частично: всё, что осталось, живёт в одном файле `domain/grade-resume.ts`.
-Из K1–K6 открыт K3 (самописный cron), K4–K6 закрыты частично. Функциональные риски F1–F4 сняты,
-кроме `process.exit` в `cmd-resume` (F1) и дрейфа документации (F3, F4).
+совпадений), `strict` включён, проверки зелёные. Из 14 дублей KISS/DRY (D1–D14) сняты все:
+D3 закрыт вместе с T-28 (`parseJSON` — единственный парсер), D13 — вместе с R1. Из K1–K6 открыт
+K3 (самописный cron, T-30), K4–K6 закрыты частично. Функциональные риски F1–F4 сняты: `process.exit`
+из `cmd-resume` убран в T-29, дрейф документации остался (T-31).
 
-Осталось два содержательных долга в коде (R1, R2) и четыре средних (R3–R6); типизация и мелочи
-единообразия — P3. Новые тикеты: T-28…T-31; T-25 и T-26 по-прежнему открыты.
+P1 закрыты: R1 — T-28 (`ab70b9d`), R2 — T-29 (`fa48c17`, `9e23a14`). Открыты P2 (R3–R6) и P3
+(R7, R8); тикеты T-25, T-26, T-30, T-31.
 
 | Приоритет | Пункт | Почему |
 |---|---|---|
-| **P1** | R1. `domain/grade-resume` держит ИИ-вызов, промпт и свой JSON-парсер | единственное место, выпадающее из T-24/T-27: домен с I/O |
-| **P1** | R2. `cmd-resume` обрывает процесс `process.exit(1)` | в меню это убивает процесс и `finally` с закрытием SQLite |
+| ✅ **P1** | R1. `domain/grade-resume` держит ИИ-вызов, промпт и свой JSON-парсер | закрыто в T-28: `GradePrompt`, VO `ResumeGrade`, `ResumeGradeService` |
+| ✅ **P1** | R2. `cmd-resume` обрывает процесс `process.exit(1)` | закрыто в T-29: `process.exitCode` + `return`, меню остаётся живым |
 | **P2** | R3. Тесты покрывают ≈12 модулей из 166 | конвейеры search/apply/cover/digest держатся только на `tsc` |
 | **P2** | R4. Документация отстала от кода | README, `docs/architecture.md` и `tsconfig` описывают несуществующее |
 | **P2** | R5. Мёртвая поверхность конфигурации | `env()` отдаёт 6 неиспользуемых OAuth-полей |
@@ -60,7 +60,7 @@
 |---|---|---|
 | **D1** подклейка писем ×3 | порт `CoverLetterCache.attach` (`domain/ports.ts`, адаптер `infrastructure/sqlite/cover-letter-cache.ts`); вызовы — `application/cover/stages.ts:47`, `application/apply/stages.ts:87,90` | ✅ |
 | **D2** догрузка полных карточек ×3 | `application/search/VacancyCollector.ts:72-107` (`ensureFullCards`); переиспользуют `application/cover/stages.ts:75-79` и стадии digest | ✅ |
-| **D3** два парсера JSON | один `parseJSON` — `shared/text-utils.ts:5`; свой `safeJsonParse` остался в `domain/grade-resume.ts:5-28` | ⚠️ → R1 |
+| **D3** два парсера JSON | один `parseJSON` — `shared/text-utils.ts:5`; свой `safeJsonParse` удалён вместе с `domain/grade-resume.ts` (T-28) | ✅ |
 | **D4** пул воркеров ×2 | `shared/batches.ts:6` (`chunk`) и `:42` (`runBatches`) — оба ИИ-шага ходят через них | ✅ |
 | **D5** мапа «vacancy → запись» ×2 | `domain/digest/DigestEntryFactory.ts` + VO `DigestCandidate` | ✅ |
 | **D6** пути/дата/env по всему проекту | `infrastructure/config/paths.ts`, `infrastructure/config/env.ts`, `shared/time.ts:14` (`dateKey`); домен больше не зовёт `loadConfig()` | ✅ |
@@ -70,15 +70,15 @@
 | **D10** `sleep`/`rand`/`printTop` | `shared/time.ts:4,9`; печать дайджеста — `presentation/cli/format/digest-report.ts` | ✅ |
 | **D11** поиск по id ×2 | `infrastructure/sqlite/cache-store.ts:105` (`findByIds`, один на `cache_pages`/`cache_full`) | ✅ |
 | **D12** дубли внутри `applyToVacancy` | `application/apply/` (13 модулей) + `infrastructure/playwright/apply-steps.ts`; env читается один раз | ✅ |
-| **D13** категории оценки и промпт | категории — `presentation/cli/format/grade-report.ts`; промпт остался строкой в домене (`domain/grade-resume.ts:30-92`) | ⚠️ → R1 |
+| **D13** категории оценки и промпт | категории — `presentation/cli/format/grade-report.ts` (VO `ResumeGrade`), промпт — `domain/grade-resume/GradePrompt.ts` (T-28) | ✅ |
 | **D14** запуск Chromium и логин | `infrastructure/playwright/browser.ts` (`openBrowser`, `assertProfileExists`) | ✅ |
 | **K1** `cmd-ui.ts` на 413 строк | `presentation/cli/menu/`: `menu.ts` 143, `steps.ts` 194, `options.ts` 38, `resume.ts` 137, `resume-download.ts` 53 | ✅ |
 | **K2** `cmd-apply.ts` на 303 строки | `application/apply/` (сценарий, конвейер, 5 стадий, `ApplicationRunner`, стратегии) + `apply-steps.ts` 199 | ✅ |
 | **K3** самописный парсер cron | `shared/cron.ts:1-42` жив; `Scheduler` не отдаёт next run | ❌ → R6 |
-| **K4** мёртвый код | в основном вычищено; остались OAuth-поля в `env()`, ветка-объект `cmdDigest`, `scripts/**/*.ts` в `tsconfig` | ⚠️ → R2, R4, R5 |
+| **K4** мёртвый код | в основном вычищено; остались OAuth-поля в `env()`, `scripts/**/*.ts` в `tsconfig`; `process.exit` и ветка-объект `cmdDigest` удалены (T-29) | ⚠️ → R4, R5 |
 | **K5** лишние round-trip'ы | `history.load()` один раз на прогон (`application/apply/stages.ts:101`), `markSeen` — атомарный upsert (`history-store.ts:45-54`); остались поштучные `markSeen` (`application/digest/stages.ts:93,108,109`) | ⚠️ |
 | **K6** единообразие импортов | алиас `@/` и `.js` везде; остались `import {  Command  }` и дубль заголовка в `presentation/cli/index.ts:1-5` | ⚠️ → R8 |
-| **F1** `process.exit` внутри модулей | остался только в `presentation/cli/commands/cmd-resume.ts:47,51,61,65` | ⚠️ → R2 |
+| **F1** `process.exit` внутри модулей | убран: `cmd-resume` выставляет `process.exitCode` и возвращается (T-29); в `src/` остались только комментарии | ✅ |
 | **F2** `cmd-history` всегда пуст | `application/history.ts` + `infrastructure/sqlite/history-store.ts` (таблица `history`) | ✅ |
 | **F3** профиль браузера в проекте | описан в `README.md:350,379`, но предупреждения «не копировать в бэкапы» нет | ⚠️ → R4 |
 | **F4** README расходится с кодом | дрейф остался: `README.md:439,448`, `docs/architecture.md:700` | ⚠️ → R4 |
@@ -88,6 +88,8 @@
 ## II. Актуальные находки
 
 ### R1 (P1) Домен оценки резюме держит ИИ, промпт и свой JSON-парсер — единственное место, выпадающее из T-24/T-27
+
+**Статус: ✅ закрыто в T-28** (`ab70b9d`) — ниже описание находки на момент отчёта.
 
 `src/domain/grade-resume.ts` (139 строк) целиком построен по старому образцу:
 
@@ -137,14 +139,16 @@
 Проверка: `Get-ChildItem src -Recurse -Filter *.ts | Select-String -Pattern 'process\.exit\(1\)'` → пусто;
 прогон пункта меню «🧾 Резюме» с заведомо отсутствующим именем не должен закрывать меню.
 
-### R3 (P2) Тесты покрывают ≈12 модулей из 166
+### R3 (P2) Тесты покрывают ≈15 модулей из 177
 
-46 тестов на 10 559 строк — это лучше, чем «тестов нет» в прошлом отчёте, но покрытие точечное.
-Спеки проверяют: `domain/actualize`, `domain/adapt-resume` (только `DEFAULT_ADAPT_BUDGET`),
+63 теста в 12 файлах на ~11 тыс. строк — это лучше, чем «тестов нет» в прошлом отчёте, но покрытие
+точечное. Спеки проверяют: `domain/actualize`, `domain/adapt-resume` (только `DEFAULT_ADAPT_BUDGET`),
 `domain/cover-letter/{config,CoverSignature,CoverTemplate,CoverLetterPrompt}`,
-`domain/digest/DigestPolicy`, `domain/judge/Verdict`, `application/judge/JudgeService`,
-`application/cover-letter/CoverLetterService`, `application/reset` (форматтер),
-`infrastructure/sqlite/db-janitor`.
+`domain/digest/DigestPolicy`, `domain/judge/Verdict`, `domain/grade-resume/{GradePrompt,ResumeGrade}`,
+`application/judge/JudgeService`, `application/cover-letter/CoverLetterService`,
+`application/grade/ResumeGradeService`, `application/reset` (форматтер),
+`infrastructure/sqlite/db-janitor`, `presentation/cli/format/grade-report`,
+`presentation/cli/commands/cmd-resume` (смоук: ошибки не убивают процесс).
 
 Не покрыто ничего из:
 
@@ -154,10 +158,10 @@
 | `application/apply` | 13 | `ApplyScenario`, `DigestSelection`, `SkipRules`, `Pacing`, `ApplicationRunner` |
 | `application/cover` | 12 | `CoverScenario`, стратегии `CoverMode`, `CoverPlan`, 7 стадий |
 | `application/digest` | 14 | `DigestScenario`, `DigestPipeline`, `DigestJudgeRunner`, `ActualizeScenario`, 7 стадий |
-| `application/` корень | 9 | `collect`, `config-view`, `grade`, `history`, `options`, `reset`, `resume`, `resume-download`, `schedule` |
+| `application/` корень | 9 | `collect`, `config-view`, `grade` (сервис покрыт, фасад — нет), `history`, `options`, `reset`, `resume`, `resume-download`, `schedule` |
 | `infrastructure/sqlite` | 12 | всё, кроме `db-janitor`: `cache-store`, `digest-store`, `history-store`, `resume-store`, `judgement-cache`, `cover-letter-cache`, `resume-registry` |
 | `infrastructure/hh`, `ai`, `files`, `playwright`, `config`, `logging`, `scheduling` | 26 | скрейпинг выдачи и карточек, разбор резюме, ретраи ИИ, артефакты `.md`, селекторы отклика, чтение env и конфига |
-| `presentation` | 20 | меню, команды, отчёты |
+| `presentation` | 20 | меню и остальные команды; отчёт `grade-report` и `cmd-resume` покрыты |
 
 Практический эффект: порядок стадий, тексты логов и решения «пропустить/откликнуться» держатся
 только на `tsc` и ручных прогонах. Регрессия в них ловится глазами владельца, а не тестом.
@@ -250,6 +254,15 @@ OAuth-поля — остаток легаси-раздела README (`src/oauth
 - `application/resume-download.ts:102,154,160` — переменная `mongoUnavailable` после миграции на SQLite.
 - `presentation/cli/commands/cmd-resume.ts:14` — английская строка в русском CLI (см. R2).
 
+### R9 (P3) Запись `resume-grade.md` из presentation
+
+- `presentation/cli/commands/cmd-grade-resume.ts:4-5,16-17` — `writeFileSync`, `join` и `process.cwd()`
+  прямо в команде: файловый I/O вне `infrastructure`, формат `.md` при этом выбирает presentation.
+  Остальные артефакты (дайджест, отчёты поиска) уже пишутся адаптерами `infrastructure/files`.
+
+**Статус: ✅ закрыто в T-28** (`ab70b9d`): порт `TextFileWriter` (`domain/ports.ts`), адаптер
+`infrastructure/files/text-file-writer.ts`, команда печатает имя, возвращённое адаптером.
+
 ---
 
 ## III. Что проверено и находкой не является
@@ -258,7 +271,7 @@ OAuth-поля — остаток легаси-раздела README (`src/oauth
 
 | Что | Почему это нормально |
 |---|---|
-| `catch (err: any)` в сценариях (`application/cover/CoverStage.ts:15`, `apply/ApplyStage.ts:15`, `apply/ApplicationRunner.ts:67`, `domain/grade-resume.ts:133`) | осознанная терпимость к форме ошибок ИИ/Playwright; типизация `unknown` + `errorMessage()` уже есть для тех мест, где текст важен |
+| `catch (err: any)` в сценариях (`application/cover/CoverStage.ts:15`, `apply/ApplyStage.ts:15`, `apply/ApplicationRunner.ts:67`) | осознанная терпимость к форме ошибок ИИ/Playwright; в `grade` уже `catch (err)` + `errorMessage()` |
 | `process.env` в `composition.ts:187-188` (`RESUMES_DIR`, `RESUME_PATH`) | решение composition root: сценарий получает готовый факт `layout`, а не env (T-21/T-22) |
 | Мутабельный sink `shared/logger.ts` + `setLogSink` | точка DI для логирования до создания composition root (логи импорта конфига); параметризация логгера — отдельная задача, не ревью |
 | `domain/adapt-resume.ts:75-76` (`mongo: 'mongodb'`) | алиас технологии в словаре навыков резюме, не легаси Mongo |
@@ -273,16 +286,16 @@ OAuth-поля — остаток легаси-раздела README (`src/oauth
 |---|---|---|---|
 | T-25 | Разбить `hh/client.ts` (737) и `hh/resume.ts` (664) | P2 | ☐ |
 | T-26 | Тесты на фейковых портах: сценарии `search`/`digest`/`cover`/`apply` + SQLite на `:memory:` | P2 | ☐ (расширен по R3) |
-| T-28 | `domain/grade-resume`: Domain Service + ИИ в `application` (R1) | P1 | ☐ новый |
+| T-28 | `domain/grade-resume`: Domain Service + ИИ в `application` (R1, R9) | P1 | ✅ `ab70b9d` |
 | T-29 | `presentation`: `exitCode` вместо `process.exit`, без commander-легаси (R2) | P1 | ✅ `fa48c17`, `9e23a14` |
 | T-30 | `Scheduler.nextRun()` вместо самописного cron (R6) | P2 | ☐ новый |
 | T-31 | Документация и мёртвая конфигурация: README, `architecture.md`, `tsconfig`, `env()` (R4, R5) | P2 | ☐ новый |
 
 Порядок:
 
-1. **T-29** — маленький, снимает функциональный риск (процесс больше не умирает из меню).
-2. **T-28** — возвращает домен в рамки T-24/T-27, попутно убирает второй парсер JSON.
-3. **T-26** — фиксирует поведение сценариев перед распилом адаптеров.
+1. ~~**T-29**~~ — закрыт (`fa48c17`, `9e23a14`): процесс больше не умирает из меню.
+2. ~~**T-28**~~ — закрыт (`ab70b9d`): домен в рамках T-24/T-27, второй парсер JSON убран.
+3. **T-26** — следующий: фиксирует поведение сценариев перед распилом адаптеров.
 4. **T-25** — самый объёмный: `hh/client.ts` и `hh/resume.ts` делятся по ответственности
    (сессия браузера / выдача / карточка / резюме), попутно типизация R7.
 5. **T-30**, **T-31** — по мере необходимости; друг от друга не зависят.
