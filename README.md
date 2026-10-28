@@ -444,7 +444,7 @@ npm start           # или: npm run ui, npx auto-hh, npx auto-hh ui (алиа�
 │  │  ├─ playwright/            # browser, apply-steps, application-gateway (порты отклика)
 │  │  └─ config/                # config (FileConfigProvider), env, paths, apply-config
 │  ├─ shared/                   # logger-фасад, logging, batches, retry, text-utils, time,
-│  │                            #   cron, path-utils, format
+│  │                            #   path-utils, format
 │  └─ composition.ts            # сборка зависимостей: источники hh.ru, ИИ, хранилища, closeResources()
 ├─ scripts/                    # вспомогательные скрипты (judge-only, fill-cover-letters, …)
 └─ data/autohh.db              # SQLite: кэш, история, дайджесты (создаётся автоматически)

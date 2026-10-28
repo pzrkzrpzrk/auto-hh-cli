@@ -46,13 +46,13 @@ composition root, тестируемость. Исходные факты на 2
 | [T-27](T-27-judge-cover-domain.md) | Домен `judge`/`cover-letter`: VO, Domain Services, ИИ вне домена | P2 | SRP, чистота домена, тесты | T-23, T-24 | ✅ |
 | [T-28](T-28-grade-resume-service.md) | `domain/grade-resume`: Domain Service, VO оценки, ИИ в `application` | **P1** | R1, R9: домен с I/O, второй парсер JSON | T-24, T-27 | ✅ |
 | [T-29](T-29-presentation-exit.md) | `presentation`: `exitCode` вместо `process.exit`, без commander-легаси | **P1** | R2: процесс умирает из меню | — | ✅ |
-| [T-30](T-30-scheduler-next-run.md) | `Scheduler.nextRun()` вместо самописного cron | P2 | R6: свой парсер cron | T-22, T-26 | ☐ |
+| [T-30](T-30-scheduler-next-run.md) | `Scheduler.nextRun()` вместо самописного cron | P2 | R6: свой парсер cron | T-22, T-26 | ✅ |
 | [T-31](T-31-docs-config-debt.md) | Документация и мёртвая конфигурация | P2 | R4, R5: README/`architecture.md`/`env()` | — | ☐ |
 
-**Сделано:** T-17…T-29 (issues #27…#34, #48…#50).
-**Открыто:** T-30 и T-31 из перепроверки 2026-10-28 (cron и документация; друг от друга не зависят).
+**Сделано:** T-17…T-30 (issues #27…#34, #48…#50).
+**Открыто:** T-31 (документация и мёртвая конфигурация).
 
-Порядок: **T-30 → T-31**.
+Порядок: **T-31**.
 
 ## Общие условия приёмки (для любого тикета)
 

@@ -521,7 +521,7 @@ sequenceDiagram
 
 ### Этап 5 — остальные команды (выполнено 2026-10-19)
 
-Все команды без бизнес-логики: `cmd-resume-download` → `application/resume-download.ts`, `cmd-resume` → `application/resume.ts`, `cmd-schedule` → `application/schedule.ts` + `shared/cron.ts`, `cmd-history` → `application/history.ts`, `cmd-grade-resume` → формат в `presentation/cli/format/grade-report.ts`, показ дайджеста и файловый fallback → `application/digest.ts` + `infrastructure/files/digest-files.ts`.
+Все команды без бизнес-логики: `cmd-resume-download` → `application/resume-download.ts`, `cmd-resume` → `application/resume.ts`, `cmd-schedule` → `application/schedule.ts` (порт `Scheduler` отдаёт и постановку задачи, и next run), `cmd-history` → `application/history.ts`, `cmd-grade-resume` → формат в `presentation/cli/format/grade-report.ts`, показ дайджеста и файловый fallback → `application/digest.ts` + `infrastructure/files/digest-files.ts`.
 
 Приём тот же, что на этапе 3: сценарий возвращает исход (`kind`) и события фаз, команда печатает и выставляет код возврата — порядок вывода в консоли сохраняется. Проверка после каждого шага: `tsc --noEmit` → 0, `node bin/auto-hh --version` → 1.0.0, сверка всех сообщений `console.*`/`log.*` со старым файлом.
 
