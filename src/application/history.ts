@@ -9,7 +9,7 @@ export interface HistoryDeps {
   resumes: ResumeRegistry;
 }
 
-// Последние n записей по времени: Mongo не гарантирует порядок документов,
+// Последние n записей по времени: Порядок строк не гарантирован,
 // а slice(-n) должен отдавать самые свежие.
 function lastByAt<T>(items: [string, T][], n: number, at: (item: T) => string): [string, T][] {
   return [...items]

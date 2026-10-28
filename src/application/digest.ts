@@ -15,6 +15,8 @@ export type { ActualizeDeps, DigestDeps, DigestShowDeps } from "@/application/di
 export type { DigestBuildResult } from "@/application/digest/DigestScenario.js";
 export type { DigestShowOutcome } from "@/application/digest/DigestShowScenario.js";
 export type { ActualizeResult } from "@/application/digest/ActualizeScenario.js";
+// DTO для печати: presentation не импортирует domain напрямую (правило depcruise).
+export type { DigestEntry } from "@/domain/models.js";
 
 /**
  * Шаг digest: совместимая обёртка над сценарием (application/digest/DigestScenario.ts).

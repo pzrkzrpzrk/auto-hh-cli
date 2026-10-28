@@ -1,5 +1,5 @@
 // Сброс истории, кэша и дайджестов: сценарий поверх порта DataJanitor.
-// Раскладку data/ и имена Mongo-коллекций знает адаптер (data-janitor).
+// Раскладку data/ и имена таблиц БД знает адаптер (infrastructure/janitor.ts).
 import type { DataJanitor, ResetSummary, ResumeProvider } from "@/domain/ports.js";
 import type { Resume, ResumeRef } from "@/domain/models.js";
 
@@ -19,7 +19,7 @@ export type ResetOutcome =
 /** Строка-сводка для консоли: «history 1278, digest 7, cachePages 65». */
 export function formatResetSummary(s: ResetSummary): string {
   return [
-    ...s.mongo.filter(m => m.deleted).map(m => `${m.collection} ${m.deleted}`),
+    ...s.db.filter(t => t.deleted).map(t => `${t.table} ${t.deleted}`),
     ...s.cache,
   ].join(', ');
 }

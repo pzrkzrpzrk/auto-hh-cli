@@ -30,7 +30,7 @@ async function cmdResumeList() {
   }
 
   if (!outcome.registryAvailable) {
-    console.log('⚠ MongoDB недоступна: статусы регистрации не получены (список файлов показан).\n');
+    console.log('⚠ База данных недоступна: статусы регистрации не получены (список файлов показан).\n');
   }
   if (outcome.missingIds.length) {
     console.log(`⚠ В реестре есть резюме без файла: ${outcome.missingIds.join(', ')}\n`);

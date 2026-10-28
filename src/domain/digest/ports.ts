@@ -1,6 +1,6 @@
 // Порты подсистемы дайджеста (DIP/ISP).
 // Сценарий сборки, показа и актуализации зависит только от этих интерфейсов;
-// MongoDB, fs и разбор файлов живут в infrastructure, а связывает их composition root.
+// SQLite, fs и разбор файлов живут в infrastructure, а связывает их composition root.
 import type { CacheStore } from "@/domain/ports.js";
 import type { DigestDoc, DigestEntry, Resume, ResumeRef } from "@/domain/models.js";
 import type { Judgement } from "@/domain/digest/JudgementSet.js";
@@ -21,7 +21,7 @@ export interface DigestCacheStore extends CacheStore {
   loadLatest(resumeId?: string): Promise<DigestCacheSnapshot | null>;
 }
 
-/** Хранилище дайджестов и отклонённых вакансий (MongoDB + .md-зеркала). */
+/** Хранилище дайджестов и отклонённых вакансий (SQLite + .md-зеркала). */
 export interface DigestRepository {
   /**
    * Последний дайджест — вход шагов digest show, cover и apply.
@@ -36,7 +36,7 @@ export interface DigestRepository {
   listDocs(kind: DigestKind, resumeId?: string): Promise<DigestDoc[]>;
   /**
    * Записать артефакт и вернуть пути .md-файлов по регионам.
-   * resume задаёт папку data/hh-parsing/<name - id>/ и ключ документа в Mongo.
+   * resume задаёт папку data/hh-parsing/<name - id>/ и ключ документа в SQLite.
    */
   save(kind: DigestKind, entries: DigestArtifactEntry[], date?: string, resume?: ResumeRef | null): Promise<string[]>;
   /** Сводный снимок актуальных вакансий за дату (actual.md). */

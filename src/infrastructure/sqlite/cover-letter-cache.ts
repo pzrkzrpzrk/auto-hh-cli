@@ -1,13 +1,13 @@
-// Адаптер порта CoverLetterCache: письма из cacheCoverLetters — чтение (с force/резюме) и запись.
+// Адаптер порта CoverLetterCache: письма из cache_cover_letters — чтение (с force/резюме) и запись.
 import {
   clearLettersByResume,
   listLetterResumeIds,
   saveLetter,
   withCoverLetters,
-} from "@/infrastructure/mongo/cache-store.js";
+} from "@/infrastructure/sqlite/cache-store.js";
 import type { CoverLetterCache } from "@/domain/digest/ports.js";
 
-class MongoCoverLetterCache implements CoverLetterCache {
+class SqliteCoverLetterCache implements CoverLetterCache {
   attach<T extends { id: string | number; coverLetter?: string; coverLetterResumeId?: string | null }>(
     entries: T[],
     opts: { force?: boolean; resumeId?: string } = {},
@@ -28,4 +28,4 @@ class MongoCoverLetterCache implements CoverLetterCache {
   }
 }
 
-export default MongoCoverLetterCache;
+export default SqliteCoverLetterCache;

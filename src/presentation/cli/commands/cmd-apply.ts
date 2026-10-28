@@ -1,6 +1,6 @@
 // Команда apply: отклик через Playwright — тонкая оболочка над application/apply.ts.
 // Сценарий сам грузит дайджест, проверяет письма/авторизацию и ведёт цикл откликов;
-// зависимости (Playwright, Mongo) приходят из composition root.
+// зависимости (Playwright, SQLite) приходят из composition root.
 import { applyDeps } from "@/composition.js";
 import { runApply } from "@/application/apply.js";
 

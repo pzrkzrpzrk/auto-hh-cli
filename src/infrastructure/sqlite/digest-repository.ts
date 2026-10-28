@@ -1,4 +1,4 @@
-// Адаптер порта DigestRepository поверх digest-store (MongoDB + .md-зеркала).
+// Адаптер порта DigestRepository поверх digest-store (SQLite + .md-зеркала).
 // Сценарий дайджеста больше не выбирает между writeDigest и writeRejected —
 // вид артефакта задаёт DigestKind.
 import {
@@ -10,7 +10,7 @@ import {
   writeActualRejected,
   writeDigest,
   writeRejected,
-} from "@/infrastructure/mongo/digest-store.js";
+} from "@/infrastructure/sqlite/digest-store.js";
 import type { DigestDoc, DigestEntry, ResumeRef } from "@/domain/models.js";
 import type {
   DigestArtifactEntry,
@@ -18,7 +18,7 @@ import type {
   DigestRepository,
 } from "@/domain/digest/ports.js";
 
-class MongoDigestRepository implements DigestRepository {
+class SqliteDigestRepository implements DigestRepository {
   latest(resumeId?: string): Promise<DigestDoc | null> {
     return getLatestDigest(resumeId);
   }
@@ -56,4 +56,4 @@ class MongoDigestRepository implements DigestRepository {
   }
 }
 
-export default MongoDigestRepository;
+export default SqliteDigestRepository;

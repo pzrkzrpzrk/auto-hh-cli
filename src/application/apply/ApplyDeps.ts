@@ -1,5 +1,5 @@
 // Зависимости сценария отклика — только порты (DIP).
-// Playwright и MongoDB подставляет composition root, поэтому сценарий можно прогнать
+// Playwright и SQLite подставляет composition root, поэтому сценарий можно прогнать
 // с подставной сессией и хранилищами.
 import type { ApplicationGateway, HistoryStore, LoginGateway, ResumeProvider } from "@/domain/ports.js";
 import type { CoverLetterCache, DigestRepository } from "@/domain/digest/ports.js";

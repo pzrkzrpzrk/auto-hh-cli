@@ -1,6 +1,6 @@
 // Актуализация старых дайджестов/rejected по последнему поиску.
 // Записи, которых нет в текущей выдаче, помечаются archived (не удаляются).
-// Логика чистая (без Mongo) — её удобно проверять на синтетических данных.
+// Логика чистая (без базы) — её удобно проверять на синтетических данных.
 import type { DigestDoc, DigestEntry } from "@/domain/models.js";
 
 export interface ActualizeOptions {
@@ -21,12 +21,12 @@ export interface ActualizeStats {
   changedDates: number;
 }
 
-// Документ после актуализации: changed=true — нужно перезаписать (Mongo + .md).
+// Документ после актуализации: changed=true — нужно перезаписать (SQLite + .md).
 export interface ActualizedDoc {
   date: string;
   entries: DigestEntry[];
   changed: boolean;
-  /** Резюме документа: от него зависят папка на диске и ключ в Mongo. */
+  /** Резюме документа: от него зависят папка на диске и ключ в SQLite. */
   resumeId?: string | null;
   resumeName?: string | null;
 }

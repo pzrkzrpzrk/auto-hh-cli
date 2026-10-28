@@ -14,7 +14,7 @@ import log from "@/shared/logger.js";
 export interface ResumeDeps {
   /** Файлы резюме на диске. */
   files: ResumeFiles;
-  /** Зарегистрированные резюме в MongoDB. */
+  /** Зарегистрированные резюме в SQLite. */
   registry: ResumeRegistry;
   /** Вердикты: нужны для поиска «сиротских» resumeId (есть в кэше, нет в реестре). */
   judgements: JudgementCache;
@@ -27,7 +27,7 @@ export interface ResumeListItem {
   /** id из файла резюме либо '?', если файл не читается. */
   id: string;
   filename: string;
-  /** Дата регистрации в MongoDB (YYYY-MM-DD) либо null, если резюме не зарегистрировано. */
+  /** Дата регистрации в SQLite (YYYY-MM-DD) либо null, если резюме не зарегистрировано. */
   registeredAt: string | null;
   /** Дата последнего изменения имени/содержимого в реестре (YYYY-MM-DD). */
   updatedAt: string | null;
@@ -40,7 +40,7 @@ export type ResumeListOutcome =
   | {
     kind: 'ok';
     rows: ResumeListItem[];
-    /** false — MongoDB недоступна: статусы не получены, но список файлов показан. */
+    /** false — база данных недоступна: статусы не получены, но список файлов показан. */
     registryAvailable: boolean;
     /** resumeId, на которые ссылается кэш, но которых нет в реестре. */
     orphanIds: string[];
@@ -65,14 +65,14 @@ export interface ResumeRegistrationInfo {
   contentChanged: boolean;
 }
 
-/** YYYY-MM-DD из даты Mongo (или строки, если драйвер вернул строку). */
+/** YYYY-MM-DD из даты реестра (Date либо ISO-строка). */
 function ymd(value: Date | string | undefined | null): string | null {
   if (!value) return null;
   const date = value instanceof Date ? value : new Date(value);
   return Number.isNaN(date.getTime()) ? null : date.toISOString().slice(0, 10);
 }
 
-/** Файлы резюме для меню: список без обращения к Mongo. */
+/** Файлы резюме для меню: список без обращения к SQLite. */
 export function listResumeFiles(deps: ResumeDeps): ResumeFile[] {
   return deps.files.list();
 }
@@ -83,8 +83,8 @@ export function readResumeFile(name: string | undefined, deps: ResumeDeps): Resu
 }
 
 /**
- * Список резюме на диске с пометкой, зарегистрировано ли каждое в MongoDB.
- * Mongo недоступна — это не ошибка: файлы печатаются, статусы помечаются как неизвестные.
+ * Список резюме на диске с пометкой, зарегистрировано ли каждое в SQLite.
+ * База недоступна — это не ошибка: файлы печатаются, статусы помечаются как неизвестные.
  */
 export async function listResumesForCli(deps: ResumeDeps): Promise<ResumeListOutcome> {
   const files = deps.files.list();
@@ -139,7 +139,7 @@ export async function listResumesForCli(deps: ResumeDeps): Promise<ResumeListOut
   return { kind: 'ok', rows, registryAvailable, orphanIds, missingIds };
 }
 
-/** Регистрация резюме по имени файла/резюме: проверка имени и запись в MongoDB. */
+/** Регистрация резюме по имени файла/резюме: проверка имени и запись в SQLite. */
 export async function registerResumeByName(name: string | undefined, deps: ResumeDeps): Promise<ResumeRegisterOutcome> {
   if (!name) return { kind: 'missing-name' };
   const resume = deps.files.load(name);
@@ -149,7 +149,7 @@ export async function registerResumeByName(name: string | undefined, deps: Resum
   return { kind: 'ok', name, id: resume.id, created, changed };
 }
 
-/** Данные реестра для показа: ошибка Mongo не должна ломать `resume show`. */
+/** Данные реестра для показа: ошибка базы не должна ломать `resume show`. */
 export async function getResumeRegistration(
   resume: Resume,
   deps: ResumeDeps,

@@ -46,7 +46,7 @@ export class LoadCacheStage extends DigestStage {
   }
 }
 
-/** 2. Сообщает, какое резюме судит ИИ; регистрирует его в Mongo (ошибка не критична). */
+/** 2. Сообщает, какое резюме судит ИИ; регистрирует его в SQLite (ошибка не критична). */
 export class RegisterResumeStage extends DigestStage {
   readonly name = 'register-resume';
 
@@ -70,7 +70,7 @@ export class RegisterResumeStage extends DigestStage {
         log.warn(`Резюме «${ctx.resume.name}» изменилось — сброшено вердиктов: ${judgements}, писем: ${letters}`);
       }
     } catch (err: any) {
-      // MongoDB может быть недоступна — судейство от этого не зависит.
+      // Хранилище может быть недоступно — судейство от этого не зависит.
       log.warn(`Resume registration skipped: ${err?.message || err}`);
     }
     return 'continue';

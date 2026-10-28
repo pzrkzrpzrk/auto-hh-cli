@@ -64,7 +64,7 @@ export class DigestScenario {
   async build(opts: DigestRunOptions = {}): Promise<DigestBuildResult | null> {
     const cfg = this.deps.config.load(opts.config);
     const resume = this.deps.resumeFiles.load(opts.resume);
-    const hasApiKey = Boolean(cfg.api?.apiKey || process.env.OPENAI_API_KEY || process.env.ANTHROPIC_API_KEY);
+    const hasApiKey = this.deps.aiAvailable(opts.config);
     // Все флаги прогона — в одном объекте (domain/digest/DigestPolicy.ts).
     const policy = DigestPolicy.from(cfg, opts, {
       hasResume: Boolean(resume),

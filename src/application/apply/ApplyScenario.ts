@@ -1,6 +1,6 @@
 // Сценарий отклика (Facade): ручной вход → стратегия выбора вакансий → конвейер
 // подготовки плана → сессия браузера (RAII) → исполнитель цикла.
-// Импортов infrastructure здесь нет: Playwright и MongoDB приходят портами из composition root.
+// Импортов infrastructure здесь нет: Playwright и SQLite приходят портами из composition root.
 import type { ApplyDeps, ApplyOutcome } from "@/application/apply/ApplyDeps.js";
 import { ApplyPipeline } from "@/application/apply/ApplyPipeline.js";
 import { ApplySummary } from "@/application/apply/ApplySummary.js";
