@@ -28,6 +28,8 @@ import type { Logger } from "@/domain/logging.js";
 export interface JudgeOpts {
   minScore?: number;
   adaptResume?: boolean;
+  /** Лимит символов на адаптированное резюме (config.adaptResumeBudget). */
+  adaptResumeBudget?: number;
   /** Куда писать диагностику: домен не импортирует logger. */
   logger?: Logger;
   [key: string]: unknown;
@@ -96,6 +98,13 @@ export interface HhResumeCertificate {
   url: string | null;
 }
 
+/** Контакты из резюме. На публичной странице часть из них скрыта до «Показать контакты». */
+export interface HhResumeContacts {
+  phone: string | null;
+  email: string | null;
+  telegram: string | null;
+}
+
 export interface HhResumeData {
   hash: string;
   firstName: string | null;
@@ -109,10 +118,16 @@ export interface HhResumeData {
   workFormats: string[];
   businessTripReadiness: string | null;
   relocation: string | null;
+  birthDate: string | null;
+  citizenship: string[];
+  contacts: HhResumeContacts;
   about: string | null;
   keySkills: string[];
   experience: HhResumeExperience[];
   education: HhResumeEducation;
+  // Уровень образования («Высшее», «Бакалавр») — отдельным полем: на hh он не
+  // относится к конкретному вузу, а выводится один раз на блок.
+  educationLevel: string | null;
   languages: HhResumeLanguage[];
   certificates: HhResumeCertificate[];
   // Сырой текст страницы — последний фолбэк, если structured-блоки не распознаны.

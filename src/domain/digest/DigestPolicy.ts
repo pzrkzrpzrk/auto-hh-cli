@@ -2,6 +2,7 @@
 // Раньше minScore/maxRun/dryRun/useClaude вычислялись россыпью переменных внутри
 // buildDigest; теперь это один неизменяемый объект, который читают стадии конвейера.
 import type { DigestConfig, DigestRunOptions } from "@/domain/digest/types.js";
+import { DEFAULT_ADAPT_BUDGET } from "@/domain/adapt-resume.js";
 
 /** Внешние факты, от которых зависит политика (их определяет сценарий). */
 export interface DigestPolicyContext {
@@ -27,6 +28,8 @@ export class DigestPolicy {
     readonly useJudge: boolean,
     /** Адаптировать резюме под каждую вакансию перед судейством. */
     readonly adaptResume: boolean,
+    /** Лимит символов на адаптированное резюме. */
+    readonly adaptResumeBudget: number,
     /** Пачка вакансий на один запрос судьи. */
     readonly judgeBatchSize: number,
     /** Сколько пачек судьи выполняется одновременно. */
@@ -47,6 +50,7 @@ export class DigestPolicy {
       opts.dryRun ?? apply.dryRun ?? false,
       Boolean(ctx.hasResume && ctx.hasApiKey && opts.claude !== false),
       cfg.adaptResume !== false,
+      Math.max(500, Math.floor(Number(cfg.adaptResumeBudget)) || DEFAULT_ADAPT_BUDGET),
       Math.max(1, Math.floor(ctx.judgeBatchSize) || 1),
       Math.max(1, Math.floor(ctx.aiConcurrency) || 1),
     );

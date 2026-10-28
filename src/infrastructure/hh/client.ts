@@ -11,6 +11,7 @@
 import path from "path";
 import fs from "fs";
 import { openBrowser, assertProfileExists } from "@/infrastructure/playwright/browser.js";
+import { pageScript } from "@/infrastructure/playwright/page-script.js";
 import type { BrowserContext, Page } from "playwright";
 import { env } from "@/infrastructure/config/config.js";
 import log from "@/shared/logger.js";
@@ -19,11 +20,15 @@ import { sleep } from "@/shared/time.js";
 import type { Vacancy } from "@/domain/models.js";
 import type { SearchParams, SearchPageResult } from "@/domain/search/types.js";
 import {
+  collectAreaLabels,
+  collectEducationLevels,
+  collectIndustryLabels,
   findResumeList,
   findResumeObject,
   isEmptyResume,
   mergeResume,
   normalizeResume,
+  unwrapResume,
 } from "@/infrastructure/hh/resume.js";
 import type { HhResumeData, HhResumeSummary } from "@/infrastructure/hh/resume.js";
 
@@ -164,6 +169,35 @@ interface MapVacancyOpts {
   links?: { desktop?: string } | null;
   translations?: Record<string, any> | null;
   fields?: Record<string, Map<string, string>> | null;
+}
+
+// Форма, которую возвращает браузерный скрипт разбора резюме (getMyResumeFromDom).
+// Описывает только блоки страницы: личные данные из DOM не читаем, их берём из
+// initial state, а тут — то, чего в состоянии может не быть.
+interface DomResumeBlocks {
+  title: string;
+  about: string;
+  skills: string[];
+  employment: string;
+  schedule: string;
+  workFormats: string[];
+  businessTripReadiness: string;
+  birthDate: string;
+  citizenship: string[];
+  educationLevel: string;
+  contacts: { phone: string; email: string; telegram: string };
+  experience: Array<{
+    company: string;
+    position: string;
+    start: string;
+    end: string;
+    description: string;
+    industries: string[];
+  }>;
+  education: Array<{ institution: string; faculty: string; specialty: string; year: string }>;
+  languages: Array<{ name: string; level: string | null }>;
+  certificates: Array<{ title: string; owner: string | null; issued: string | null; url: string | null }>;
+  rawText: string;
 }
 
 function mapVacancyView(v: Record<string, any> | null, opts: MapVacancyOpts = {}): Vacancy | null {
@@ -474,7 +508,21 @@ class HHClient {
     let data: HhResumeData | null = null;
     if (state) {
       const raw = findResumeObject(state);
-      if (raw) data = normalizeResume(raw, hash);
+      if (raw) {
+        // Дата рождения, гражданство и мессенджеры лежат не в объекте резюме, а в
+        // applicantProfile.fields — поэтому склеиваем их перед разбором.
+        const personal = state?.applicantProfile?.fields;
+        const mergedRaw = personal && typeof personal === 'object' && !Array.isArray(personal)
+          ? { ...personal, ...raw }
+          : raw;
+        // Поля схемы hh обёрнуты по одному ({ string }, { date }) — разворачиваем их,
+        // а справочники (отрасли, уровни образования, страны) собираем из состояния.
+        data = normalizeResume(unwrapResume(mergedRaw), hash, {
+          industryLabels: collectIndustryLabels(state),
+          educationLevels: collectEducationLevels(state),
+          areaLabels: collectAreaLabels(state),
+        });
+      }
     }
 
     const fromDom = await this.getMyResumeFromDom(hash).catch(err => {
@@ -499,7 +547,14 @@ class HHClient {
     // Блоки резюме могут дорисоваться позже; если их нет вовсе — сработает rawText.
     await this.pg.waitForSelector('[data-qa^="resume-block"], [data-qa="resume"], h1', { timeout: 5000 }).catch(() => {});
 
-    const raw = await this.pg.evaluate(() => {
+    // Телефон и почта на своей странице резюме скрыты до «Показать контакты».
+    // Клик необязательный: если кнопки нет, просто читаем, что видно.
+    await this.pg.click('button:has-text("Показать контакты"), [data-qa*="show-contact"]', { timeout: 1000 })
+      .catch(() => {});
+
+    // pageScript, а не голый колбэк: иначе tsx вставляет в него вызовы __name,
+    // которых нет в браузере, и evaluate падает (см. playwright/page-script.ts).
+    const raw = await this.pg.evaluate<DomResumeBlocks | null>(pageScript<DomResumeBlocks | null>(() => {
       // Страницу капчи/входа нельзя выдавать за резюме — иначе сохранится мусор.
       if (document.querySelector('[data-qa="account-captcha-picture"], form[action*="captcha"]')) return null;
 
@@ -525,11 +580,18 @@ class HHClient {
         '[data-qa="resume-title"]',
         'h1',
       ]);
-      const about = firstText(document, ['[data-qa="resume-block-about"]', '[data-qa="resume-about"]']);
+      const about = firstText(document, [
+        '[data-qa="resume-about-card"]',
+        '[data-qa="resume-block-about"]',
+        '[data-qa="resume-about"]',
+      ]);
 
-      const skillsRoot = q('[data-qa="resume-block-skills"], [data-qa="resume-skills"]');
+      // Навыки: на актуальной странице это карточка skills-card с тегами skill-tag-<id>.
+      const skillsRoot = q('[data-qa="skills-card"], [data-qa="resume-block-skills"], [data-qa="resume-skills"]');
       const skills = skillsRoot
-        ? unique(all('li, .bloko-tag__text, [data-qa="skills-block-content"] span', skillsRoot).map(text))
+        ? unique(
+          all('[data-qa^="skill-tag-"], li, .bloko-tag__text', skillsRoot).map(text),
+        )
         : [];
 
       const experience = all('[data-qa="resume-block-experience-item"], .resume-block__experience-item').map(item => ({
@@ -547,17 +609,24 @@ class HHClient {
           '[data-qa="resume-block-experience-description"]',
           '[data-qa="resume-block-experience-additional-info"]',
         ]),
-        industries: [],
+        // Отрасли — отдельными элементами: названия содержат запятые, поэтому
+        // общий текст блока на части не режем.
+        industries: all('[data-qa="resume-block-experience-industry"]', item).map(text).filter(Boolean),
       }));
 
-      const education = all('[data-qa="resume-block-education-item"], .resume-block__education-item').map(item => ({
+      const education = all([
+        '[data-qa^="resume-list-card-education-item-"]',
+        '[data-qa="resume-block-education-item"]',
+        '.resume-block__education-item',
+      ].join(', ')).map(item => ({
         institution: firstText(item, [
           '[data-qa="resume-block-education-name"]',
           '[data-qa="resume-block-education-organization"]',
         ]) || text(item),
-        faculty: '',
-        specialty: firstText(item, ['[data-qa="resume-block-education-organization"]']),
-        year: firstText(item, ['[data-qa="resume-block-education-year"]']),
+        faculty: firstText(item, ['[data-qa="resume-block-education-faculty"]', '.resume-block__education-faculty']),
+        specialty: firstText(item, ['[data-qa="resume-block-education-specialty"]', '.resume-block__education-specialty']),
+        year: firstText(item, ['[data-qa="resume-block-education-year"]'])
+          || (text(item).match(/\b(19|20)\d{2}\b/g) || []).slice(-1)[0] || '',
       }));
 
       const languagesRoot = q('[data-qa="resume-block-languages"], [data-qa="resume-languages"]');
@@ -574,15 +643,83 @@ class HHClient {
 
       // Последний фолбэк: весь видимый текст резюме без навигации и кнопок.
       const root = q('[data-qa="resume"], [data-qa="resume-content"], main') || document.body;
-      const noise = /^(скачать|редактировать|обновить|поделиться|вернуться|назад|откликнуться|показать контакты|hh\.ru)/i;
-      const rawText = ((root as HTMLElement).innerText || '')
+      const pageLines = ((root as HTMLElement).innerText || '')
         .split('\n')
         .map(line => line.trim())
-        .filter(line => line && !noise.test(line))
-        .join('\n');
+        .filter(Boolean);
 
-      return { title, about, skills, experience, education, languages, certificates, rawText };
-    });
+      // Часть фактов у hh без своих data-qa: они печатаются строками «Метка: значение»
+      // (иногда метка отдельной строкой, а значение — следующей).
+      const labeled = (name: string, requireColon = false): string => {
+        const index = pageLines.findIndex(line => line.toLowerCase().startsWith(name.toLowerCase()));
+        if (index < 0) return '';
+        const rest = pageLines[index].slice(name.length).trim();
+        const bare = rest === '';
+        if (requireColon && !bare && !rest.startsWith(':')) return '';
+        const value = rest.replace(/^:?\s*/, '');
+        return value || (pageLines[index + 1] || '');
+      };
+      const splitList = (value: string): string[] => value
+        .split(/,\s*/)
+        .map(item => item.trim())
+        .filter(Boolean);
+
+      // Часть полей карточки «Желаемая должность» размечена data-qa: значение берём из
+      // него (снимая префикс-метку), остальное — по текстовым меткам.
+      const fieldValue = (selectors: string[], label: string): string => {
+        const value = firstText(document, selectors);
+        if (!value) return '';
+        return value.toLowerCase().startsWith(label.toLowerCase())
+          ? value.slice(label.length).replace(/^\s*:?\s*/, '').trim()
+          : value;
+      };
+
+      const employment = fieldValue(['[data-qa="resume-position-field-employmentForms"]'], 'Тип занятости')
+        || labeled('Тип занятости') || labeled('Занятость');
+      const schedule = labeled('График работы') || labeled('График');
+      const workFormats = splitList(
+        fieldValue(['[data-qa="resume-position-field-workFormats"]'], 'Формат работы') || labeled('Формат работы'),
+      );
+      const businessTripReadiness = fieldValue(
+        ['[data-qa="resume-position-field-businessTripReadiness"]'], 'Командировки',
+      ) || labeled('Командировки');
+      const birthDate = labeled('Дата рождения', true);
+      const citizenship = splitList(labeled('Гражданство', true));
+      const educationLevel = labeled('Уровень образования');
+      const contacts = {
+        phone: firstText(document, [
+          '[data-qa="resume-contact-phone-value-text"]',
+          '[data-qa="resume-contact-phone-value"]',
+        ]) || labeled('Телефон', true),
+        email: firstText(document, [
+          '[data-qa="resume-contact-email-value-preferred-text"]',
+          '[data-qa="resume-contact-email-value"]',
+        ]) || labeled('Электронная почта', true) || labeled('Эл. почта', true)
+          || labeled('E-mail', true) || labeled('Email', true),
+        telegram: labeled('Telegram', true),
+      };
+      const noise = /^(скачать|редактировать|обновить|поделиться|вернуться|назад|откликнуться|показать контакты|hh\.ru)/i;
+      const rawText = pageLines.filter(line => !noise.test(line)).join('\n');
+
+      return {
+        title,
+        about,
+        skills,
+        employment,
+        schedule,
+        workFormats,
+        businessTripReadiness,
+        birthDate,
+        citizenship,
+        educationLevel,
+        contacts,
+        experience,
+        education,
+        languages,
+        certificates,
+        rawText,
+      };
+    }));
 
     if (!raw) return null;
 
@@ -594,15 +731,23 @@ class HHClient {
       title: raw.title || null,
       salary: null,
       area: null,
-      employment: null,
-      schedule: null,
-      workFormats: [],
-      businessTripReadiness: null,
+      employment: raw.employment || null,
+      schedule: raw.schedule || null,
+      workFormats: raw.workFormats,
+      businessTripReadiness: raw.businessTripReadiness || null,
       relocation: null,
+      birthDate: raw.birthDate || null,
+      citizenship: raw.citizenship,
+      contacts: {
+        phone: raw.contacts.phone || null,
+        email: raw.contacts.email || null,
+        telegram: raw.contacts.telegram || null,
+      },
       about: raw.about || null,
       keySkills: raw.skills,
       experience: raw.experience,
       education: { primary: raw.education, additional: [] },
+      educationLevel: raw.educationLevel || null,
       languages: raw.languages,
       certificates: raw.certificates,
       rawText: raw.rawText || null,

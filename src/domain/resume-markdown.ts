@@ -119,16 +119,32 @@ export function renderResumeMarkdown(data: HhResumeData): string {
     ['Желаемая должность', data.title],
     ['Зарплата', formatSalary(data.salary)],
     ['Локация', data.area],
-    ['Занятость', data.employment],
+    ['Тип занятости', data.employment],
     ['График', data.schedule],
     ['Формат работы', data.workFormats.length ? data.workFormats.join(', ') : null],
     ['Готовность к переезду', data.relocation],
     ['Командировки', data.businessTripReadiness],
+    ['Дата рождения', data.birthDate],
+    ['Гражданство', data.citizenship.length ? data.citizenship.join(', ') : null],
   ];
   for (const [name, value] of facts) {
     if (value) lines.push(`- **${name}:** ${value}`);
   }
   if (facts.some(([, value]) => value)) lines.push('');
+
+  // Контакты — отдельным блоком: на публичной странице hh часть из них скрыта
+  // до «Показать контакты», поэтому в файле они появляются только когда прочитались.
+  const contacts: [string, string | null][] = [
+    ['Телефон', data.contacts.phone],
+    ['E-mail', data.contacts.email],
+    ['Telegram', data.contacts.telegram],
+  ];
+  const filledContacts = contacts.filter(([, value]) => Boolean(value));
+  if (filledContacts.length) {
+    lines.push('## Контакты', '');
+    for (const [name, value] of filledContacts) lines.push(`- **${name}:** ${value}`);
+    lines.push('');
+  }
 
   const about = htmlToText(data.about);
   if (about) {
@@ -155,8 +171,9 @@ export function renderResumeMarkdown(data: HhResumeData): string {
     }
   }
 
-  if (data.education.primary.length || data.education.additional.length) {
+  if (data.education.primary.length || data.education.additional.length || data.educationLevel) {
     lines.push('## Образование', '');
+    if (data.educationLevel) lines.push(`**Уровень:** ${data.educationLevel}`, '');
     for (const item of data.education.primary) lines.push(...renderEducationItem(item), '');
     if (data.education.additional.length) {
       lines.push('### Дополнительное образование', '');
@@ -165,7 +182,7 @@ export function renderResumeMarkdown(data: HhResumeData): string {
   }
 
   if (data.languages.length) {
-    lines.push('## Языки', '');
+    lines.push('## Знание языков', '');
     for (const language of data.languages) {
       lines.push(`- ${language.name}${language.level ? ` — ${language.level}` : ''}`);
     }

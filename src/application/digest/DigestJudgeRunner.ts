@@ -46,7 +46,12 @@ export class DigestJudgeRunner {
     }
 
     const batches = chunk(pending, policy.judgeBatchSize).map(group => group.map(c => c.full));
-    const opts = { minScore: policy.minScore, adaptResume: policy.adaptResume, logger: log };
+    const opts = {
+      minScore: policy.minScore,
+      adaptResume: policy.adaptResume,
+      adaptResumeBudget: policy.adaptResumeBudget,
+      logger: log,
+    };
     let judgedCount = 0;
 
     const runBatch = async (idx: number, batch: any[]) => {
