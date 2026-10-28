@@ -1,6 +1,6 @@
 // Адаптация резюме под вакансию: ядро, ранжирование секций и бюджет — на чистых данных.
 import { describe, expect, it } from "vitest";
-import { adaptResumeForVacancy, DEFAULT_ADAPT_BUDGET } from "@/domain/adapt-resume/index";
+import { adaptBudget, adaptResumeForVacancy, DEFAULT_ADAPT_BUDGET } from "@/domain/adapt-resume/index";
 import type { Resume, Vacancy } from "@/domain/models";
 
 const resume: Resume = {
@@ -137,3 +137,17 @@ describe("adaptResumeForVacancy", () => {
     expect(skills).not.toContain("- Навык номер 79 с описанием");
   });
 });
+
+describe("adaptBudget", () => {
+  it("пустое и нечисловое значение дают дефолт", () => {
+    expect(adaptBudget()).toBe(DEFAULT_ADAPT_BUDGET);
+    expect(adaptBudget(0)).toBe(DEFAULT_ADAPT_BUDGET);
+    expect(adaptBudget(Number.NaN)).toBe(DEFAULT_ADAPT_BUDGET);
+  });
+
+  it("не опускается ниже 500 и отбрасывает дробную часть", () => {
+    expect(adaptBudget(100)).toBe(500);
+    expect(adaptBudget(1200.9)).toBe(1200);
+  });
+});
+

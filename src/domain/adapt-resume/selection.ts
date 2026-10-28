@@ -7,13 +7,11 @@
 //
 // Всё локально и детерминированно: сеть и модель не используются.
 import type { Resume, Vacancy } from "@/domain/models.js";
+import { adaptBudget } from "@/domain/adapt-resume/budget.js";
 import type { ResumeSection } from "@/domain/adapt-resume/sections.js";
 import { isSkillsSection, renderSkills, splitSections } from "@/domain/adapt-resume/sections.js";
 import type { VacancyTerms } from "@/domain/adapt-resume/terms.js";
 import { collectTerms, tokenize } from "@/domain/adapt-resume/terms.js";
-
-/** Сколько символов адаптированного резюме по умолчанию уходит в промпт. */
-export const DEFAULT_ADAPT_BUDGET = 3500;
 
 /** Минимальный вес секции, чтобы считать её релевантной (1 сильный термин или 2 слабых). */
 const MIN_SCORE = 1;
@@ -41,7 +39,7 @@ export function adaptResumeForVacancy(
   const text = resume.text.replace(/\r\n/g, "\n").trim();
   if (!text) return null;
 
-  const budget = Math.max(500, Math.floor(options.budgetChars ?? DEFAULT_ADAPT_BUDGET) || DEFAULT_ADAPT_BUDGET);
+  const budget = adaptBudget(options.budgetChars);
   const terms = collectTerms(vacancy);
   const { head, sections } = splitSections(text);
 
