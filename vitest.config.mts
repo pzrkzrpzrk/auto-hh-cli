@@ -15,7 +15,5 @@ export default defineConfig({
   test: {
     environment: "node",
     include: ["tests/**/*.spec.ts"],
-    // Адаптеры SQLite в тестах не создают файл в data/.
-    env: { SQLITE_PATH: ":memory:" },
   },
 });

@@ -106,7 +106,7 @@ resumes/ivan.md
 npm start
 ```
 
-> ℹ️ Файл `data/autohh.db` (путь — `SQLITE_PATH`) создаётся при первом обращении к хранилищу: схема применяется там же (`src/infrastructure/sqlite/schema.ts`, версия — в `PRAGMA user_version`). Отдельные миграции и `docker-compose` больше не нужны; для просмотра данных подойдёт любой SQLite-клиент (например, DB Browser for SQLite).
+> ℹ️ Файл `data/autohh.db` (путь — `SQLITE_PATH`, читается при первом подключении) создаётся при первом обращении к хранилищу: схема применяется там же (`src/infrastructure/sqlite/schema.ts`, версия — в `PRAGMA user_version`). Отдельные миграции и `docker-compose` больше не нужны; для просмотра данных подойдёт любой SQLite-клиент (например, DB Browser for SQLite).
 
 ### Шаг 4 — резюме попадает в реестр
 

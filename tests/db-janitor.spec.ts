@@ -13,7 +13,8 @@ function count(sql: string): number {
 
 /** Чистая база перед каждым тестом: по две записи на резюме и общий кэш поиска. */
 function seed(): void {
-  const conn = connect();
+  // Соединение открывается здесь и живёт до конца файла: env для тестов не нужен.
+  const conn = connect({ file: ':memory:' });
   for (const table of TABLES) clearTable(table);
 
   const insertDigest = conn.prepare(

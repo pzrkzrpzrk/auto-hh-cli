@@ -232,7 +232,7 @@ src/
 │   ├── logging/logger.ts        # адаптер LogSink: app.log + DEBUG
 │   ├── scheduling/node-cron.ts # адаптер Scheduler: единственный import node-cron
 │   ├── playwright/{browser.ts, apply-steps.ts, application-gateway.ts}
-│   └── config/{config.ts, env.ts, paths.ts, apply-config.ts, cover-config.ts}
+│   └── config/{config.ts, env.ts, paths.ts, apply-config.ts, cover-config.ts, db-config.ts}
 │
 ├── presentation/cli/
 │   ├── index.ts
@@ -713,7 +713,7 @@ bin/auto-hh
 
 Автотесты заведены на vitest (`npm test`, каталог `tests/`, конфиг `vitest.config.mts`):
 чистые правила и доменные функции проверяются без базы, SQLite-адаптеры — на `:memory:`
-(`SQLITE_PATH` в конфиге тестов). Первый набор: `DigestPolicy`, `computeActualization` /
+(`:memory:` + `connect({ file: ':memory:' })`, env тесту не нужен). Первый набор: `DigestPolicy`, `computeActualization` /
 `mergeActualized`, `formatResetSummary`, `DbJanitor`. Дальше — `DigestFilter.matches/select`,
 `SkipRules`, `withCoverLetters`, `chunk`, `runBatches`, `parseJSON`, `SqliteCacheStore` и `FileJanitor`.
 
