@@ -11,7 +11,7 @@
 Полный цикл «поиск → отклик» разбит на независимые шаги — все они запускаются из **интерактивного меню** (`npm start`):
 
 1. **`search`** — собрать вакансии с hh.ru в кэш: страницы выдачи и описания (полные карточки). Ни фильтра, ни ИИ, ни писем.
-2. **`digest`** — по кэшу поиска: локальный фильтр → ИИ-судья → **дайджест** (файл + MongoDB).
+2. **`digest`** — по кэшу поиска: локальный фильтр → ИИ-судья → **дайджест** (файл + SQLite).
 3. **`cover`** — сопроводительные письма для вакансий дайджеста (батчами, с кэшем).
 4. **`apply`** — открыть сохранённую сессию браузера и откликнуться, подставляя готовые письма.
 5. **`digest actualize`** — пометить в дайджестах/rejected за прошлые даты вакансии, которых уже нет в последнем поиске (опционально; ничего не удаляет) и собрать сводный снимок актуальных вакансий за день.
@@ -22,7 +22,7 @@ hh.ru ──Playwright──▶ search: страницы выдачи (cachePage
                                         ▼
              digest: локальный фильтр (навыки, исключения, ЗП) ── пропуск
                         └─▶ ИИ-судья: score 1–10, вердикт fit/no-fit
-                                └─▶ дайджест (data/digests/ГГГГ-ММ-ДД/<Регион>/digest.md + MongoDB)
+                                └─▶ дайджест (data/digests/ГГГГ-ММ-ДД/<Регион>/digest.md + SQLite)
                                         │
                                         ▼
              cover: генерация сопроводительных под каждую вакансию
@@ -33,13 +33,13 @@ hh.ru ──Playwright──▶ search: страницы выдачи (cachePage
 
 Порядок важен: `digest` читает кэш последнего `search`, `cover` — последний дайджест, `apply` — письма, сохранённые шагом `cover`.
 
-> ℹ️ `search` тянет не только страницы выдачи, но и **описания вакансий** (`cacheFull`) — по одной карточке на вакансию, поэтому шаг занимает минуты, а не секунды (≈3 с на карточку при `REQUEST_DELAY_MS=1500`). Уже скачанное и вакансии из истории пропускаются: повторный запуск быстрый, а Ctrl+C ничего не теряет — прогресс лежит в MongoDB. Если описаний всё же не хватит, `digest` и `cover` догрузят их сами.
+> ℹ️ `search` тянет не только страницы выдачи, но и **описания вакансий** (`cacheFull`) — по одной карточке на вакансию, поэтому шаг занимает минуты, а не секунды (≈3 с на карточку при `REQUEST_DELAY_MS=1500`). Уже скачанное и вакансии из истории пропускаются: повторный запуск быстрый, а Ctrl+C ничего не теряет — прогресс лежит в SQLite. Если описаний всё же не хватит, `digest` и `cover` догрузят их сами.
 
 ---
 
 ## Установка
 
-Требования: **Node.js 18+**, запущенный **MongoDB** (проще всего через `docker-compose`).
+Требования: **Node.js 22.13+** (в этой версии `node:sqlite` работает без флага `--experimental-sqlite`; проект проверен на Node 24). Отдельный сервер БД не нужен: файл `data/autohh.db` создаётся автоматически.
 
 ```bash
 # 1. Зависимости и браузер Playwright
@@ -50,13 +50,10 @@ npx playwright install chromium
 cp .env.example .env                 # затем заполните .env (см. ниже)
 cp config.example.json config.json   # затем отредактируйте config.json под себя
 
-# 3. MongoDB (опционально, если нет своего инстанса)
-docker compose up -d          # поднимет mongo + mongo-express (localhost:8081, admin/admin)
+# 3. База данных создаётся сама: data/autohh.db
+#    (схема применяется при первом обращении к хранилищу)
 
-# 4. Применить миграции MongoDB (индексы, коллекции)
-npm run migrate:up
-
-# 5. Резюме
+# 4. Резюме
 #    Один файл:  задайте RESUME_PATH=./resume.md в .env
 #    Несколько:  RESUMES_DIR=./resumes (каждый файл .md/.txt/.pdf = отдельное резюме)
 ```
@@ -97,24 +94,23 @@ resumes/ivan.md
 - **`.md`** — основной формат: структурированный текст, который читают ИИ-шаги (`digest`, `cover`, `grade`);
 - **`.pdf`** — опциональная копия для человека; кладётся в `<RESUMES_DIR>/pdf/` и в список резюме не попадает.
 
-Имя файла — `<фамилия-имя>-<8 символов hash>.md`: оно стабильно между скачиваниями, поэтому `resumeId` и привязки вердиктов/писем в MongoDB не меняются. Существующие файлы перезаписываются только после подтверждения.
+Имя файла — `<фамилия-имя>-<8 символов hash>.md`: оно стабильно между скачиваниями, поэтому `resumeId` и привязки вердиктов/писем в базе не меняются. Существующие файлы перезаписываются только после подтверждения.
 
 > ℹ️ Нужна действующая сессия hh.ru в профиле Playwright. Если она истекла, команда попросит войти через пункт «🔑 Войти на hh.ru». Скачивание идёт через браузер (сайт hh.ru), потому что соискательский API закрыт.
 
 > ℹ️ Если структура страницы не распозналась, запустите с `HH_DUMP_STATE=1` — сырое состояние сохранится в `data/tmp-resume-state-*.json` для отладки.
 
-### Шаг 3 — поднимите MongoDB и примените миграции
+### Шаг 3 — база данных создаётся автоматически
 
 ```bash
-docker compose up -d
-npm run migrate:up
+npm start
 ```
 
-> ℹ️ Настройки migrate-mongo лежат в `migrate-mongo-config.js` в корне проекта — указывать `-f` не нужно. Файл берёт `MONGODB_URI` и `MONGODB_TIMEOUT_MS` из `.env`, поэтому миграции применяются к той же базе, что и остальные команды. Статус миграций: `npx migrate-mongo status`.
+> ℹ️ Файл `data/autohh.db` (путь — `SQLITE_PATH`) создаётся при первом обращении к хранилищу: схема применяется там же (`src/infrastructure/sqlite/schema.ts`, версия — в `PRAGMA user_version`). Отдельные миграции и `docker-compose` больше не нужны; для просмотра данных подойдёт любой SQLite-клиент (например, DB Browser for SQLite).
 
 ### Шаг 4 — резюме попадает в реестр
 
-Реестр `resumes` в MongoDB — каталог резюме: `resumeId`, имя, файл, **sha256 содержимого** и даты (`createdAt` / `updatedAt`). По `resumeId` к резюме привязываются вердикты ИИ, сопроводительные, дайджесты, rejected, папки артефактов и отклики.
+Реестр `resumes` в SQLite — каталог резюме: `resumeId`, имя, файл, **sha256 содержимого** и даты (`createdAt` / `updatedAt`). По `resumeId` к резюме привязываются вердикты ИИ, сопроводительные, дайджесты, rejected, папки артефактов и отклики.
 
 Регистрация происходит **автоматически**:
 
@@ -135,7 +131,7 @@ npm run migrate:up
 
 Имя `<name>` — имя файла без расширения; файл должен лежать в `RESUMES_DIR`.
 
-> В базе хранятся только метаданные и хеш содержимого — **сам текст резюме в MongoDB не загружается**: он всегда читается из файла на диске.
+> В базе хранятся только метаданные и хеш содержимого — **сам текст резюме в базу не загружается**: он всегда читается из файла на диске.
 
 ---
 
@@ -184,7 +180,7 @@ npm start           # или: npm run ui, npx auto-hh, npx auto-hh ui (алиа�
 | ✉️ Письмо по id | Одно сопроводительное для вакансии по id (ввод id и выбор резюме) |
 | ⏰ Планировщик | Шаги из `config.schedule.steps` по cron; блокирующий, выход по Ctrl+C |
 | ⚙️ Конфигурация | Показать текущий `config.json` (только просмотр) |
-| 🧹 Сброс данных | Сбросить всё или **только выбранное резюме** (файлы + MongoDB) — с подтверждением |
+| 🧹 Сброс данных | Сбросить всё или **только выбранное резюме** (файлы + база) — с подтверждением |
 
 - **Активное резюме** показывается в шапке меню (`Резюме: pavel (pavel.txt)`) и подставляется по умолчанию в шаги `search`, `digest`, `cover`, `apply`, `grade` и `schedule`. Выбор живёт только в текущей сессии меню — на диск ничего не пишется; пункт «Резюме → 🎯 выбрать активное» умеет вернуть «как в .env». Вне меню «активного» резюме нет: шаги берут `RESUME_PATH` / первый файл из `RESUMES_DIR`, а планировщик — резюме, выбранное в меню при его запуске.
 
@@ -209,9 +205,6 @@ npm start           # или: npm run ui, npx auto-hh, npx auto-hh ui (алиа�
 | `npm run ui` | То же меню явной командой: `npx auto-hh ui` (алиасы: `menu`, `interactive`) |
 | `npm run build` | Проверка границ слоёв + компиляция TS в JS (не обязательна для запуска) |
 | `npm run arch` | Проверить правила зависимостей слоёв (`dependency-cruiser`) |
-| `npm run migrate:up` | Применить миграции MongoDB |
-| `npm run migrate:down` | Откатить последнюю миграцию |
-| `npm run migrate:create` | Создать новую миграцию |
 
 Любой другой аргумент (`npx auto-hh search`, `npx auto-hh digest`) отвечает подсказкой: «Команд больше нет — все шаги делаются в интерактивном меню».
 
@@ -321,8 +314,8 @@ npm start           # или: npm run ui, npx auto-hh, npx auto-hh ui (алиа�
 | `RESUMES_DIR` | — | Директория с **несколькими** резюме. Выбор: пункт меню «🧾 Резюме» → 🎯 выбрать активное |
 | `APPLICANT_PROFILE` | `опытный разработчик` | Краткое описание соискателя — попадает в системный промпт ИИ |
 | `REQUEST_DELAY_MS` | `1500` | Пауза между запросами к API hh.ru |
-| `MONGODB_URI` | `mongodb://localhost:27017/autohh` | URI MongoDB для кэша, истории и дайджестов |
-| `MONGODB_TIMEOUT_MS` | `10000` | Таймаут подключения к MongoDB: если база недоступна, команда сообщит об этом быстро, а не через 30 с |
+| `SQLITE_PATH` | `./data/autohh.db` | Файл SQLite для кэша, истории и дайджестов (создаётся автоматически), путь относительно корня проекта |
+| `SQLITE_BUSY_TIMEOUT_MS` | `5000` | Сколько ждать снятия блокировки БД вторым процессом |
 | `DEBUG` | — | Любое непустое значение включает `log.debug` |
 | `HH_DUMP_STATE` | — | Сохранять initial state страниц резюме в `data/tmp-resume-state-*.json` — для отладки разбора вёрстки hh.ru |
 
@@ -365,16 +358,17 @@ npm start           # или: npm run ui, npx auto-hh, npx auto-hh ui (алиа�
 
 ## Файлы в `data/`
 
-| Файл / коллекция | Что в нём |
+| Файл / таблица | Что в нём |
 | --- | --- |
-| MongoDB `history` | Какие вакансии уже видели / на какие откликались (статусы `seen` / `applied`); у откликов — `meta.resumeId` |
-| MongoDB `cachePages`, `cacheFull` | Общий кэш выдачи и описаний вакансий (от резюме не зависит) — позволяет продолжить после обрыва, не запрашивая hh.ru |
-| MongoDB `cacheJudgements`, `cacheCoverLetters` | Вердикты ИИ и письма по резюме: ключи `(date, resumeId, vacancyId)` и `(resumeId, vacancyId)` |
-| MongoDB `digest`, `rejected` | Дайджесты/отклонённые по ключу `(date, resumeId)` — два резюме за день не перезаписывают друг друга |
-| MongoDB `resumes` | Реестр резюме: `resumeId`, имя, файл, sha256 содержимого, даты регистрации/изменения |
+| `autohh.db` (+ `-wal`, `-shm`) | Файл SQLite: кэш, история, дайджесты и реестр резюме. Путь — `SQLITE_PATH` |
+| SQLite `history` | Какие вакансии уже видели / на какие откликались (статусы `seen` / `applied`); у откликов — `meta.resumeId` |
+| SQLite `cache_pages`, `cache_full` | Общий кэш выдачи и описаний вакансий (от резюме не зависит) — позволяет продолжить после обрыва, не запрашивая hh.ru |
+| SQLite `cache_judgements`, `cache_cover_letters` | Вердикты ИИ и письма по резюме: ключи `(date, resumeId, vacancyId)` и `(resumeId, vacancyId)` |
+| SQLite `digests` (`kind` = `digest` / `rejected`) | Дайджесты и отклонённые по ключу `(kind, date, resumeId)` — два резюме за день не перезаписывают друг друга |
+| SQLite `resumes` | Реестр резюме: `resumeId`, имя, файл, sha256 содержимого, даты регистрации/изменения |
 | `hh-parsing/<имя> - <resumeId>/search/ГГГГ-ММ-ДД/<Регион>/search.md` | Выдача поиска за день по регионам — только новые вакансии, накопительно (дедуп по id) |
-| `hh-parsing/<имя> - <resumeId>/digests/...` (+ MongoDB `digest`) | Подходящие вакансии по регионам; письма дописываются шагом `cover`; `actual.md` — сводка актуализации |
-| `hh-parsing/<имя> - <resumeId>/rejected/...` (+ MongoDB `rejected`) | Вакансии, отбракованные ИИ, с причинами. Регион берётся из `area` вакансии |
+| `hh-parsing/<имя> - <resumeId>/digests/...` (+ SQLite `digests`) | Подходящие вакансии по регионам; письма дописываются шагом `cover`; `actual.md` — сводка актуализации |
+| `hh-parsing/<имя> - <resumeId>/rejected/...` (+ SQLite `digests`) | Вакансии, отбракованные ИИ, с причинами. Регион берётся из `area` вакансии |
 | `hh-parsing/no-resume/...` | Артефакты, когда резюме не выбрано или не найдено |
 | `search/`, `digests/`, `rejected/` | Старая плоская раскладка: читается `digest show` как fallback, удаляется только глобальным reset |
 | `browser-profile/` | Профиль Chromium (cookies, localStorage) |
@@ -434,8 +428,9 @@ npm start           # или: npm run ui, npx auto-hh, npx auto-hh ui (алиа�
 │  ├─ infrastructure/           # адаптеры внешнего мира
 │  │  ├─ hh/                    # client, resume, vacancy-source, resume-source, source-provider
 │  │  ├─ ai/client.ts           # единый OpenAI-совместимый клиент
-│  │  ├─ mongo/                 # db, cache-store, digest-store, history-store, resume-store,
-│  │  │                         #   digest-repository, judgement-cache, cover-letter-cache, resume-registry
+│  │  ├─ sqlite/                # db, schema, rows, cache-store, digest-store, history-store,
+│  │  │                         #   resume-store, digest-repository, judgement-cache,
+│  │  │                         #   cover-letter-cache, resume-registry
 │  │  ├─ files/                 # resume-loader, resume-files, data-janitor, search-output,
 │  │  │                         #   search-report-writer, digest-files, digest-file-source
 │  │  ├─ logging/logger.ts      # адаптер LogSink: data/app.log + DEBUG
@@ -446,9 +441,7 @@ npm start           # или: npm run ui, npx auto-hh, npx auto-hh ui (алиа�
 │  │                            #   cron, path-utils, format
 │  └─ composition.ts            # сборка зависимостей: источники hh.ru, ИИ, хранилища, closeResources()
 ├─ scripts/                    # вспомогательные скрипты (judge-only, fill-cover-letters, …)
-├─ migrations/                 # миграции MongoDB
-├─ migrate-mongo-config.js     # настройки migrate-mongo (берёт MONGODB_URI из .env)
-└─ docker-compose.yml          # MongoDB + mongo-express
+└─ data/autohh.db              # SQLite: кэш, история, дайджесты (создаётся автоматически)
 ```
 
 Шаг `digest` собран как конвейер стадий (`application/digest/`): политика прогона → кэш → фильтр → ИИ-судья → отбор → запись; тексты консоли — в `presentation/cli/format/digest-report.ts`. Подробнее — `docs/architecture.md`, раздел «Паттерны дайджеста (этап 7)».
