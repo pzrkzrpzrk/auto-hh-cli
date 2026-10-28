@@ -12,29 +12,6 @@ export interface Vacancy {
   [key: string]: unknown;
 }
 
-export interface Verdict {
-  vacancyId: string;
-  fit: boolean;
-  score: number;
-  reason: string | null;
-  comment: string | null;
-  // Модель по контракту (judge/system-text.ts) возвращает пустую строку; поле читает
-  // normalizeVerdict, поэтому объявлено в типе (иначе TS-ошибка TS2353).
-  coverLetter?: string;
-}
-
-import type { Logger } from "@/domain/logging.js";
-
-export interface JudgeOpts {
-  minScore?: number;
-  adaptResume?: boolean;
-  /** Лимит символов на адаптированное резюме (config.adaptResumeBudget). */
-  adaptResumeBudget?: number;
-  /** Куда писать диагностику: домен не импортирует logger. */
-  logger?: Logger;
-  [key: string]: unknown;
-}
-
 export interface Resume {
   name: string;
   id: string;

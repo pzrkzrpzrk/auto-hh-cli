@@ -1,19 +1,14 @@
 // Стратегия судейства (Strategy): КАК спрашивать ИИ — пачкой или поштучно.
-// Реализация по умолчанию — реальные вызовы доменного судьи; в проверках подставляется
+// Транспорт вынесен в application/judge/JudgeService; в проверках подставляется
 // детерминированная стратегия, поэтому DigestJudgeRunner не знает про сеть.
-import { judgeVacancy, judgeVacanciesBatch } from "@/domain/judge/index.js";
+import { JudgeService, type JudgeSettings } from "@/application/judge/index.js";
 import type { Logger } from "@/domain/logging.js";
 import type { Judgement } from "@/domain/digest/JudgementSet.js";
 import type { AiProvider } from "@/domain/ports.js";
 import type { Resume, Vacancy } from "@/domain/models.js";
 
-/** Параметры судейства, общие для пачки и одиночного запроса. */
-export interface JudgeOptions {
-  minScore: number;
-  adaptResume: boolean;
-  /** Лимит символов на адаптированное резюме. */
-  adaptResumeBudget?: number;
-  /** Диагностика домена: передаётся в judge* и пишется адаптером логгера. */
+/** Параметры судейства: настройки JudgeService плюс диагностика для адаптера логгера. */
+export interface JudgeOptions extends JudgeSettings {
   logger?: Logger;
   [key: string]: unknown;
 }
@@ -36,7 +31,7 @@ export interface JudgeStrategy {
   ): Promise<Judgement | null>;
 }
 
-/** Боевая стратегия: батч-запрос и поштучный фолбэк через domain/judge. */
+/** Боевая стратегия: батч-запрос и поштучный фолбэк через JudgeService. */
 export class AiJudgeStrategy implements JudgeStrategy {
   judgeBatch(
     ai: AiProvider | null,
@@ -44,7 +39,7 @@ export class AiJudgeStrategy implements JudgeStrategy {
     vacancies: Vacancy[],
     opts: JudgeOptions,
   ): Promise<Map<string, Judgement> | null> {
-    return judgeVacanciesBatch(ai, resume, vacancies, opts);
+    return new JudgeService(ai, opts.logger).judgeBatch(resume, vacancies, opts);
   }
 
   judgeOne(
@@ -53,6 +48,6 @@ export class AiJudgeStrategy implements JudgeStrategy {
     vacancy: Vacancy,
     opts: JudgeOptions,
   ): Promise<Judgement | null> {
-    return judgeVacancy(ai, resume, vacancy, opts);
+    return new JudgeService(ai, opts.logger).judgeOne(resume, vacancy, opts);
   }
 }

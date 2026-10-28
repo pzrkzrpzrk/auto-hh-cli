@@ -1,7 +1,8 @@
 // Режим «одна вакансия»: карточка со страницы hh.ru → письмо → cacheCoverLetters.
-// Шаблон и адаптация резюме приходят из CoverConfig, поэтому сценарий не читает config.json.
+// Настройки (шаблон, адаптация, профиль) приходят из CoverSettings, поэтому сценарий
+// не читает config.json; транспорт ИИ — в application/cover-letter/CoverLetterService.
 import log from "@/shared/logger.js";
-import { buildCoverLetter } from "@/domain/cover-letter/index.js";
+import { CoverLetterService } from "@/application/cover-letter/index.js";
 import type { AiProvider } from "@/domain/ports.js";
 import type { Resume } from "@/domain/models.js";
 import type { CoverConfig, CoverDeps, CoverOutcome, OnVacancy } from "@/application/cover/CoverDeps.js";
@@ -31,20 +32,7 @@ export class SingleVacancyMode implements CoverMode {
       if (this.onVacancy) this.onVacancy(full, this.vacancyId);
 
       log.info('Generating cover letter...');
-      const letter = await buildCoverLetter(
-        this.ai,
-        this.cfg.coverLetterTemplate,
-        full,
-        this.resume,
-        this.cfg.adaptResume,
-        {
-          profile: this.cfg.profile,
-          signature: this.cfg.signature,
-          concurrency: this.cfg.concurrency,
-          adaptResumeBudget: this.cfg.adaptResumeBudget,
-          logger: log,
-        },
-      );
+      const letter = await new CoverLetterService(this.ai, this.cfg, log).generateOne(this.resume, full);
       if (!letter) return { kind: 'no-letter' } as CoverOutcome;
 
       // Ошибка кэша не отменяет письмо: команда его напечатает, шаг apply — нет.

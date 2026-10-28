@@ -1,6 +1,6 @@
 # Архитектура auto-hh-cli
 
-- **Статус:** этапы 1–9 выполнены — структура приведена к целевой (раздел 4), домен не зависит от инфраструктуры, все сценарии в `application/`; поиск (этап 6) и дайджест (этап 7) переведены на ООП (порты, конвейер, репортёр), этап 8 закрыл `apply`/`cover` портами (T-17/T-18) и собрал их как ООП-подсистемы (фасады, конвейеры, стратегии), этап 9 — файловый I/O (T-20), `ConfigProvider` (T-19), чистые `shared`/домен (T-21), единый composition root с портом `Scheduler` (T-22), защита границ (T-23: `dependency-cruiser` + `strict: true`) и домен без побочек (T-24); документация обновлена.
+- **Статус:** этапы 1–9 выполнены — структура приведена к целевой (раздел 4), домен не зависит от инфраструктуры, все сценарии в `application/`; поиск (этап 6) и дайджест (этап 7) переведены на ООП (порты, конвейер, репортёр), этап 8 закрыл `apply`/`cover` портами (T-17/T-18) и собрал их как ООП-подсистемы (фасады, конвейеры, стратегии), этап 9 — файловый I/O (T-20), `ConfigProvider` (T-19), чистые `shared`/домен (T-21), единый composition root с портом `Scheduler` (T-22), защита границ (T-23: `dependency-cruiser` + `strict: true`) и домен без побочек (T-24); этап 10 (T-27) перевёл `domain/judge` и `domain/cover-letter` на Value Objects и Domain Services (`Verdict`, `JudgePrompt`, `CoverSignature`, `CoverTemplate`, `CoverSettings`), а вызовы ИИ, пачки и логи — в `application/judge/JudgeService` и `application/cover-letter/CoverLetterService`; документация обновлена.
 - **Дата:** 2026-10-19.
 - **Ветка:** `refactor/t24-domain-purity`.
 - **Состояние кода:** `src/` — 154 файла, ≈10,26 тыс. строк; `npm run arch` → 0 нарушений, `npx tsc --noEmit` → exit 0 при `strict: true`.
@@ -90,8 +90,14 @@ src/                              # 154 файла
 
 В `domain/` нет I/O: 7 «плоских» файлов (`models`, `ports`, `actualize`, `adapt-resume`,
 `resume-block`, `resume-markdown`, `grade-resume`) и четыре подпакета — `search/` (VO запроса, порт
-источника и политика догрузки), `digest/` (политика, кандидат, вердикты, Domain Services и порты), `judge/`
-и `cover-letter/` (правило + промпт).
+источника и политика догрузки), `digest/` (политика, кандидат, вердикты, Domain Services и порты),
+`judge/` (Value Object вердикта + тексты промпта) и `cover-letter/` (подпись, шаблон, промпт, настройки).
+
+С этапа 10 (T-27) в `judge/` и `cover-letter/` нет ни `AiProvider`, ни логгера, ни `parseJSON`:
+домен отвечает за правила и тексты, а `application/judge/JudgeService` и
+`application/cover-letter/CoverLetterService` — за транспорт, пачки и диагностику.
+Проверка: `Select-String -Path src/domain/judge/*.ts,src/domain/cover-letter/*.ts -Pattern 'AiProvider|chat\(|logger'`
+→ пусто.
 
 `filter.ts` перенесён в `domain/digest/` и переписан как Domain Service `DigestFilter`
 (2026-10-19): правила `config.filter` и регионы «любые вакансии» задаются в конструкторе
@@ -124,7 +130,7 @@ src/                              # 154 файла
 ```
 src/
 ├── domain/
-│   ├── models.ts               # Vacancy, Resume, Verdict, DigestEntry, HhResume*
+│   ├── models.ts               # Vacancy, Resume, DigestEntry, HhResume*
 │   ├── ports.ts                # CacheStore, HistoryStore, DataJanitor, ResumeFiles,
 │   │                           #   SearchReportWriter, AppConfig, ConfigProvider, Logger,
 │   │                           #   SearchDeps, ResumeSource, SourceProvider, AiProvider
@@ -132,8 +138,16 @@ src/
 │   ├── actualize.ts
 │   ├── adapt-resume.ts
 │   ├── resume-markdown.ts
-│   ├── judge/{judge.ts, system-text.ts}
-│   ├── cover-letter/{cover-letter.ts, system-text.ts, config.ts}
+│   ├── judge/                  # чистый домен судьи
+│   │   ├── Verdict.ts          # Value Object: инвариант fit/score/reason/comment + разбор ответа
+│   │   ├── JudgePrompt.ts      # Domain Service: system/batch-система и блок вакансии
+│   │   └── index.ts
+│   ├── cover-letter/           # чистый домен писем
+│   │   ├── CoverSignature.ts   # Value Object подписи (+ плейсхолдер по умолчанию)
+│   │   ├── CoverTemplate.ts    # Value Object шаблона {title}/{employer}/{area}/{signature}
+│   │   ├── CoverLetterPrompt.ts # Domain Service: одиночный и батчевый промпт
+│   │   ├── config.ts           # CoverSettings (VO) + CoverConfig (совместимый alias)
+│   │   └── index.ts
 │   ├── grade-resume.ts
 │   ├── search/                 # VO и порт источника вакансий
 │   │   ├── SearchQuery.ts      # config.search → проходы и страницы
@@ -168,6 +182,9 @@ src/
 │   │   ├── CoverContext.ts     # состояние прогона для стадий
 │   │   ├── CoverDeps.ts        # порты сценария, CoverConfig/CoverOutcome/OnVacancy
 │   │   ├── CoverPlan.ts        # Value Object: счётчики плана и готовности
+│   │   └── index.ts
+│   ├── cover-letter/           # Application Service генерации писем
+│   │   ├── CoverLetterService.ts # ИИ, пачки, onBatch, fallback на шаблон
 │   │   └── index.ts
 │   ├── apply.ts                # runApply() — обёртка над ApplyScenario
 │   ├── apply/                  # ООП-реализация отклика
@@ -208,6 +225,9 @@ src/
 │   │   ├── DigestShowScenario.ts    # SQLite → письма → .md fallback
 │   │   ├── ActualizeScenario.ts     # актуализация digest/rejected
 │   │   ├── ActualizeTarget.ts       # цели актуализации (digest/rejected)
+│   │   └── index.ts
+│   ├── judge/                  # Application Service судейства
+│   │   ├── JudgeService.ts     # ИИ-вызовы, разбор вердикта, логи, ошибки → null
 │   │   └── index.ts
 │   ├── options.ts              # опции команд: SearchOptions/CoverOptions/ApplyOptions…
 │   ├── config-view.ts          # просмотр config.json через ConfigProvider
@@ -296,7 +316,7 @@ src/
 
 **Repository — `SqliteDigestRepository`.** Прячет выбор `writeDigest`/`writeRejected` и `writeActualDigest`/`writeActualRejected` за `save(kind)`, `saveActual(kind)`, `latest()`, `byDate()`, `all()` и `listDocs()`. `ActualizeScenario` больше не держит таблицу функций записи: цели описаны `DigestKind` и `ActualizeTarget`, поэтому новый артефакт добавляется одной строкой.
 
-**Strategy — `JudgeStrategy`.** `AiJudgeStrategy` — боевые вызовы `judgeVacanciesBatch` и `judgeVacancy`; в проверках подставляется детерминированная стратегия, и `DigestJudgeRunner` не меняется. `ActualizeTarget` применяет ту же идею к актуализации: `digest` и `rejected` отличаются только `kind` и подписью в логе.
+**Strategy — `JudgeStrategy`.** `AiJudgeStrategy` делегирует в `JudgeService` (`application/judge`), поэтому домен судьи остаётся без I/O; в проверках подставляется детерминированная стратегия, и `DigestJudgeRunner` не меняется. `ActualizeTarget` применяет ту же идею к актуализации: `digest` и `rejected` отличаются только `kind` и подписью в логе.
 
 **Template Method — `DigestStage`.** `run()` проверяет, не остановлен ли конвейер, и вызывает `execute()`; стадия не дублирует эту проверку. Ошибки не глушатся: падение пачки судьи пробрасывается наверх (`onError: throw`), как в прежнем `buildDigest`.
 
@@ -384,6 +404,27 @@ sequenceDiagram
 **Repository + Application Service — без нового кода.** `EnsureCardsStage` читает `cacheFull` через `CacheStore.getFullByVacancyIds`, догружает недостающее `VacancyCollector` с `AllVacanciesPolicy` (просмотренные не пропускаем) и пишет через `SearchCache.saveFull` — тот же путь, что в search/digest.
 
 `application/cover.ts` остался совместимой обёрткой `runCover(vacancyId, opts, deps, onVacancy)`; `cmd-cover.ts` и `composition.ts` не менялись.
+
+### Паттерны судьи и писем (этап 10, T-27)
+
+| Паттерн | Где | Что решает |
+|---|---|---|
+| Value Object + Factory | `Verdict.fromModel` / `listFromModel` | инвариант `fit/comment/reason`, clamp 1..10 и обе формы ответа модели в одном месте |
+| Value Object | `CoverSignature`, `CoverTemplate`, `CoverSettings` | подпись, шаблон и настройки вместо строк и интерфейса-мешка |
+| Domain Service | `JudgePrompt`, `CoverLetterPrompt` | тексты промптов без портов, логов и `try/catch` |
+| Application Service | `JudgeService`, `CoverLetterService` | `AiProvider.chat`, пачки, `onBatch`, «ошибка → null», диагностика |
+| Strategy | `JudgeStrategy` | `DigestJudgeRunner` не знает, батч это или поштучный запрос |
+| Adapter + DIP | `infrastructure/config/cover-config.ts` | env/config.json → `CoverSettings.from(...)`, домен env не читает |
+
+**Value Object — `Verdict`.** Инвариант собран в класс: при `fit=true` заполняется `comment` (или берётся `reason`, или шаблонная фраза), при `fit=false` — `reason`; `score` зажимается в 1..10, строки тримятся. `listFromModel` принимает и голый массив (GLM), и `{"verdicts": [...]}`, а `toJudgement()` отдаёт ровно те поля, что лежат в `cache_judgements` (`score/fit/reason/comment`).
+
+**Domain Service — `JudgePrompt`/`CoverLetterPrompt`.** Тексты перенесены дословно (системный текст, батчевые добавки, блоки вакансий, образец письма). Проверка чистоты домена: `Select-String -Path src/domain/judge/*.ts,src/domain/cover-letter/*.ts -Pattern 'AiProvider|chat\(|logger'` → пусто.
+
+**Application Service — `JudgeService`/`CoverLetterService`.** Здесь остались подписи запросов (`судья <id>`, `судья батч N`, `письма батч N`, `письмо`), тексты логов, `try/catch` и порядок `chunk → runBatches → onBatch`. `CoverLetterService.generateOne` держит прежний fallback «ИИ → шаблон», `generateBatch` сохраняет частичный прогресс после каждой пачки.
+
+**Value Object — `CoverSettings`.** Дефолты (`опытный разработчик`, пачка 20, параллелизм 10) и клампы (бюджет ≥ 500, пачка/параллелизм ≥ 1) живут в домене; `cover-config.ts` только читает env и config.json и вызывает `CoverSettings.from(...)`. Имя `CoverConfig` осталось type-alias'ом, поэтому сценарии и порты не менялись.
+
+Проверки этапа: `npx tsc --noEmit` → exit 0, `npm run arch` → 0 нарушений (171 модуль), `npx vitest run tests/judge-verdict.spec.ts tests/judge-service.spec.ts tests/cover-template.spec.ts tests/cover-letter-service.spec.ts` → 29 тестов, `node bin/auto-hh --help` → exit 0.
 
 ### Резюме как измерение данных (2026-10-21)
 
