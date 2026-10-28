@@ -12,6 +12,7 @@
     "arch": "depcruise src",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:types": "tsc -p tests",
     "watch": "tsc --watch"
   },
   "dependencies": {

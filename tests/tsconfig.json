@@ -1,0 +1,17 @@
+// Конфиг для тестов: отдельный от сборки (rootDir: src → dist).
+// Файлы в tests/ получают ближайший tsconfig — этот, поэтому IDE видит алиас @/,
+// а `tsc -p tests` проверяет типы без сборки.
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": "..",
+    // Vite резолвит импорты без расширения — как и в тестах.
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    // Глобали node (process, __dirname, node:sqlite) подключаем явно:
+    // при moduleResolution bundler автоматический подхват @types не срабатывает.
+    "types": ["node"]
+  },
+  "include": ["**/*.ts"]
+}

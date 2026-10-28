@@ -713,7 +713,10 @@ bin/auto-hh
 
 Автотесты заведены на vitest (`npm test`, каталог `tests/`, конфиг `vitest.config.mts`):
 чистые правила и доменные функции проверяются без базы, SQLite-адаптеры — на `:memory:`
-(`:memory:` + `connect({ file: ':memory:' })`, env тесту не нужен). Первый набор: `DigestPolicy`, `computeActualization` /
+(`:memory:` + `connect({ file: ':memory:' })`, env тесту не нужен). У тестов свой
+`tests/tsconfig.json` (алиас `@/`, `moduleResolution: bundler`, `types: ["node"]`):
+он даёт IDE и `npm run test:types` те же пути, что у сборки, не расширяя `rootDir: src`.
+Первый набор: `DigestPolicy`, `computeActualization` /
 `mergeActualized`, `formatResetSummary`, `DbJanitor`. Дальше — `DigestFilter.matches/select`,
 `SkipRules`, `withCoverLetters`, `chunk`, `runBatches`, `parseJSON`, `SqliteCacheStore` и `FileJanitor`.
 

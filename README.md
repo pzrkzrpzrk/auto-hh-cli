@@ -207,6 +207,7 @@ npm start           # или: npm run ui, npx auto-hh, npx auto-hh ui (алиа�
 | `npm run arch` | Проверить правила зависимостей слоёв (`dependency-cruiser`) |
 | `npm test` | Прогнать тесты (`vitest run`, каталог `tests/`) |
 | `npm run test:watch` | Тесты в режиме наблюдения |
+| `npm run test:types` | Проверить типы тестов (`tsc -p tests`, отдельный `tests/tsconfig.json`) |
 
 Любой другой аргумент (`npx auto-hh search`, `npx auto-hh digest`) отвечает подсказкой: «Команд больше нет — все шаги делаются в интерактивном меню».
 
