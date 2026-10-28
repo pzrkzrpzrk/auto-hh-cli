@@ -155,7 +155,6 @@ Get-ChildItem src/presentation -Recurse -Filter *.ts | Select-String -Pattern 'f
 | Что | Почему важно | Тикет |
 | --- | --- | --- |
 | `hh/client.ts` (737) и `hh/resume.ts` (664) | SRP адаптеров, 46 `any` на двоих | T-25 |
-| сценарии `search`/`apply`/`cover`/`digest` без тестов | регрессии ловятся глазами | T-26 |
 | `shared/cron.ts` — самописный парсер | ошибки на диапазонах и day-of-week | T-30 |
 | дрейф документации и `env()` с OAuth-полями | README/`architecture.md` описывают несуществующее | T-31 |
 

@@ -2,7 +2,6 @@
 // ИИ, Playwright и SQLite отсутствуют: шаблон письма и кэш писем — фейки.
 import { describe, expect, it } from "vitest";
 import { CoverScenario } from "@/application/cover/CoverScenario";
-import type { CoverDeps } from "@/application/cover/CoverDeps";
 import { CoverSettings } from "@/domain/cover-letter/config";
 import type { DigestEntry, DigestDoc, Vacancy } from "@/domain/models";
 import type { HistoryMeta, HistoryState, HistoryStore } from "@/domain/ports";

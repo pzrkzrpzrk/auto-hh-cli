@@ -1,10 +1,13 @@
-# T-26 — Тесты на фейковых портах (`node:test` + `tsx`)
+# T-26 — Тесты на фейковых портах (vitest)
 
 - **Приоритет:** **P2** — без тестов архитектура не даёт своей главной выгоды
 - **Этап:** 10
 - **Зависимости:** T-17, T-18, T-19 (сценарии должны принимать зависимости, а не импортировать их)
-- **Объём:** новый каталог `tests/`, npm-скрипт, ~10 тестов
-- **Пути:** актуальные, состояние на 2026-10-19
+- **Объём:** расширение каталога `tests/`, ~40 тестов
+- **Пути:** актуальны на 2026-10-28
+- **Статус:** ✅ сделано по сценариям и SQLite; открытыми остались адаптеры hh.ru (уйдут в T-25)
+- **История:** тикет писался, когда тестов не было вовсе и планировался `node:test`; сейчас стек —
+  vitest (`vitest.config.mts`, `tests/**/*.spec.ts`), поэтому первый пункт закрыт по-другому.
 
 ## Проблема
 
@@ -23,26 +26,30 @@
 
 ## Что сделать
 
-- [ ] `package.json`: `"test": "node --test --import tsx tests/**/*.test.ts"` (или `tsx --test`).
-- [ ] `tests/domain/digest-filter.test.ts`: `matches` — архив, компании, ключевые слова, зарплата,
-      удалёнка/регион; `select` — карточки отсутствуют/есть.
-- [ ] `tests/domain/digest-matcher.test.ts`: лимит `maxRun`, отсутствие вердикта → шаблон,
-      `fit=false` → `rejected` с причиной.
-- [ ] `tests/domain/actualize.test.ts`: `computeActualization` / `mergeActualized` на фикстурах дат.
-- [ ] `tests/domain/judge.test.ts`: `normalizeVerdict` — инвариант `fit ⇒ comment≠null, reason=null`.
-- [ ] `tests/application/digest-scenario.test.ts`: `DigestScenario` на фейковых портах
-      (`CacheStore`, `DigestRepository`, `JudgementCache`, `AiProvider`) — сценарии:
-      пустой кэш, пустая выдача, dry-run без записей, батч-фолбэк.
-- [ ] `tests/application/apply.test.ts` (после T-17): `runApply` на фейковом `ApplicationGateway` —
-      `not-logged-in`, пропуск `digestOnly`, лимит, `archived`.
-- [ ] `tests/application/cover.test.ts` (после T-18): `runCover` — нет резюме, пустой дайджест,
-      письма уже есть, `force`.
+- [x] Тестовый раннер — `vitest` (`tests/**/*.spec.ts`, алиас `@/` из `vitest.config.mts`); отдельный
+      npm-скрипт `test` не нужен: проверки идут адресно (`npx vitest run tests/<файл>`).
+- [x] `tests/digest-policy.spec.ts`, `tests/judge-verdict.spec.ts`, `tests/cover-*` (**T-27**):
+      доменные правила дайджеста, вердикт судьи, шаблон и сигнатура письма.
+- [x] `tests/actualize.spec.ts`, `tests/reset-summary.spec.ts`: `computeActualization` на фикстурах дат,
+      формат сводки сброса.
+- [x] `tests/search-scenario.spec.ts`: `SearchScenario` на фейковых портах — страницы и дедуп в файле,
+      полные карточки, пустая выдача, страница 0 при заполненном кэше, пропуск просмотренных, reset.
+- [x] `tests/digest-scenario.spec.ts`: `DigestScenario` — пустой кэш и пустая выдача, сборка без ИИ
+      (запись `rejected`+`digest`, отметки `digestOnly`), dry-run, лимит, локальный фильтр.
+- [x] `tests/cover-scenario.spec.ts`: `CoverScenario` — нет резюме, пустой дайджест, письма из кэша,
+      `force`, отсутствие описаний, лимит.
+- [x] `tests/apply-scenario.spec.ts`: `ApplyScenario` — `not-logged-in`, пропуск без письма,
+      `applied`/`digestOnly`, архивные, лимит, отказ и исключение сессии, `--login`, выбор резюме, `--type all`.
+- [x] `tests/{cache,digest,history}-store.spec.ts`: адаптеры SQLite на `:memory:` — снимок кэша,
+      выборка дайджеста с legacy-fallback, `markSeen` не затирает `applied`.
+- [ ] Адаптеры hh.ru (разбор выдачи, карточки и резюме) — фикстурами займётся **T-25**, там же
+      появятся спеки на маппинг без браузера.
 
 ## Definition of Done
 
-- [ ] `npm test` → зелёный, без Mongo/Playwright/ключа ИИ.
-- [ ] Тест на `apply`/`cover` не импортирует `infrastructure/*` (фейки лежат в `tests/fakes/`).
-- [ ] `npx tsc --noEmit` → exit 0 (тесты включены в `tsconfig` или отдельный `tsconfig.test.json`).
+- [x] Проверки зелёные без Mongo/Playwright/ключа ИИ: `vitest` — 19 файлов / 103 теста.
+- [x] Тесты сценариев не импортируют `infrastructure/*`: все порты заменены фейками в самих спеках.
+- [x] `npx tsc --noEmit` → exit 0, `npm run test:types` → exit 0 (у тестов свой `tsconfig`).
 
 ## Проверка
 

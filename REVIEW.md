@@ -139,25 +139,29 @@ P1 закрыты: R1 — T-28 (`ab70b9d`), R2 — T-29 (`fa48c17`, `9e23a14`). 
 Проверка: `Get-ChildItem src -Recurse -Filter *.ts | Select-String -Pattern 'process\.exit\(1\)'` → пусто;
 прогон пункта меню «🧾 Резюме» с заведомо отсутствующим именем не должен закрывать меню.
 
-### R3 (P2) Тесты покрывают ≈15 модулей из 177
+### R3 (P2) Тесты покрывают ≈30 модулей из 177
 
-63 теста в 12 файлах на ~11 тыс. строк — это лучше, чем «тестов нет» в прошлом отчёте, но покрытие
+103 теста в 19 файлах на ~11 тыс. строк — это лучше, чем «тестов нет» в прошлом отчёте, но покрытие
 точечное. Спеки проверяют: `domain/actualize`, `domain/adapt-resume` (только `DEFAULT_ADAPT_BUDGET`),
 `domain/cover-letter/{config,CoverSignature,CoverTemplate,CoverLetterPrompt}`,
-`domain/digest/DigestPolicy`, `domain/judge/Verdict`, `domain/grade-resume/{GradePrompt,ResumeGrade}`,
+`domain/digest/{DigestPolicy,DigestFilter,DigestMatcher}`, `domain/judge/Verdict`,
+`domain/grade-resume/{GradePrompt,ResumeGrade}`,
+**сценарии** `application/search/SearchScenario`, `application/digest/DigestScenario`,
+`application/cover/CoverScenario`, `application/apply/ApplyScenario`,
 `application/judge/JudgeService`, `application/cover-letter/CoverLetterService`,
 `application/grade/ResumeGradeService`, `application/reset` (форматтер),
-`infrastructure/sqlite/db-janitor`, `presentation/cli/format/grade-report`,
-`presentation/cli/commands/cmd-resume` (смоук: ошибки не убивают процесс).
+**адаптеры** `infrastructure/sqlite/{db-janitor,cache-store,digest-store,history-store}`,
+`presentation/cli/format/grade-report`, `presentation/cli/commands/cmd-resume`
+(смоук: ошибки не убивают процесс).
 
 Не покрыто ничего из:
 
 | Слой | Модулей | Что именно не проверяется |
 |---|---|---|
-| `application/search` | 11 | `SearchScenario`, `SearchPipeline`, `PageIterator`, `VacancyCollector`, `SearchRequestBuilder` |
-| `application/apply` | 13 | `ApplyScenario`, `DigestSelection`, `SkipRules`, `Pacing`, `ApplicationRunner` |
-| `application/cover` | 12 | `CoverScenario`, стратегии `CoverMode`, `CoverPlan`, 7 стадий |
-| `application/digest` | 14 | `DigestScenario`, `DigestPipeline`, `DigestJudgeRunner`, `ActualizeScenario`, 7 стадий |
+| `application/search` | 11 | `SearchPipeline`, `PageIterator`, `SearchRequestBuilder` — сценарий покрыт smoke-тестом |
+| `application/apply` | 13 | `ApplyPipeline`, `Pacing`, `ApplySummary` — сценарий, `SkipRules` и выбор дайджеста покрыты |
+| `application/cover` | 12 | `CoverPipeline`, стратегии `CoverMode`, `CoverPlan` и стадии — сценарий покрыт смоуком |
+| `application/digest` | 14 | `DigestPipeline`, `DigestJudgeRunner`, `ActualizeScenario`, стадии — сценарий сборки покрыт |
 | `application/` корень | 9 | `collect`, `config-view`, `grade` (сервис покрыт, фасад — нет), `history`, `options`, `reset`, `resume`, `resume-download`, `schedule` |
 | `infrastructure/sqlite` | 12 | всё, кроме `db-janitor`: `cache-store`, `digest-store`, `history-store`, `resume-store`, `judgement-cache`, `cover-letter-cache`, `resume-registry` |
 | `infrastructure/hh`, `ai`, `files`, `playwright`, `config`, `logging`, `scheduling` | 26 | скрейпинг выдачи и карточек, разбор резюме, ретраи ИИ, артефакты `.md`, селекторы отклика, чтение env и конфига |
@@ -285,7 +289,7 @@ OAuth-поля — остаток легаси-раздела README (`src/oauth
 | ID | Тикет | Приоритет | Статус |
 |---|---|---|---|
 | T-25 | Разбить `hh/client.ts` (737) и `hh/resume.ts` (664) | P2 | ☐ |
-| T-26 | Тесты на фейковых портах: сценарии `search`/`digest`/`cover`/`apply` + SQLite на `:memory:` | P2 | ☐ (расширен по R3) |
+| T-26 | Тесты на фейковых портах: сценарии `search`/`digest`/`cover`/`apply` + SQLite на `:memory:` | P2 | ✅ (кроме адаптеров hh.ru — T-25) |
 | T-28 | `domain/grade-resume`: Domain Service + ИИ в `application` (R1, R9) | P1 | ✅ `ab70b9d` |
 | T-29 | `presentation`: `exitCode` вместо `process.exit`, без commander-легаси (R2) | P1 | ✅ `fa48c17`, `9e23a14` |
 | T-30 | `Scheduler.nextRun()` вместо самописного cron (R6) | P2 | ☐ новый |
@@ -295,9 +299,10 @@ OAuth-поля — остаток легаси-раздела README (`src/oauth
 
 1. ~~**T-29**~~ — закрыт (`fa48c17`, `9e23a14`): процесс больше не умирает из меню.
 2. ~~**T-28**~~ — закрыт (`ab70b9d`): домен в рамках T-24/T-27, второй парсер JSON убран.
-3. **T-26** — следующий: фиксирует поведение сценариев перед распилом адаптеров.
-4. **T-25** — самый объёмный: `hh/client.ts` и `hh/resume.ts` делятся по ответственности
-   (сессия браузера / выдача / карточка / резюме), попутно типизация R7.
+3. ~~**T-26**~~ — закрыт по сценариям и SQLite (`2eacd67`, `ec7ee5b`, `a5f245f`, `eb7c7f5` + SQLite-спеки):
+   поведение search/digest/cover/apply и хранилищ зафиксировано на фейковых портах.
+4. **T-25** — следующий: `hh/client.ts` и `hh/resume.ts` делятся по ответственности
+   (сессия браузера / выдача / карточка / резюме), попутно типизация R7 и спеки на маппинг.
 5. **T-30**, **T-31** — по мере необходимости; друг от друга не зависят.
 
 ## V. Ограничения и как проверять
