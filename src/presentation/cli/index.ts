@@ -1,8 +1,7 @@
-// CLI entry point: регистрирует команды и запускает Commander.
 // CLI entry point: единственная точка входа — интерактивное меню.
 // Все шаги (поиск, дайджест, письма, отклики, планировщик, резюме) меню вызывает
 // напрямую из cmd-*, поэтому отдельных подкоманд у CLI больше нет.
-import {  Command  } from "commander";
+import { Command } from "commander";
 import cmdUi from "@/presentation/cli/menu/menu.js";
 import { closeResources } from "@/composition.js";
 

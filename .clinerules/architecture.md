@@ -1,7 +1,8 @@
 # Clean Architecture · паттерны · KISS/DRY
 
-Это **правила**, как устроен код. Описание того, что уже сделано, и хронология этапов —
-[`docs/architecture.md`](../docs/architecture.md); актуальный список долга — [`REVIEW.md`](../REVIEW.md).
+Это **правила**, как устроен код. Слои, структура и паттерны — [`docs/architecture.md`](../docs/architecture.md);
+история этапов и тикеты — [`docs/review/`](../docs/review/README.md); актуальный список долга —
+[`REVIEW.md`](../REVIEW.md).
 Границы слоёв проверяются автоматически: `npm run arch` (`.dependency-cruiser.js`, нарушение = exit ≠ 0).
 
 ## 1. Слои и направление зависимостей

@@ -62,22 +62,13 @@ export class FileConfigProvider implements ConfigProvider {
 /** Один провайдер на процесс: config.json читается один раз на путь. */
 export const configProvider: ConfigProvider = new FileConfigProvider();
 
-/** Совместимая обёртка: явный путь важнее `CONFIG_PATH`. */
-function loadConfig(configPath?: string): AppConfig {
-  return configProvider.load(configPath);
-}
-
+// Переменные, которые читает hh-адаптер (сессия браузера). OAuth-поля не нужны:
+// вход выполняется вручную в профиле Chromium, токены не используются.
 function env() {
   return {
-    clientId: process.env.HH_CLIENT_ID,
-    clientSecret: process.env.HH_CLIENT_SECRET,
-    redirectUri: process.env.HH_REDIRECT_URI || 'http://localhost:3000/callback',
-    accessToken: process.env.HH_ACCESS_TOKEN,
-    refreshToken: process.env.HH_REFRESH_TOKEN,
     userAgent: process.env.HH_USER_AGENT || 'AutoHH/1.0',
-    resumeId: process.env.HH_RESUME_ID,
     requestDelayMs: intFromEnv('REQUEST_DELAY_MS', 1500),
   };
 }
 
-export { loadConfig, env };
+export { env };

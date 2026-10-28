@@ -99,7 +99,7 @@ async function downloadWith(
 
   const results: ResumeDownloadResult[] = [];
   // База может быть недоступна: пробуем один раз и дальше не тормозим на таймаутах.
-  let mongoUnavailable = false;
+  let dbUnavailable = false;
 
   for (const item of items) {
     const result: ResumeDownloadResult = {
@@ -151,13 +151,13 @@ async function downloadWith(
         }
       }
 
-      if (!result.skipped && !mongoUnavailable) {
+      if (!result.skipped && !dbUnavailable) {
         try {
           const resume = deps.files.load(name);
           if (resume) await deps.registry.register(resume);
         } catch (err) {
           // База может быть недоступна — скачанное резюме от этого не страдает.
-          mongoUnavailable = true;
+          dbUnavailable = true;
           log.warn(`Резюме ${name} скачано, но не зарегистрировано в базе: ${errorMessage(err)}`);
         }
       }

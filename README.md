@@ -376,7 +376,7 @@ npm start           # или: npm run ui, npx auto-hh, npx auto-hh ui (алиа�
 | `hh-parsing/<имя> - <resumeId>/rejected/...` (+ SQLite `digests`) | Вакансии, отбракованные ИИ, с причинами. Регион берётся из `area` вакансии |
 | `hh-parsing/no-resume/...` | Артефакты, когда резюме не выбрано или не найдено |
 | `search/`, `digests/`, `rejected/` | Старая плоская раскладка: читается `digest show` как fallback, удаляется только глобальным reset |
-| `browser-profile/` | Профиль Chromium (cookies, localStorage) |
+| `browser-profile/` | Профиль Chromium: cookies и localStorage сессии hh.ru. **Не коммитить и не бэкапить** — это доступ к аккаунту |
 | `apply-dom-*.html` | Дамп DOM, если Playwright не нашёл поле для письма |
 | `app.log` | Лог |
 
@@ -431,21 +431,21 @@ npm start           # или: npm run ui, npx auto-hh, npx auto-hh ui (алиа�
 │  │  │                         #   Domain Service DigestFilter и порты
 │  │  └─ judge/ cover-letter/   # ИИ-судья и генерация писем
 │  ├─ infrastructure/           # адаптеры внешнего мира
-│  │  ├─ hh/                    # client, resume, vacancy-source, resume-source, source-provider
+│  │  ├─ hh/                    # session + readers (search/vacancy/resume), mapping,
+│  │  │                         #   resume-parser, resume-pdf, vacancy/resume-source, source-provider
 │  │  ├─ ai/client.ts           # единый OpenAI-совместимый клиент
 │  │  ├─ sqlite/                # db, schema, rows, cache-store, digest-store, history-store,
 │  │  │                         #   resume-store, digest-repository, judgement-cache,
-│  │  │                         #   cover-letter-cache, resume-registry
-│  │  ├─ files/                 # resume-loader, resume-files, data-janitor, search-output,
-│  │  │                         #   search-report-writer, digest-files, digest-file-source
+│  │  │                         #   cover-letter-cache, resume-registry, db-janitor
+│  │  ├─ files/                 # resume-loader, resume-files, file-janitor, search-output,
+│  │  │                         #   search-report-writer, digest-files, digest-file-source, digest-artifacts
 │  │  ├─ logging/logger.ts      # адаптер LogSink: data/app.log + DEBUG
 │  │  ├─ scheduling/node-cron.ts # адаптер Scheduler (единственный import node-cron)
 │  │  ├─ playwright/            # browser, apply-steps, application-gateway (порты отклика)
 │  │  └─ config/                # config (FileConfigProvider), env, paths, apply-config
 │  ├─ shared/                   # logger-фасад, logging, batches, retry, text-utils, time,
-│  │                            #   cron, path-utils, format
+│  │                            #   path-utils, format
 │  └─ composition.ts            # сборка зависимостей: источники hh.ru, ИИ, хранилища, closeResources()
-├─ scripts/                    # вспомогательные скрипты (judge-only, fill-cover-letters, …)
 └─ data/autohh.db              # SQLite: кэш, история, дайджесты (создаётся автоматически)
 ```
 

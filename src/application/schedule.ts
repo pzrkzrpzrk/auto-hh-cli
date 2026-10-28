@@ -1,6 +1,5 @@
 // Сценарий планировщика: запуск пайплайна (search → digest → cover) по cron-расписанию.
 // Сами шаги приходят из presentation (application не зависит от команд), печать — тоже там.
-import { getNextDate } from "@/shared/cron.js";
 import log from "@/shared/logger.js";
 import type { ConfigProvider, Scheduler } from "@/domain/ports.js";
 import type { ScheduleOptions } from "@/application/options.js";
@@ -65,8 +64,6 @@ export async function runSchedule(
     return { kind: 'invalid-cron', expression };
   }
 
-  const next = getNextDate(expression);
-
   deps.scheduler.schedule(expression, async () => {
     report?.({ type: 'pipeline-start', at: new Date().toISOString() });
 
@@ -88,9 +85,17 @@ export async function runSchedule(
       }
     }
 
-    const next2 = getNextDate(expression);
-    if (next2) report?.({ type: 'next-run', at: next2 });
+    // Следующий запуск считает планировщик: у node-cron это getNextRun(),
+    // поэтому cron-выражение разбирается в одном месте — адаптере.
+    const next = deps.scheduler.nextRun(expression);
+    if (next) report?.({ type: 'next-run', at: next });
   });
 
-  return { kind: 'scheduled', expression, steps, resume: opts.resume ?? null, next };
+  return {
+    kind: 'scheduled',
+    expression,
+    steps,
+    resume: opts.resume ?? null,
+    next: deps.scheduler.nextRun(expression),
+  };
 }

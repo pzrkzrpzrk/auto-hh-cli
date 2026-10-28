@@ -20,22 +20,28 @@
 
 ## Что сделать
 
-- [ ] `Scheduler` (`domain/ports.ts`): добавить `nextRun(expression: string): Date | null`
-      (или `schedule(): { nextRun(): Date | null }` — решить по месту вызова).
-- [ ] `NodeCronScheduler`: реализовать через `cron.schedule(...).getNextRun()` / `cron.validate`,
-      задачу сохранять в поле, чтобы её можно было останавливать.
-- [ ] `application/schedule.ts:68,91`: один расчёт next run; при `null` — прежнее поведение
-      («неизвестно» в `presentation/cli/commands/cmd-schedule.ts:49`).
-- [ ] Удалить `src/shared/cron.ts` и его импорт.
-- [ ] Тест на фейковом `Scheduler` (`tests/schedule-next-run.spec.ts`): next run приходит из порта,
-      `null` не ломает запуск, `no-cron`/`invalid-cron` не изменились.
+- [x] `Scheduler` (`domain/ports.ts`): добавлен `nextRun(expression: string): Date | null` —
+      расчёт отдан адаптеру, сценарий не разбирает cron.
+- [x] `NodeCronScheduler`: задача хранится в поле (`schedule` останавливает предыдущую),
+      `nextRun` берёт `getNextRun()` у стоящей задачи, а для чужого выражения — у временной,
+      которую сразу останавливает.
+- [x] `application/schedule.ts`: один расчёт next run на постановку (`nextRun` после `schedule`),
+      в срабатывании — ещё один для события `next-run`; при `null` — прежнее «неизвестно»
+      в `presentation/cli/commands/cmd-schedule.ts:49`.
+- [x] Удалён `src/shared/cron.ts` и его импорт.
+- [x] Тест на фейковом `Scheduler` (`tests/schedule-next-run.spec.ts`): next run приходит из порта,
+      `null` не ломает запуск, `no-cron`/`invalid-cron` не изменились, событие `next-run` — из порта.
 
 ## Definition of Done
 
-- [ ] `npx tsc --noEmit` → exit 0; `npm run arch` → 0 нарушений; `npm run test:types` → exit 0.
-- [ ] `Get-ChildItem src -Recurse -Filter *.ts | Select-String -Pattern 'getNextDate|shared/cron'` → пусто.
-- [ ] `node bin/auto-hh --help` → exit 0.
-- [ ] Текст «Следующий запуск» и формат `toLocaleString("ru-RU")` сохранены.
+- [x] `npx tsc --noEmit` → exit 0; `npm run arch` → 0 нарушений (188 модулей, 701 зависимость);
+      `npm run test:types` → exit 0.
+- [x] `Get-ChildItem src -Recurse -Filter *.ts | Select-String -Pattern 'getNextDate|shared/cron'` → пусто.
+- [x] `node bin/auto-hh --help` → exit 0.
+- [x] Текст «Следующий запуск» и формат `toLocaleString("ru-RU")` сохранены (правок в
+      `cmd-schedule.ts` нет).
+- [x] Адаптер проверен на живой библиотеке: `cron.schedule('*/5 * * * *').getNextRun()` возвращает
+      дату, `cron.validate('bad')` → `false`.
 
 ## Проверка
 

@@ -29,24 +29,26 @@
 
 ## Что сделать
 
-- [ ] `README.md`: убрать `scripts/`, исправить перечень `files/`, добавить предупреждение
-      о `data/browser-profile` (cookies, не коммитить и не бэкапить).
-- [ ] `docs/architecture.md`: убрать `MONGODB_*` из списка env, обновить дату, ветку и счётчики
-      файлов/строк (или заменить их ссылкой на `Get-ChildItem`-команду).
-- [ ] `tsconfig.json`: убрать `scripts/**/*.ts` из `include` (либо создать каталог — но его нет).
-- [ ] `config.ts`: оставить `env()` = `{ userAgent, requestDelayMs }`, `loadConfig()` удалить.
-- [ ] Переименовать `mongoUnavailable` → `dbUnavailable` (3 места).
-- [ ] Убрать дубль комментария и лишние пробелы в `presentation/cli/index.ts`.
+- [x] `README.md`: убран `scripts/`, исправлен перечень `files/` и `sqlite/` (`file-janitor`,
+      `db-janitor`, `digest-artifacts`), добавлено предупреждение о `data/browser-profile`
+      (cookies сессии, не коммитить и не бэкапить).
+- [x] `docs/architecture.md`: убран `MONGODB_*` из списка env, обновлены дата, ветка и счётчики
+      (183 файла, ≈12,2 тыс. строк, 188 модулей), таблицы названы по SQLite
+      (`cache_pages`/`cache_full`), дописан этап 11.
+- [x] `tsconfig.json`: `include` — только `src/**/*.ts` (каталога `scripts/` нет).
+- [x] `config.ts`: `env()` = `{ userAgent, requestDelayMs }`, `loadConfig()` удалён.
+- [x] `mongoUnavailable` → `dbUnavailable` (3 места в `application/resume-download.ts`).
+- [x] Убран дубль комментария и лишние пробелы в `presentation/cli/index.ts`.
 
 ## Definition of Done
 
-- [ ] `npx tsc --noEmit` → exit 0.
-- [ ] `Select-String -Path README.md,tsconfig.json,.env.example -Pattern 'MONGODB|scripts/'` → пусто;
-      `Select-String -Path docs/architecture.md -Pattern 'MONGODB_|cachePages'` → пусто (упоминания
-      Mongo в хронологии этапов остаются).
-- [ ] `Get-ChildItem src -Recurse -Filter *.ts | Select-String -Pattern 'HH_CLIENT_ID|HH_CLIENT_SECRET|HH_REDIRECT_URI|HH_ACCESS_TOKEN|HH_REFRESH_TOKEN'` → пусто.
-- [ ] `node bin/auto-hh --help` → exit 0; `env()`-поля `userAgent`/`requestDelayMs` работают
-      (smoke: `search` не запускаем, проверяем чтение в `HHClient` конструктором в тесте или ревью кода).
+- [x] `npx tsc --noEmit` → exit 0; `npm run test:types` → exit 0; `npm run arch` → 0.
+- [x] `Select-String -Path README.md,tsconfig.json,.env.example -Pattern 'MONGODB|scripts/'` → пусто;
+      `Select-String -Path docs/architecture.md -Pattern 'MONGODB_|cachePages|cacheFull'` → пусто
+      (упоминания Mongo в хронологии этапов остаются).
+- [x] `Get-ChildItem src -Recurse -Filter *.ts | Select-String -Pattern 'HH_CLIENT_ID|HH_CLIENT_SECRET|HH_REDIRECT_URI|HH_ACCESS_TOKEN|HH_REFRESH_TOKEN|HH_RESUME_ID|loadConfig'` → пусто.
+- [x] `node bin/auto-hh --help` → exit 0; `env()`-поля `userAgent`/`requestDelayMs` читаются
+      в `HHPageSession` (smoke без сети: конструктор проверен типами, `search` не запускался).
 
 ## Проверка
 
