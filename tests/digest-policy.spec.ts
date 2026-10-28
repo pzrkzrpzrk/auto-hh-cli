@@ -1,7 +1,7 @@
 // Политика дайджеста: дефолты, приоритет лимита, включение судьи и dry-run.
 import { describe, expect, it } from "vitest";
 import { DigestPolicy } from "@/domain/digest/DigestPolicy";
-import { DEFAULT_ADAPT_BUDGET } from "@/domain/adapt-resume";
+import { DEFAULT_ADAPT_BUDGET } from "@/domain/adapt-resume/index";
 
 const ctx = { hasResume: true, hasApiKey: true, judgeBatchSize: 10, aiConcurrency: 4 };
 

@@ -3,7 +3,7 @@
 // Раньше это был интерфейс-мешок: дефолты жили в cover-config.ts и в самом домене,
 // а сценарий принимал ещё один необязательный набор полей (CoverLetterOptions).
 // Теперь один неизменяемый объект: дефолты и клампы — здесь, env читает адаптер.
-import { DEFAULT_ADAPT_BUDGET } from "@/domain/adapt-resume.js";
+import { DEFAULT_ADAPT_BUDGET } from "@/domain/adapt-resume/index.js";
 import { CoverSignature } from "@/domain/cover-letter/CoverSignature.js";
 
 /** Сырые настройки: config.json и env передаёт адаптер, значения необязательны. */

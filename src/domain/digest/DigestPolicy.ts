@@ -2,7 +2,7 @@
 // Раньше minScore/maxRun/dryRun/useClaude вычислялись россыпью переменных внутри
 // buildDigest; теперь это один неизменяемый объект, который читают стадии конвейера.
 import type { DigestConfig, DigestRunOptions } from "@/domain/digest/types.js";
-import { DEFAULT_ADAPT_BUDGET } from "@/domain/adapt-resume.js";
+import { DEFAULT_ADAPT_BUDGET } from "@/domain/adapt-resume/index.js";
 
 /** Внешние факты, от которых зависит политика (их определяет сценарий). */
 export interface DigestPolicyContext {

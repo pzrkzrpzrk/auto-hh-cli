@@ -1,6 +1,6 @@
 // Адаптация резюме под вакансию: ядро, ранжирование секций и бюджет — на чистых данных.
 import { describe, expect, it } from "vitest";
-import { adaptResumeForVacancy, DEFAULT_ADAPT_BUDGET } from "@/domain/adapt-resume";
+import { adaptResumeForVacancy, DEFAULT_ADAPT_BUDGET } from "@/domain/adapt-resume/index";
 import type { Resume, Vacancy } from "@/domain/models";
 
 const resume: Resume = {

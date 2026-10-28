@@ -3,7 +3,7 @@
 // Домен (domain/cover-letter) отвечает за шаблон, подпись и тексты промпта; здесь — use case:
 // собрать сообщения, вызвать порт, разложить ответ по пачкам, сохранить частичный прогресс
 // через onBatch и залогировать теми же строками, что были в прежнем cover-letter.ts.
-import { adaptResumeForVacancy } from "@/domain/adapt-resume.js";
+import { adaptResumeForVacancy } from "@/domain/adapt-resume/index.js";
 import { CoverLetterPrompt } from "@/domain/cover-letter/CoverLetterPrompt.js";
 import { CoverTemplate } from "@/domain/cover-letter/CoverTemplate.js";
 import type { CoverSettings } from "@/domain/cover-letter/config.js";

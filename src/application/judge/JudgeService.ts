@@ -3,7 +3,7 @@
 // Домен (domain/judge) остаётся чистым: Verdict отвечает за инвариант, JudgePrompt — за
 // тексты промпта. Здесь только use case: собрать сообщения, вызвать порт, поймать ошибку
 // и залогировать теми же строками, что были в прежнем domain/judge/judge.ts.
-import { adaptResumeForVacancy } from "@/domain/adapt-resume.js";
+import { adaptResumeForVacancy } from "@/domain/adapt-resume/index.js";
 import { JudgePrompt } from "@/domain/judge/JudgePrompt.js";
 import { Verdict } from "@/domain/judge/Verdict.js";
 import type { Logger } from "@/domain/logging.js";
