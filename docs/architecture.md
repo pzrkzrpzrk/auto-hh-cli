@@ -1,9 +1,9 @@
 # Архитектура auto-hh-cli
 
 - **Статус:** этапы 1–9 выполнены — структура приведена к целевой (раздел 4), домен не зависит от инфраструктуры, все сценарии в `application/`; поиск (этап 6) и дайджест (этап 7) переведены на ООП (порты, конвейер, репортёр), этап 8 закрыл `apply`/`cover` портами (T-17/T-18) и собрал их как ООП-подсистемы (фасады, конвейеры, стратегии), этап 9 — файловый I/O (T-20), `ConfigProvider` (T-19), чистые `shared`/домен (T-21), единый composition root с портом `Scheduler` (T-22), защита границ (T-23: `dependency-cruiser` + `strict: true`) и домен без побочек (T-24); этап 10 (T-27) перевёл `domain/judge` и `domain/cover-letter` на Value Objects и Domain Services (`Verdict`, `JudgePrompt`, `CoverSignature`, `CoverTemplate`, `CoverSettings`), а вызовы ИИ, пачки и логи — в `application/judge/JudgeService` и `application/cover-letter/CoverLetterService`; документация обновлена.
-- **Дата:** 2026-10-19.
-- **Ветка:** `refactor/t24-domain-purity`.
-- **Состояние кода:** `src/` — 154 файла, ≈10,26 тыс. строк; `npm run arch` → 0 нарушений, `npx tsc --noEmit` → exit 0 при `strict: true`.
+- **Дата:** 2026-10-28.
+- **Ветка:** `refactor/t-25-t-31`.
+- **Состояние кода:** `src/` — 183 файла, ≈12,2 тыс. строк; `npm run arch` → 0 нарушений (188 модулей), `npx tsc --noEmit` → exit 0 при `strict: true`; тесты — 23 файла / 136 кейсов.
 - **Хранилище (2026-10-28):** MongoDB заменена на SQLite — встроенный `node:sqlite`, файл `data/autohh.db`, адаптеры в `infrastructure/sqlite/`. Порты домена не менялись. Упоминания MongoDB ниже в хронологии этапов описывают состояние **до** миграции.
 
 ---
@@ -70,21 +70,21 @@ presentation ──▶ application ──▶ domain
 
 ## 3. Текущее состояние
 
-Структура совпадает с целевой (раздел 4): `src/` — 150 файлов, ≈8,48 тыс. строк, `npm run arch` → 0 нарушений, `npx tsc --noEmit` → exit 0 при `strict: true`.
+Структура совпадает с целевой (раздел 4): `src/` — 183 файла, ≈12,2 тыс. строк, `npm run arch` → 0 нарушений, `npx tsc --noEmit` → exit 0 при `strict: true`.
 
 ```
-src/                              # 154 файла
-├── application/                  # 58 файлов, ≈2,50 тыс. строк — сценарии (use cases)
-├── domain/                       # 30 файлов, ≈1,88 тыс. строк — модели, правила, порты
-├── infrastructure/               # 34 файла, ≈3,44 тыс. строк — адаптеры hh.ru, ИИ, SQLite,
+src/                              # 183 файла
+├── application/                  # 66 файлов, ≈3,56 тыс. строк — сценарии (use cases)
+├── domain/                       # 34 файла, ≈2,56 тыс. строк — модели, правила, порты
+├── infrastructure/               # 52 файла, ≈4,14 тыс. строк — адаптеры hh.ru, ИИ, SQLite,
 │                                 #   Playwright, файлы, логирование, планировщик, конфигурация
-├── presentation/                 # 20 файлов, ≈1,17 тыс. строк — CLI: команды, меню, форматтеры
-├── shared/                       # 10 файлов, ≈0,30 тыс. строк — логгер-фасад, батчи, время,
+├── presentation/                 # 20 файлов, ≈1,43 тыс. строк — CLI: команды, меню, форматтеры
+├── shared/                       # 10 файлов, ≈0,31 тыс. строк — логгер-фасад, батчи, время,
 │                                 #   ретраи, текст, ошибки
 └── composition.ts                # точка сборки зависимостей
 ```
 
-Счётчики — `Get-ChildItem -Recurse -File src/<слой> -Filter *.ts` на 2026-10-19.
+Счётчики — `Get-ChildItem -Recurse -File src/<слой> -Filter *.ts` на 2026-10-28.
 
 ### Раскладка домена
 
@@ -209,7 +209,7 @@ src/
 │   │   ├── SearchContext.ts    # состояние прогона для стадий
 │   │   ├── SearchEvent.ts      # события фаз + порт SearchReporter
 │   │   ├── VacancyCollector.ts # Application Service: страницы и карточки
-│   │   ├── SearchCache.ts      # Repository кэша (cachePages/cacheFull)
+│   │   ├── SearchCache.ts      # Repository кэша (cache_pages/cache_full)
 │   │   ├── PageIterator.ts     # Iterator страниц прохода
 │   │   └── SearchRequestBuilder.ts # Builder параметров запроса
 │   ├── digest/                 # ООП-реализация дайджеста
@@ -406,7 +406,7 @@ sequenceDiagram
 
 **Value Object — `CoverPlan`/`CoverProgress`.** `CoverPlan` считает `existing = total - pending` и печатает «Вакансий: N, письма уже есть: N, генерируем: N»; `CoverProgress` — «Сопроводительных готово: N/N» и решает, писать ли дайджест. Логи не могут разойтись с числами, потому что строка и арифметика в одном объекте.
 
-**Repository + Application Service — без нового кода.** `EnsureCardsStage` читает `cacheFull` через `CacheStore.getFullByVacancyIds`, догружает недостающее `VacancyCollector` с `AllVacanciesPolicy` (просмотренные не пропускаем) и пишет через `SearchCache.saveFull` — тот же путь, что в search/digest.
+**Repository + Application Service — без нового кода.** `EnsureCardsStage` читает `cache_full` через `CacheStore.getFullByVacancyIds`, догружает недостающее `VacancyCollector` с `AllVacanciesPolicy` (просмотренные не пропускаем) и пишет через `SearchCache.saveFull` — тот же путь, что в search/digest.
 
 `application/cover.ts` остался совместимой обёрткой `runCover(vacancyId, opts, deps, onVacancy)`; `cmd-cover.ts` и `composition.ts` не менялись.
 
@@ -495,7 +495,7 @@ sequenceDiagram
 
 Проверка зависимости: `grep "infrastructure" src/domain` не должен находить совпадений.
 
-**Выполнено (2026-10-19).** Типы `HhResume*` перенесены в `domain/models.ts`; `infrastructure/hh/resume.ts` оставляет реэкспорт, поэтому адаптеры и команды не менялись. `loadResume()` убран из домена: сценарий `application/grade.ts` загружает резюме и передаёт его параметром. Заодно закрыты ещё две утечки: `sanitizeSegment`/`UNKNOWN_REGION` вынесены в `shared/path-utils.ts` (реэкспорт из `paths.ts` сохранён), а `domain/cover-letter/*` больше не читает `config.json` — флаг `adaptResume` передаётся из `cmd-cover`. Проверка: `grep "infrastructure" src/domain` → 0 совпадений, `npx tsc --noEmit` → exit 0.
+**Выполнено (2026-10-19).** Типы `HhResume*` перенесены в `domain/models.ts`; реэкспорт из `infrastructure/hh/resume.ts` жил до T-25 (этап 11) и затем удалён — адаптеры берут типы из домена. `loadResume()` убран из домена: сценарий `application/grade.ts` загружает резюме и передаёт его параметром. Заодно закрыты ещё две утечки: `sanitizeSegment`/`UNKNOWN_REGION` вынесены в `shared/path-utils.ts` (реэкспорт из `paths.ts` сохранён), а `domain/cover-letter/*` больше не читает `config.json` — флаг `adaptResume` передаётся из `cmd-cover`. Проверка: `grep "infrastructure" src/domain` → 0 совпадений, `npx tsc --noEmit` → exit 0.
 
 ### Этап 3 — use cases
 
@@ -529,7 +529,7 @@ sequenceDiagram
 
 1. VO и порт источника: `domain/search/{SearchQuery,SearchBucket,PageKey,VacancySource,types}.ts`.
 2. Адаптеры `HHVacancySource`/`HHResumeSource` и `HHSourceProvider` (открыть → работа → закрыть).
-3. `SearchCache` — репозиторий `cachePages`/`cacheFull`; `flatten()` проверен на идентичность прежнему `flattenCollected`.
+3. `SearchCache` — репозиторий `cache_pages`/`cache_full`; `flatten()` проверен на идентичность прежнему `flattenCollected`.
 4. `VacancyCollector` + `SearchRequestBuilder` + `PageIterator` + `FullCardPolicy`.
 5. `SearchScenario` + `SearchPipeline` + стадии (`CollectPages`, `ExportSearchFile`, `CollectFullCards`), `runSearch()` остался обёрткой.
 6. `ConsoleSearchReporter` в `presentation/cli/format/`; `cmd-search.ts` — 10 строк.
@@ -695,16 +695,36 @@ T-26 (тесты на фейковых портах).
 `Select-String -Path src\domain\digest -Pattern 'markApplied|history\.|logger'` → пусто;
 смоук на фейковых портах: логи, `DigestEntry` и `markApplied` совпадают с прежними (включая dry-run).
 
-Ограничения: `Vacancy`/`DigestEntry` не менялись; формат `.md`, меню и коллекции Mongo те же.
-Открыты T-25 (разбить адаптеры hh.ru), T-26 (тесты на фейковых портах).
+Ограничения: `Vacancy`/`DigestEntry` не менялись; формат `.md`, меню и схема SQLite те же.
+Тогда оставались открытыми T-25 (адаптеры hh.ru) и T-26 (тесты); закрыты на этапе 11.
+
+### Этап 11 — адаптеры hh.ru, планировщик, документация (выполнено 2026-10-28, T-25/T-30/T-31)
+
+1. `infrastructure/hh/client.ts` (804) и `resume.ts` (743) разложены по ответственности:
+   `session.ts` (браузер, капча, initial state, порт `PageFetcher`), `search-page-reader.ts`,
+   `vacancy-page-reader.ts`, `resume-page-reader.ts`, `resume-dom-blocks.ts` (браузерный скрипт),
+   `resume-pdf.ts`; разбор состояния — чистые `vacancy-fields.ts` + `vacancy-mapping.ts` и
+   `resume-raw.ts` + `resume-codes.ts` + `resume-lookup.ts` + `resume-sections.ts` + `resume-parser.ts`.
+   `client.ts` (52 строки) — фасад; публичные порты и селекторы не менялись.
+2. `Scheduler.nextRun(expression)` вместо `shared/cron.ts`: адаптер `NodeCronScheduler` берёт
+   `getNextRun()` у стоящей задачи (или у временной, которую сразу останавливает), сценарий
+   считает next run один раз на постановку.
+3. Документация и конфигурация: `env()` отдаёт только `userAgent`/`requestDelayMs`, `loadConfig()`
+   удалён, `tsconfig` больше не включает несуществующий `scripts/`, README/`architecture.md`
+   описывают SQLite-таблицы и предупреждают про `data/browser-profile` (cookies сессии).
+4. Тесты: `hh-vacancy-mapping`, `hh-resume-parser`, `hh-page-readers` (чистые данные и фейковый
+   `PageFetcher`), `schedule-next-run` (фейковый `Scheduler`).
+
+Проверка: `npx tsc --noEmit` → 0, `npm run arch` → 0, `npm run test:types` → 0,
+`npx vitest run` → 23 файла / 136 кейсов, `node bin/auto-hh --help` → exit 0.
 
 ---
 
 ## 7. Инварианты (не менять при переносе)
 
-- **Переменные окружения:** все имена `HH_*`, `PW_*`, `AI_*`, `MONGODB_*`, `CONFIG_PATH`, `RESUME_PATH`, `RESUMES_DIR`, `EXCLUDED_COMPANIES`, `APPLICANT_PROFILE`, `REQUEST_DELAY_MS`.
+- **Переменные окружения:** все имена `HH_*`, `PW_*`, `AI_*`, `CONFIG_PATH`, `RESUME_PATH`, `RESUMES_DIR`, `EXCLUDED_COMPANIES`, `APPLICANT_PROFILE`, `REQUEST_DELAY_MS`.
 - **CLI и меню:** имена подкоманд, флаги и пункты интерактивного меню.
-- **MongoDB:** коллекции `cachePages`, `cacheFull`, `cacheJudgements`, `cacheCoverLetters`, `history`, `digest`, `rejected`, `resumes` и их поля.
+- **SQLite:** таблицы `cache_pages`, `cache_full`, `cache_judgements`, `cache_cover_letters`, `history`, `digests`, `resumes` и их поля.
 - **Файлы:** раскладка `data/` (`search/`, `digests/`, `rejected/`, `resumes/`, `app.log`, `browser-profile/`); форматы `digest.md` (поля `id/title/employer/area/salary/url/publishedAt/score/reason/comment/coverLetter`), `rejected.md` (те же без письма и комментария) и `actual.md` (сводный снимок с `archived/lastSeenAt/checkedAt`).
 - **Точка входа:** `bin/auto-hh` загружает `dotenv`, `tsx/cjs` и вызывает `run()` из `cli/index`.
 - **Сборка:** `tsconfig` (`rootDir: src`, `module: nodenext`), импорты с явным `.js`.

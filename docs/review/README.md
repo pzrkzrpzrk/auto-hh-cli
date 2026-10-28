@@ -47,12 +47,10 @@ composition root, тестируемость. Исходные факты на 2
 | [T-28](T-28-grade-resume-service.md) | `domain/grade-resume`: Domain Service, VO оценки, ИИ в `application` | **P1** | R1, R9: домен с I/O, второй парсер JSON | T-24, T-27 | ✅ |
 | [T-29](T-29-presentation-exit.md) | `presentation`: `exitCode` вместо `process.exit`, без commander-легаси | **P1** | R2: процесс умирает из меню | — | ✅ |
 | [T-30](T-30-scheduler-next-run.md) | `Scheduler.nextRun()` вместо самописного cron | P2 | R6: свой парсер cron | T-22, T-26 | ✅ |
-| [T-31](T-31-docs-config-debt.md) | Документация и мёртвая конфигурация | P2 | R4, R5: README/`architecture.md`/`env()` | — | ☐ |
+| [T-31](T-31-docs-config-debt.md) | Документация и мёртвая конфигурация | P2 | R4, R5: README/`architecture.md`/`env()` | — | ✅ |
 
-**Сделано:** T-17…T-30 (issues #27…#34, #48…#50).
-**Открыто:** T-31 (документация и мёртвая конфигурация).
-
-Порядок: **T-31**.
+**Сделано:** T-17…T-31 (issues #27…#34, #48…#50).
+**Открыто:** нет — серия аудита Clean Architecture закрыта. Новые находки заводить отдельными тикетами.
 
 ## Общие условия приёмки (для любого тикета)
 

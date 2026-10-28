@@ -1,6 +1,6 @@
 # Code Review: auto-hh-cli — после миграции на SQLite и аудита Clean Architecture
 
-> **Актуально на 2026-10-28**, ветка `development`, коммит `0955ed7`.
+> **Актуально на 2026-10-28**, ветка `refactor/t-25-t-31` (от `development`, коммит `c9de575`).
 > Тикеты к отчёту — [`docs/review/`](docs/review/README.md).
 
 > **Что это за документ.** Перепроверка прошлого отчёта (KISS/DRY, дерево до архитектурного
@@ -34,18 +34,19 @@
 совпадений), `strict` включён, проверки зелёные. Из 14 дублей KISS/DRY (D1–D14) сняты все:
 D3 закрыт вместе с T-28 (`parseJSON` — единственный парсер), D13 — вместе с R1. K3 (самописный cron)
 закрыт в T-30, K4–K6 закрыты частично. Функциональные риски F1–F4 сняты: `process.exit`
-из `cmd-resume` убран в T-29, дрейф документации остался (T-31).
+из `cmd-resume` убран в T-29, дрейф документации исправлен в T-31.
 
 P1 закрыты: R1 — T-28 (`ab70b9d`), R2 — T-29 (`fa48c17`, `9e23a14`). R3 закрыт в T-26 (тесты на фейковых
-портах), адаптеры hh.ru разбиты в T-25. Открыты P2 (R4–R6) и P3 (R7, R8); тикеты T-30, T-31.
+портах), адаптеры hh.ru разбиты в T-25, cron и документация — в T-30/T-31. Открытых пунктов R1–R9
+нет; остаётся долг R7/R8 уровня P3 (типизация и мелочи), он вынесен в §II.
 
 | Приоритет | Пункт | Почему |
 |---|---|---|
 | ✅ **P1** | R1. `domain/grade-resume` держит ИИ-вызов, промпт и свой JSON-парсер | закрыто в T-28: `GradePrompt`, VO `ResumeGrade`, `ResumeGradeService` |
 | ✅ **P1** | R2. `cmd-resume` обрывает процесс `process.exit(1)` | закрыто в T-29: `process.exitCode` + `return`, меню остаётся живым |
 | ✅ **P2** | R3. Тесты покрывают ≈12 модулей из 166 | закрыто в T-26 (+ T-25): 22 файла / 131 тест на фейковых портах и `:memory:` |
-| **P2** | R4. Документация отстала от кода | README, `docs/architecture.md` и `tsconfig` описывают несуществующее |
-| **P2** | R5. Мёртвая поверхность конфигурации | `env()` отдаёт 6 неиспользуемых OAuth-полей |
+| ✅ **P2** | R4. Документация отстала от кода | закрыто в T-31: `scripts/`, `MONGODB_*`, счётчики и предупреждение о профиле |
+| ✅ **P2** | R5. Мёртвая поверхность конфигурации | закрыто в T-31: `env()` = `userAgent`/`requestDelayMs`, `loadConfig()` удалён |
 | ✅ **P2** | R6. Самописный cron вместо `getNextRun()` | закрыто в T-30: `Scheduler.nextRun()`, `shared/cron.ts` удалён |
 | **P3** | R7. 143 `any` | хот-споты после T-25 — `hh/resume-raw.ts` (16) и `hh/resume-lookup.ts` (14) |
 | **P3** | R8. Мелочи единообразия | шум в диффах, дубли логгера и интерфейсов |
@@ -174,36 +175,25 @@ P1 закрыты: R1 — T-28 (`ab70b9d`), R2 — T-29 (`fa48c17`, `9e23a14`). 
 `DigestScenario`, `CoverScenario`, `ApplyScenario` на фейковых портах + `:memory:`-тесты
 `cache-store`/`digest-store`/`history-store`. Проверять исход и события, а не текст лога.
 
-### R4 (P2) Документация отстала от кода
+### R4 (P2) Документация отстала от кода — закрыто в T-31
 
-| Место | Что написано | Что на самом деле |
-|---|---|---|
-| `README.md:448` | `├─ scripts/ # вспомогательные скрипты (judge-only, fill-cover-letters, …)` | каталога `scripts/` нет; при этом `tsconfig.json:19` всё ещё включает `scripts/**/*.ts` |
-| `README.md:439` | `files/: resume-loader, resume-files, data-janitor, …` | `data-janitor.ts` нет — есть `file-janitor.ts`; не упомянуты `sqlite/db-janitor.ts` и `files/digest-artifacts.ts` |
-| `docs/architecture.md:700` | «Переменные окружения: … `MONGODB_*` …» | Mongo в проекте нет: `.env.example`, `README.md`, `src/` — 0 совпадений |
-| `docs/architecture.md:702` | «MongoDB: коллекции `cachePages`, `cacheFull`, …» как актуальное состояние | таблицы SQLite `cache_pages`, `cache_full`, … (`infrastructure/sqlite/schema.ts`) |
-| `docs/architecture.md:4-6` | «дата 2026-10-19, ветка `refactor/t24-domain-purity`, 154 файла, ≈10,26 тыс. строк» | 2026-10-28, `development`, 166 файлов, 10 559 строк |
-| `README.md:350,379` | профиль Chromium описан как данные | нет предупреждения «не копировать в бэкапы и не публиковать» (остаток F3) |
+Приведено к фактическому состоянию:
 
-**Предложение (T-31):** привести дерево и env-таблицу к коду, убрать `scripts/**/*.ts` из `tsconfig`,
-добавить предупреждение о `data/browser-profile`.
+| Было | Стало |
+|---|---|
+| `README.md`: `├─ scripts/ # judge-only, fill-cover-letters` | строка удалена; `tsconfig.include` — только `src/**/*.ts` |
+| `README.md`: `files/: … data-janitor …` | `file-janitor`, `digest-artifacts`, `sqlite/db-janitor` — по факту |
+| `docs/architecture.md`: env `MONGODB_*` | список env без Mongo |
+| `docs/architecture.md`: «MongoDB: коллекции `cachePages`…» | «SQLite: таблицы `cache_pages`, `cache_full`, …» |
+| `docs/architecture.md:4-6`: дата 2026-10-19, ветка `refactor/t24-domain-purity`, 154 файла | 2026-10-28, `refactor/t-25-t-31`, 183 файла, ≈12,2 тыс. строк |
+| `README.md`: профиль Chromium «(cookies, localStorage)» | добавлено «**не коммитить и не бэкапить** — это доступ к аккаунту» |
 
-### R5 (P2) Мёртвая поверхность конфигурации
+### R5 (P2) Мёртвая поверхность конфигурации — закрыто в T-31
 
-`infrastructure/config/config.ts:70-81` — `env()` отдаёт 8 полей, из которых используются два:
-
-```ts
-clientId: process.env.HH_CLIENT_ID,        // не читается нигде
-clientSecret: process.env.HH_CLIENT_SECRET, // не читается нигде
-redirectUri: …, accessToken: …, refreshToken: …, resumeId: …, // не читаются нигде
-userAgent: …, requestDelayMs: …             // ← только эти два (hh/session.ts:44-48)
-```
-
-OAuth-поля — остаток легаси-раздела README (`src/oauth-server.js` не существует с прошлого ревью).
-Там же `config.ts:65-68`: обёртка `loadConfig()` экспортируется, но не импортируется ни одним модулем
-(`composition.ts:19` берёт `configProvider`).
-
-**Предложение (T-31):** оставить `{ userAgent, requestDelayMs }`, `loadConfig()` удалить.
+`infrastructure/config/config.ts` — `env()` теперь отдаёт только реально читаемые поля
+`userAgent` и `requestDelayMs` (их берёт `HHPageSession`, `hh/session.ts:44-48`). Шесть OAuth-полей
+(`clientId`, `clientSecret`, `redirectUri`, `accessToken`, `refreshToken`, `resumeId`) и обёртка
+`loadConfig()` удалены: входа по токенам в проекте нет, логин выполняется в профиле Chromium.
 
 ### R6 (P2) Самописный cron — закрыто в T-30
 
@@ -243,8 +233,6 @@ OAuth-поля — остаток легаси-раздела README (`src/oauth
 
 ### R8 (P3) Мелочи единообразия
 
-- `presentation/cli/index.ts:1-2` — один и тот же комментарий дважды; `:5` — `import {  Command  }`
-  с двойными пробелами (следы старого форматтера). Файл — лицо CLI, с него читают.
 - `shared/logger.ts:5-8` и `infrastructure/logging/logger.ts:8-14` — форматирование строки лога
   (время МСК + JSON-meta) скопировано дважды; `shared/logger.ts:13` пишет `error` через `console.log`,
   а не `console.error`, то есть ошибки уезжают в stdout.
@@ -254,8 +242,9 @@ OAuth-поля — остаток легаси-раздела README (`src/oauth
 - `infrastructure/logging/logger.ts:25` — `setLogSink(fileLogSink)` выполняется на импорте модуля
   (сайд-эффект), хотя комментарий рядом (`:2`) говорит «импортируется composition root, который
   регистрирует sink». Либо явный вызов из `composition.ts`, либо честный комментарий.
-- `application/resume-download.ts:102,154,160` — переменная `mongoUnavailable` после миграции на SQLite.
-- `presentation/cli/commands/cmd-resume.ts:14` — английская строка в русском CLI (см. R2).
+
+Закрыто в T-31: дубль комментария и двойные пробелы в `presentation/cli/index.ts`; `mongoUnavailable`
+переименован в `dbUnavailable`; английская строка в `cmd-resume.ts` заменена ещё в T-29.
 
 ### R9 (P3) Запись `resume-grade.md` из presentation
 
@@ -292,7 +281,7 @@ OAuth-поля — остаток легаси-раздела README (`src/oauth
 | T-28 | `domain/grade-resume`: Domain Service + ИИ в `application` (R1, R9) | P1 | ✅ `ab70b9d` |
 | T-29 | `presentation`: `exitCode` вместо `process.exit`, без commander-легаси (R2) | P1 | ✅ `fa48c17`, `9e23a14` |
 | T-30 | `Scheduler.nextRun()` вместо самописного cron (R6) | P2 | ✅ |
-| T-31 | Документация и мёртвая конфигурация: README, `architecture.md`, `tsconfig`, `env()` (R4, R5) | P2 | ☐ новый |
+| T-31 | Документация и мёртвая конфигурация: README, `architecture.md`, `tsconfig`, `env()` (R4, R5) | P2 | ✅ |
 
 Порядок:
 
@@ -303,7 +292,8 @@ OAuth-поля — остаток легаси-раздела README (`src/oauth
 4. ~~**T-25**~~ — закрыт: `hh/client.ts` (804) и `hh/resume.ts` (743) разложены на 14 модулей
    (сессия браузера / читатели страниц / чистый разбор / фасад), маппинг покрыт спеками.
 5. ~~**T-30**~~ — закрыт: `Scheduler.nextRun()` вместо самописного парсера, `shared/cron.ts` удалён.
-6. **T-31** — последний: README, `architecture.md`, `tsconfig`, мёртвые поля `env()`.
+6. ~~**T-31**~~ — закрыт: README и `architecture.md` приведены к коду, `scripts/` из `tsconfig` убран,
+   `env()` сокращён до `userAgent`/`requestDelayMs`.
 
 ## V. Ограничения и как проверять
 
