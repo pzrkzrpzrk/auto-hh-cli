@@ -113,4 +113,14 @@ describe("CoverLetterService.generateBatch", () => {
     expect(JSON.stringify(withAdaptation.calls[0].messages)).not.toContain("=== РЕЗЮМЕ СОИСКАТЕЛЯ ===");
     expect(JSON.stringify(withAdaptation.calls[0].messages)).toContain("=== РЕЗЮМЕ (релевантное для вакансии #1) ===");
   });
+
+  it("PDF не адаптируется и уходит общим блоком даже при adaptResume=true", async () => {
+    const pdf: Resume = { ...resume, type: "pdf", text: undefined, filename: "cv.pdf" };
+    const ai = new FakeAi(lettersForPrompt);
+    await new CoverLetterService(ai, settings({ adaptResume: true })).generateBatch(pdf, [items[0]]);
+    const prompt = JSON.stringify(ai.calls[0].messages);
+
+    expect(prompt).toContain("=== РЕЗЮМЕ СОИСКАТЕЛЯ (PDF) ===");
+    expect(prompt).not.toContain("релевантное для вакансии");
+  });
 });

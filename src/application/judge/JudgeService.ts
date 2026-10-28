@@ -3,7 +3,7 @@
 // Домен (domain/judge) остаётся чистым: Verdict отвечает за инвариант, JudgePrompt — за
 // тексты промпта. Здесь только use case: собрать сообщения, вызвать порт, поймать ошибку
 // и залогировать теми же строками, что были в прежнем domain/judge/judge.ts.
-import { adaptResumeForVacancy } from "@/domain/adapt-resume/index.js";
+import { adaptResumeForVacancy, canAdaptResume } from "@/domain/adapt-resume/index.js";
 import { JudgePrompt } from "@/domain/judge/JudgePrompt.js";
 import { Verdict } from "@/domain/judge/Verdict.js";
 import type { Logger } from "@/domain/logging.js";
@@ -76,13 +76,12 @@ export class JudgeService {
 
     const prompt = new JudgePrompt(settings.minScore);
     // PDF адаптировать нельзя: иначе при adaptResume=true блок резюме не попадёт в промпт вовсе.
-    const textualResume = resume && resume.type === 'text' && resume.text ? resume : null;
-    const adapt = Boolean(settings.adaptResume && textualResume);
+    const adapt = Boolean(settings.adaptResume && canAdaptResume(resume));
 
     const vacanciesText = vacancies.map((vacancy, index) => {
       let block = '';
-      if (adapt && textualResume) {
-        const adapted = adaptResumeForVacancy(textualResume, vacancy, { budgetChars: settings.adaptResumeBudget });
+      if (adapt) {
+        const adapted = adaptResumeForVacancy(resume, vacancy, { budgetChars: settings.adaptResumeBudget });
         if (adapted) {
           block += `${prompt.adaptedResumeBlock(adapted, index + 1)}\n\n`;
         }

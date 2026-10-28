@@ -3,7 +3,7 @@
 // Домен (domain/cover-letter) отвечает за шаблон, подпись и тексты промпта; здесь — use case:
 // собрать сообщения, вызвать порт, разложить ответ по пачкам, сохранить частичный прогресс
 // через onBatch и залогировать теми же строками, что были в прежнем cover-letter.ts.
-import { adaptResumeForVacancy } from "@/domain/adapt-resume/index.js";
+import { adaptResumeForVacancy, canAdaptResume } from "@/domain/adapt-resume/index.js";
 import { CoverLetterPrompt } from "@/domain/cover-letter/CoverLetterPrompt.js";
 import { CoverTemplate } from "@/domain/cover-letter/CoverTemplate.js";
 import type { CoverSettings } from "@/domain/cover-letter/config.js";
@@ -48,8 +48,7 @@ export class CoverLetterService {
 
     const prompt = new CoverLetterPrompt(this.settings.profile, this.settings.signature);
     // PDF адаптировать нельзя — тогда резюме уходит общим блоком (имя файла), как при adaptResume=false.
-    const textualResume = resume && resume.type === 'text' && resume.text ? resume : null;
-    const adaptationPossible = Boolean(this.settings.adaptResume && textualResume);
+    const adaptationPossible = Boolean(this.settings.adaptResume && canAdaptResume(resume));
     const resumeBlock = adaptationPossible ? null : buildResumeBlock(resume);
     const systemText = prompt.batchSystem(adaptationPossible);
 
@@ -58,8 +57,8 @@ export class CoverLetterService {
       batch,
       text: batch.map((item, position) => {
         let block = '';
-        if (adaptationPossible && textualResume) {
-          const adapted = adaptResumeForVacancy(textualResume, item.vacancy, {
+        if (adaptationPossible) {
+          const adapted = adaptResumeForVacancy(resume, item.vacancy, {
             budgetChars: this.settings.adaptResumeBudget,
           });
           if (adapted) {

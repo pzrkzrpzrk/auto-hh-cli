@@ -1,6 +1,6 @@
 // Адаптация резюме под вакансию: ядро, ранжирование секций и бюджет — на чистых данных.
 import { describe, expect, it } from "vitest";
-import { adaptBudget, adaptResumeForVacancy, DEFAULT_ADAPT_BUDGET } from "@/domain/adapt-resume/index";
+import { adaptBudget, adaptResumeForVacancy, canAdaptResume, DEFAULT_ADAPT_BUDGET } from "@/domain/adapt-resume/index";
 import type { Resume, Vacancy } from "@/domain/models";
 
 const resume: Resume = {
@@ -148,6 +148,16 @@ describe("adaptBudget", () => {
   it("не опускается ниже 500 и отбрасывает дробную часть", () => {
     expect(adaptBudget(100)).toBe(500);
     expect(adaptBudget(1200.9)).toBe(1200);
+  });
+});
+
+describe("canAdaptResume", () => {
+  it("пропускает только непустой текст", () => {
+    expect(canAdaptResume(resume)).toBe(true);
+    expect(canAdaptResume({ ...resume, text: "   " })).toBe(false);
+    expect(canAdaptResume({ ...resume, text: undefined })).toBe(false);
+    expect(canAdaptResume(pdfResume)).toBe(false);
+    expect(canAdaptResume(null)).toBe(false);
   });
 });
 

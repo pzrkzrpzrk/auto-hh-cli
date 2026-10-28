@@ -22,6 +22,14 @@ export interface AdaptResumeOptions {
 }
 
 /**
+ * Адаптировать можно только непустой текст: PDF уходит в промпт отдельным блоком.
+ * Правило одно и для сервисов (какой блок показывать), и для самого отбора секций.
+ */
+export function canAdaptResume(resume: Resume | null): resume is Resume & { text: string } {
+  return Boolean(resume && resume.type === "text" && resume.text?.trim());
+}
+
+/**
  * Адаптированное под вакансию резюме: шапка и ключевые навыки всегда, остальные секции —
  * по убыванию релевантности, пока не исчерпан бюджет символов.
  *
@@ -34,7 +42,7 @@ export function adaptResumeForVacancy(
   vacancy: Vacancy,
   options: AdaptResumeOptions = {},
 ): string | null {
-  if (!resume || resume.type === "pdf" || !resume.text) return null;
+  if (!canAdaptResume(resume)) return null;
 
   const text = resume.text.replace(/\r\n/g, "\n").trim();
   if (!text) return null;
