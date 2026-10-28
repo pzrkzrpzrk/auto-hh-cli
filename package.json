@@ -13,6 +13,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:types": "tsc -p tests",
+    "lint": "eslint \"src/**/*.ts\" \"tests/**/*.ts\"",
+    "lint:fix": "eslint \"src/**/*.ts\" \"tests/**/*.ts\" --fix",
     "watch": "tsc --watch"
   },
   "dependencies": {
@@ -31,9 +33,12 @@
     "node": ">=22.13"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/node": "^25.7.0",
     "@types/node-cron": "^3.0.11",
     "dependency-cruiser": "^18.6.0",
+    "eslint": "^10.13.0",
+    "typescript-eslint": "^8.72.1",
     "vitest": "^5.0.5"
   }
 }

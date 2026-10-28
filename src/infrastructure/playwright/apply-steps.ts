@@ -60,7 +60,9 @@ async function fillLetter(page: Page, entry: DigestEntry) {
       const html = await page.content();
       fs.writeFileSync(dumpPath, html);
       log.warn(`Letter textarea NOT found. Dumped DOM to ${dumpPath}`);
-    } catch (_) {}
+    } catch {
+      // Дамп DOM — диагностика: сбой записи не должен ломать отклик.
+    }
     return { ok: false, hadTextarea: false };
   }
   return { ok: true, hadTextarea: false };

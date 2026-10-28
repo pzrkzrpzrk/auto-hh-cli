@@ -196,7 +196,7 @@ export async function runReset(ctx: UiContext) {
     return;
   }
 
-  let label = name;
+  let label: string;
   try {
     const resume = readResumeFile(name, resumeDeps);
     if (!resume) throw new Error("not found");

@@ -33,7 +33,7 @@ export default async function resetData(
     return { kind: 'ok', resume: null, summary: await deps.janitor.clearAll() };
   }
 
-  let resume: Resume | null = null;
+  let resume: Resume | null;
   try {
     resume = deps.resumeFiles.load(opts.resume);
   } catch {

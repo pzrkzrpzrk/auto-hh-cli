@@ -13,13 +13,14 @@ function safeJsonParse(text: string): any {
     // Если не вышло — экранируем неэкранированные кавычки внутри строк
     // (грубая эвристика: заменяем " внутри значений на «»)
     cleaned = cleaned.replace(
-      /: "([^"]*?)"([^,\]\}])/g,
+      /: "([^"]*?)"([^,\]}])/g,
       (_m, p1, p2) => `: "${p1.replace(/"/g, "«")}"${p2}`
     );
     try {
       return JSON.parse(cleaned);
     } catch {
       // Последняя попытка: удалить управляющие символы
+      // eslint-disable-next-line no-control-regex -- \x00-\x1f и есть управляющие символы, которые чистим
       cleaned = cleaned.replace(/[\x00-\x1f]/g, " ");
       return JSON.parse(cleaned);
     }
