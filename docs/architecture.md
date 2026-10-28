@@ -239,8 +239,13 @@ src/
 │   └── reset.ts                # сброс данных (порт DataJanitor)
 │
 ├── infrastructure/
-│   ├── hh/{client.ts, resume.ts, vacancy-source.ts, resume-source.ts,
-│   │       source-provider.ts}  # адаптеры портов + жизненный цикл браузера
+│   ├── hh/{client.ts, session.ts, search-page-reader.ts, vacancy-page-reader.ts,
+│   │       resume-page-reader.ts, resume-dom-blocks.ts, resume-pdf.ts,
+│   │       vacancy-mapping.ts, vacancy-fields.ts, resume-parser.ts, resume-raw.ts,
+│   │       resume-codes.ts, resume-lookup.ts, resume-sections.ts,
+│   │       vacancy-source.ts, resume-source.ts, source-provider.ts}
+│   │                            # адаптеры портов: сессия браузера, читатели страниц,
+│   │                            #   чистый разбор состояния, жизненный цикл источника
 │   ├── ai/client.ts
 │   ├── sqlite/{db.ts, schema.ts, rows.ts, cache-store.ts, digest-store.ts, history-store.ts,
 │   │   │      resume-store.ts, digest-repository.ts, judgement-cache.ts,

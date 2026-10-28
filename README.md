@@ -431,7 +431,8 @@ npm start           # или: npm run ui, npx auto-hh, npx auto-hh ui (алиа�
 │  │  │                         #   Domain Service DigestFilter и порты
 │  │  └─ judge/ cover-letter/   # ИИ-судья и генерация писем
 │  ├─ infrastructure/           # адаптеры внешнего мира
-│  │  ├─ hh/                    # client, resume, vacancy-source, resume-source, source-provider
+│  │  ├─ hh/                    # session + readers (search/vacancy/resume), mapping,
+│  │  │                         #   resume-parser, resume-pdf, vacancy/resume-source, source-provider
 │  │  ├─ ai/client.ts           # единый OpenAI-совместимый клиент
 │  │  ├─ sqlite/                # db, schema, rows, cache-store, digest-store, history-store,
 │  │  │                         #   resume-store, digest-repository, judgement-cache,

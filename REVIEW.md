@@ -36,18 +36,18 @@ D3 закрыт вместе с T-28 (`parseJSON` — единственный �
 K3 (самописный cron, T-30), K4–K6 закрыты частично. Функциональные риски F1–F4 сняты: `process.exit`
 из `cmd-resume` убран в T-29, дрейф документации остался (T-31).
 
-P1 закрыты: R1 — T-28 (`ab70b9d`), R2 — T-29 (`fa48c17`, `9e23a14`). Открыты P2 (R3–R6) и P3
-(R7, R8); тикеты T-25, T-26, T-30, T-31.
+P1 закрыты: R1 — T-28 (`ab70b9d`), R2 — T-29 (`fa48c17`, `9e23a14`). R3 закрыт в T-26 (тесты на фейковых
+портах), адаптеры hh.ru разбиты в T-25. Открыты P2 (R4–R6) и P3 (R7, R8); тикеты T-30, T-31.
 
 | Приоритет | Пункт | Почему |
 |---|---|---|
 | ✅ **P1** | R1. `domain/grade-resume` держит ИИ-вызов, промпт и свой JSON-парсер | закрыто в T-28: `GradePrompt`, VO `ResumeGrade`, `ResumeGradeService` |
 | ✅ **P1** | R2. `cmd-resume` обрывает процесс `process.exit(1)` | закрыто в T-29: `process.exitCode` + `return`, меню остаётся живым |
-| **P2** | R3. Тесты покрывают ≈12 модулей из 166 | конвейеры search/apply/cover/digest держатся только на `tsc` |
+| ✅ **P2** | R3. Тесты покрывают ≈12 модулей из 166 | закрыто в T-26 (+ T-25): 22 файла / 131 тест на фейковых портах и `:memory:` |
 | **P2** | R4. Документация отстала от кода | README, `docs/architecture.md` и `tsconfig` описывают несуществующее |
 | **P2** | R5. Мёртвая поверхность конфигурации | `env()` отдаёт 6 неиспользуемых OAuth-полей |
 | **P2** | R6. Самописный cron вместо `getNextRun()` | свой парсер ошибается на диапазонах и day-of-week |
-| **P3** | R7. 134 `any` | хот-спот — `infrastructure/hh/resume.ts` (40) |
+| **P3** | R7. 143 `any` | хот-споты после T-25 — `hh/resume-raw.ts` (16) и `hh/resume-lookup.ts` (14) |
 | **P3** | R8. Мелочи единообразия | шум в диффах, дубли логгера и интерфейсов |
 
 ---
@@ -196,7 +196,7 @@ P1 закрыты: R1 — T-28 (`ab70b9d`), R2 — T-29 (`fa48c17`, `9e23a14`). 
 clientId: process.env.HH_CLIENT_ID,        // не читается нигде
 clientSecret: process.env.HH_CLIENT_SECRET, // не читается нигде
 redirectUri: …, accessToken: …, refreshToken: …, resumeId: …, // не читаются нигде
-userAgent: …, requestDelayMs: …             // ← только эти два (hh/client.ts:262-264)
+userAgent: …, requestDelayMs: …             // ← только эти два (hh/session.ts:44-48)
 ```
 
 OAuth-поля — остаток легаси-раздела README (`src/oauth-server.js` не существует с прошлого ревью).
@@ -219,15 +219,18 @@ OAuth-поля — остаток легаси-раздела README (`src/oauth
 **Предложение (T-30):** добавить `nextRun(expression): Date | null` в порт и адаптер, удалить
 `shared/cron.ts`, тест — на фейковом `Scheduler`.
 
-### R7 (P3) Типизация: 134 `any`
+### R7 (P3) Типизация: 143 `any`
 
-`strict: true` включён, но `any` остаётся на границах с внешним миром. Хот-споты:
+`strict: true` включён, но `any` остаётся на границах с внешним миром. После T-25 адаптеры hh.ru
+разложены по модулям, и «сырой JSON» сконцентрирован в двух файлах вместо одного на 743 строки.
+Хот-споты:
 
 | Файл | `any` | Что именно |
 |---|---|---|
-| `infrastructure/hh/resume.ts` | 40 | разбор сырого initial state hh.ru |
+| `infrastructure/hh/resume-raw.ts` | 16 | низкоуровневый доступ к initial state hh.ru |
+| `infrastructure/hh/resume-lookup.ts` | 14 | эвристики поиска резюме в дереве |
+| `infrastructure/hh/resume-sections.ts` | 9 | мапперы блоков резюме |
 | `infrastructure/ai/client.ts` | 7 | ответы провайдера, ошибки ретраев |
-| `infrastructure/hh/client.ts` | 6 | `RawPageState`, карточка вакансии |
 | `infrastructure/sqlite/digest-store.ts` | 5 | `entries: any[]` в 5 функциях записи |
 | `infrastructure/files/digest-artifacts.ts` | 5 | вход рендера `.md` |
 | `application/history.ts` | 5 | `Record<string, any>` вместо `HistoryMeta` |
@@ -240,7 +243,8 @@ OAuth-поля — остаток легаси-раздела README (`src/oauth
 - `shared/text-utils.ts:5` — `parseJSON<T = unknown>(text: string): T | null` вместо `any`
   (после T-28 все ИИ-шаги будут разбирать ответ через него).
 
-Остальное рационально закрывать внутри **T-25** (адаптеры hh.ru) и **T-26** (тесты фиксируют форму).
+Остальное рационально закрывать тикетом на типизацию границ (R7, P3): тесты формы уже зафиксированы
+в T-26 и T-25.
 
 ### R8 (P3) Мелочи единообразия
 
@@ -288,7 +292,7 @@ OAuth-поля — остаток легаси-раздела README (`src/oauth
 
 | ID | Тикет | Приоритет | Статус |
 |---|---|---|---|
-| T-25 | Разбить `hh/client.ts` (737) и `hh/resume.ts` (664) | P2 | ☐ |
+| T-25 | Разбить `hh/client.ts` (804) и `hh/resume.ts` (743) на сессию, читателей и чистый разбор | P2 | ✅ |
 | T-26 | Тесты на фейковых портах: сценарии `search`/`digest`/`cover`/`apply` + SQLite на `:memory:` | P2 | ✅ (кроме адаптеров hh.ru — T-25) |
 | T-28 | `domain/grade-resume`: Domain Service + ИИ в `application` (R1, R9) | P1 | ✅ `ab70b9d` |
 | T-29 | `presentation`: `exitCode` вместо `process.exit`, без commander-легаси (R2) | P1 | ✅ `fa48c17`, `9e23a14` |
@@ -301,9 +305,9 @@ OAuth-поля — остаток легаси-раздела README (`src/oauth
 2. ~~**T-28**~~ — закрыт (`ab70b9d`): домен в рамках T-24/T-27, второй парсер JSON убран.
 3. ~~**T-26**~~ — закрыт по сценариям и SQLite (`2eacd67`, `ec7ee5b`, `a5f245f`, `eb7c7f5` + SQLite-спеки):
    поведение search/digest/cover/apply и хранилищ зафиксировано на фейковых портах.
-4. **T-25** — следующий: `hh/client.ts` и `hh/resume.ts` делятся по ответственности
-   (сессия браузера / выдача / карточка / резюме), попутно типизация R7 и спеки на маппинг.
-5. **T-30**, **T-31** — по мере необходимости; друг от друга не зависят.
+4. ~~**T-25**~~ — закрыт: `hh/client.ts` (804) и `hh/resume.ts` (743) разложены на 14 модулей
+   (сессия браузера / читатели страниц / чистый разбор / фасад), маппинг покрыт спеками.
+5. **T-30**, **T-31** — следующие; друг от друга не зависят.
 
 ## V. Ограничения и как проверять
 

@@ -41,7 +41,7 @@ composition root, тестируемость. Исходные факты на 2
 | [T-22](T-22-composition-scheduler.md) | Единый composition root + порт `Scheduler` | P1 | `node-cron` в use case, 4 импорта в CLI | T-17, T-18, T-20 | ✅ |
 | [T-23](T-23-boundary-guard.md) | `dependency-cruiser` + `strict: true` | P1 | защита правил от дрейфа | T-17…T-22 | ✅ |
 | [T-24](T-24-domain-purity.md) | Домен без побочек, политики в домен | P2 | SRP, `markApplied` из домена | T-17, T-18 | ✅ |
-| [T-25](T-25-hh-adapters-split.md) | Разбить `hh/client.ts` (737) и `hh/resume.ts` (664) | P2 | SRP адаптеров hh.ru | T-23 | ☐ |
+| [T-25](T-25-hh-adapters-split.md) | Разбить `hh/client.ts` (804) и `hh/resume.ts` (743) | P2 | SRP адаптеров hh.ru | T-23 | ✅ |
 | [T-26](T-26-fake-port-tests.md) | Тесты на фейковых портах (vitest) для сценариев и адаптеров | P2 | тестируемость, R3 | T-17, T-18, T-19 | ✅ |
 | [T-27](T-27-judge-cover-domain.md) | Домен `judge`/`cover-letter`: VO, Domain Services, ИИ вне домена | P2 | SRP, чистота домена, тесты | T-23, T-24 | ✅ |
 | [T-28](T-28-grade-resume-service.md) | `domain/grade-resume`: Domain Service, VO оценки, ИИ в `application` | **P1** | R1, R9: домен с I/O, второй парсер JSON | T-24, T-27 | ✅ |
@@ -49,11 +49,10 @@ composition root, тестируемость. Исходные факты на 2
 | [T-30](T-30-scheduler-next-run.md) | `Scheduler.nextRun()` вместо самописного cron | P2 | R6: свой парсер cron | T-22, T-26 | ☐ |
 | [T-31](T-31-docs-config-debt.md) | Документация и мёртвая конфигурация | P2 | R4, R5: README/`architecture.md`/`env()` | — | ☐ |
 
-**Сделано:** T-17…T-24 (issues #27…#34), T-26 (сценарии и SQLite), T-27, T-28, T-29.
-**Открыто:** T-25 (адаптеры hh.ru и типизация R7) и T-30, T-31 из перепроверки 2026-10-28.
+**Сделано:** T-17…T-29 (issues #27…#34, #48…#50).
+**Открыто:** T-30 и T-31 из перепроверки 2026-10-28 (cron и документация; друг от друга не зависят).
 
-Порядок: **T-25** (распил адаптеров + спеки на маппинг), затем **T-30 → T-31** (cron и документация;
-друг от друга не зависят).
+Порядок: **T-30 → T-31**.
 
 ## Общие условия приёмки (для любого тикета)
 
