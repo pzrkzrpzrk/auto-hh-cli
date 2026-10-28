@@ -4,6 +4,8 @@
   `fix/t-29-cmd-resume-exit`, `refactor/t-25-hh-adapters`; work without a ticket — `chore/<slug>`.
   All task commits go **to this branch**, `development` stays clean. When the task is finished, report the
   branch name and its commit list; merge/PR/push — only on explicit request.
+- **PR body — по шаблону**: описание пулл-реквеста заполняется по [`.github/pull_request_template.md`](../.github/pull_request_template.md)
+  (что в PR → проверки → не проверялось живьём → инварианты → чек-лист), заголовок PR повторяет Conventional Commits, база — `development`.
 - **Commit after every subtask**: as soon as a self-contained piece of work is done (a plan stage, a bug fix, a refactor step), commit it. Never leave finished work uncommitted while starting the next item.
 - **Verify first, commit second**: run the targeted checks for that subtask (`npx tsc --noEmit`, `npm run arch`, the single related test file) and commit only when they pass. `npm run lint` is a **final** check — run it once at the end of the task, not in every subtask commit. If a check cannot be run, say so in the commit body.
 - **One intent per commit**: do not mix storage/infra changes with behavior changes, formatting or dependency bumps. If one file belongs to two commits, stage hunks (`git add -p`).
