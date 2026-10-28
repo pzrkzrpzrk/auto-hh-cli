@@ -159,6 +159,12 @@ export interface ResumeFiles {
   save(name: string, markdown: string, opts?: { overwrite?: boolean }): { file: string; saved: boolean };
 }
 
+/** Запись текстового артефакта (отчёт CLI): команда только печатает возвращённый путь. */
+export interface TextFileWriter {
+  /** Сохранить текст под именем `name` и вернуть путь (или имя) для печати. */
+  save(name: string, text: string): string;
+}
+
 /**
  * Чтение резюме с диска: сценарии (grade, cover, digest) просят файл по имени,
  * а путь по умолчанию (RESUME_PATH / RESUMES_DIR) выбирает адаптер.

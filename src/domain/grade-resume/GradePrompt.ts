@@ -1,34 +1,18 @@
+// Тексты промпта оценки резюме (Domain Service).
+//
+// Раньше промпт, разбор JSON и вызов ИИ жили в одном domain/grade-resume.ts. Теперь домен
+// отвечает только за формулировки: транспорт — application/grade/ResumeGradeService.
 import type { Resume } from "@/domain/models.js";
-import type { Logger } from "@/domain/logging.js";
-import type { AiProvider } from "@/domain/ports.js";
 
-function safeJsonParse(text: string): any {
-  let cleaned = text.trim();
-  cleaned = cleaned.replace(/^```json\s*\n?/i, "").replace(/\n?```\s*$/i, "");
-  cleaned = cleaned.replace(/^\*\*+/, "").replace(/\*\*+$/, "");
-  // Попытка распарсить как есть
-  try {
-    return JSON.parse(cleaned);
-  } catch {
-    // Если не вышло — экранируем неэкранированные кавычки внутри строк
-    // (грубая эвристика: заменяем " внутри значений на «»)
-    cleaned = cleaned.replace(
-      /: "([^"]*?)"([^,\]}])/g,
-      (_m, p1, p2) => `: "${p1.replace(/"/g, "«")}"${p2}`
-    );
-    try {
-      return JSON.parse(cleaned);
-    } catch {
-      // Последняя попытка: удалить управляющие символы
-      // eslint-disable-next-line no-control-regex -- \x00-\x1f и есть управляющие символы, которые чистим
-      cleaned = cleaned.replace(/[\x00-\x1f]/g, " ");
-      return JSON.parse(cleaned);
-    }
-  }
+/** Что показать модели вместо текста, если резюме загружено в PDF. */
+function resumeBody(resume: Resume): string {
+  return resume.type === "pdf" ? `[PDF] ${resume.filename}` : resume.text ?? "";
 }
 
-function buildSystemText(): string {
-  return `Ты профессиональный HR-эксперт и карьерный консультант. Проведи подробную оценку резюме соискателя.
+export class GradePrompt {
+  /** Системный текст: критерии, веса категорий и формат JSON-ответа. */
+  system(): string {
+    return `Ты профессиональный HR-эксперт и карьерный консультант. Проведи подробную оценку резюме соискателя.
 
 Сначала напиши общую оценку — 1-2 абзаца (на русском), резюмирующие впечатление, уровень кандидата, ключевые выводы.
 
@@ -89,51 +73,10 @@ function buildSystemText(): string {
     }
   ]
 }`;
-}
-
-// Резюме приходит готовым (загрузку с диска делает application/grade.ts):
-// у домена не остаётся ни файлов, ни путей — только правило оценки.
-async function gradeResume(ai: AiProvider | null, resume: Resume | null, logger?: Logger): Promise<Record<string, any> | null> {
-  if (!ai) {
-    logger?.warn("gradeResume: no API client (check API key)");
-    return null;
   }
 
-  if (!resume) {
-    logger?.warn("gradeResume: resume not found (set RESUME_PATH)");
-    return null;
-  }
-
-  const r = resume;
-
-  const resumeText = r.type === "pdf" ? `[PDF] ${r.filename}` : r.text;
-
-  const messages = [
-    { role: "system" as const, content: buildSystemText() },
-    {
-      role: "user" as const,
-      content: `Оцени следующее резюме:\n\n${resumeText}`,
-    },
-  ];
-
-  try {
-    const resp = await ai.chat({ messages, json: true, label: 'оценка резюме' });
-
-    const text = resp.text;
-    if (!text) {
-      logger?.warn("gradeResume: empty response");
-      return null;
-    }
-
-    const parsed = safeJsonParse(text);
-    logger?.debug(
-      `gradeResume: score=${parsed.overallScore} in=${resp.usage.prompt} out=${resp.usage.completion}`
-    );
-    return parsed;
-  } catch (err: any) {
-    logger?.warn(`gradeResume failed: ${err.message}`);
-    return null;
+  /** Пользовательский текст: само резюме (PDF — только пометка о файле). */
+  user(resume: Resume): string {
+    return `Оцени следующее резюме:\n\n${resumeBody(resume)}`;
   }
 }
-
-export { gradeResume };

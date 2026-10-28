@@ -126,13 +126,20 @@ export async function runResumeMenu(ctx: UiContext) {
   }
   if (action === "list") {
     console.log();
-    await cmdResume({ _: ["list"] });
+    await cmdResume({ action: "list" });
     return;
   }
 
-  const name = await askResumeName(action === "register" ? "Какое резюме зарегистрировать?" : "Какое резюме показать?");
+  if (action === "register") {
+    const name = await askResumeName("Какое резюме зарегистрировать?");
+    console.log();
+    await cmdResume({ action: "register", name });
+    return;
+  }
+
+  const name = await askResumeName("Какое резюме показать?");
   console.log();
-  await cmdResume({ _: [action, name] });
+  await cmdResume({ action: "show", name });
 }
 
 export async function runGrade(ctx: UiContext) {

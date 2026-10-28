@@ -15,6 +15,7 @@ import FileDigestSource from "@/infrastructure/files/digest-file-source.js";
 import CompositeDataJanitor from "@/infrastructure/janitor.js";
 import FileResumeFiles from "@/infrastructure/files/resume-files.js";
 import FileSearchReportWriter from "@/infrastructure/files/search-report-writer.js";
+import { CwdTextFileWriter } from "@/infrastructure/files/text-file-writer.js";
 import { createAiProvider } from "@/infrastructure/ai/client.js";
 import { configProvider } from "@/infrastructure/config/config.js";
 import { coverConfig } from "@/infrastructure/config/cover-config.js";
@@ -34,6 +35,7 @@ import type {
   ResumeSource,
   SearchDeps,
   SourceProvider,
+  TextFileWriter,
 } from "@/domain/ports.js";
 import type { DigestCacheStore } from "@/domain/digest/ports.js";
 import type { VacancySource } from "@/domain/search/VacancySource.js";
@@ -191,6 +193,9 @@ export const resumeDownloadDeps: ResumeDownloadDeps = {
 
 /** Зависимости оценки резюме: ленивый ИИ и файлы резюме. */
 export const gradeDeps: GradeDeps = { ai: aiProvider, resumeFiles, logger: log };
+
+/** Текстовые отчёты CLI (resume-grade.md): файловый I/O за портом, не в presentation. */
+export const gradeReportFile: TextFileWriter = new CwdTextFileWriter();
 
 /** Зависимости планировщика: конфиг и адаптер. Шаги передаёт команда. */
 export const scheduleDeps: ScheduleRuntimeDeps = {

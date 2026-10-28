@@ -5,6 +5,7 @@
 - **Зависимости:** нет (правка только `presentation`)
 - **Объём:** 2 файла команд, 1 тест-смоук меню
 - **Пути:** актуальны на 2026-10-28
+- **Статус:** ✅ сделано (`fa48c17`, `9e23a14`); TTY-smoke меню — за пользователем
 
 ## Проблема
 
@@ -25,18 +26,19 @@
 
 ## Что сделать
 
-- [ ] `cmd-resume`: `process.exitCode = 1` + `return`; подпись `cmdResume(opts: { action?: 'list' | 'register' | 'show'; name?: string })`.
-- [ ] Меню (`presentation/cli/menu/steps.ts:129,135`) передаёт `{ action, name }` вместо `{ _: [...] }`.
-- [ ] Русский текст вместо английского в `cmd-resume.ts:14`.
-- [ ] `cmd-digest`: убрать ветку-объект, алиасы и `any`; оставить `action: 'build' | 'show' | 'actualize'`.
+- [x] `cmd-resume`: `process.exitCode = 1` + `return`; подпись `cmdResume(opts: { action?: 'list' | 'register' | 'show'; name?: string })`.
+- [x] Меню (`presentation/cli/menu/steps.ts:129,135`) передаёт `{ action, name }` вместо `{ _: [...] }`.
+- [x] Русский текст вместо английского в `cmd-resume.ts:14`.
+- [x] `cmd-digest`: убрать ветку-объект, алиасы и `any`; оставить `action: 'build' | 'show' | 'actualize'`.
 - [ ] Ручной smoke: пункт меню «🧾 Резюме» → `show` с несуществующим именем — печатает ошибку,
-      меню остаётся живым; `list` работает.
+      меню остаётся живым; `list` работает. _(нужен TTY: не выполнялось; вместо него спек
+      `tests/cmd-resume.spec.ts` — при возврате `process.exit` процесс тестов падает)_
 
 ## Definition of Done
 
-- [ ] `Get-ChildItem src -Recurse -Filter *.ts | Select-String -Pattern 'process\.exit\(1\)'` → пусто.
-- [ ] `npx tsc --noEmit` → exit 0; `node bin/auto-hh --help` → exit 0.
-- [ ] Тексты меню и команды `resume` не изменились (кроме перевода одной строки).
+- [x] `Get-ChildItem src -Recurse -Filter *.ts | Select-String -Pattern 'process\.exit\(1\)'` → пусто.
+- [x] `npx tsc --noEmit` → exit 0; `node bin/auto-hh --help` → exit 0.
+- [x] Тексты меню и команды `resume` не изменились (кроме перевода одной строки).
 
 ## Проверка
 

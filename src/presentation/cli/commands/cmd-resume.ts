@@ -8,10 +8,16 @@ import {
 } from "@/application/resume.js";
 import { resumeDeps } from "@/composition.js";
 
+/** Действие пункта меню «🧾 Резюме»: подкоманд у CLI нет, параметры приходят объектом. */
+export interface ResumeCommandOptions {
+  action?: 'list' | 'register' | 'show';
+  name?: string;
+}
+
 async function cmdResumeList() {
   const outcome = await listResumesForCli(resumeDeps);
   if (outcome.kind === 'empty') {
-    console.log("No resumes found. Set RESUMES_DIR or RESUME_PATH.");
+    console.log("Резюме не найдены. Задайте RESUMES_DIR или RESUME_PATH.");
     return;
   }
 
@@ -40,15 +46,17 @@ async function cmdResumeList() {
   }
 }
 
-async function cmdResumeRegister(name: string) {
+async function cmdResumeRegister(name?: string) {
   const outcome = await registerResumeByName(name, resumeDeps);
   if (outcome.kind === 'missing-name') {
     console.error('Укажите имя резюме: пункт меню «🧾 Резюме» → register <name>');
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
   if (outcome.kind === 'not-found') {
     console.error(`Resume "${outcome.name}" not found`);
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
   const state = outcome.created ? 'зарегистрировано' : (outcome.changed ? 'обновлено (содержимое изменилось)' : 'без изменений');
   console.log(`Резюме «${outcome.name}»: ${state} (id: ${outcome.id})`);
@@ -58,11 +66,13 @@ async function cmdResumeShow(name?: string) {
   const outcome = loadResumeForShow(name, resumeDeps);
   if (outcome.kind === 'error') {
     console.error(outcome.message);
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
   if (outcome.kind === 'not-found') {
     console.error('Резюме не найдено. Задайте RESUME_PATH или RESUMES_DIR в .env, либо укажите имя: пункт меню «🧾 Резюме» → show <name>');
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
 
   const resume = outcome.resume;
@@ -85,15 +95,8 @@ async function cmdResumeShow(name?: string) {
   console.log(resume.text);
 }
 
-export default async function cmdResume(opts: Record<string, any> = {}) {
-  const sub = opts._?.join(' ') || 'list';
-  if (sub.startsWith('register')) {
-    const [, name] = sub.split(/\s+/);
-    await cmdResumeRegister(name);
-  } else if (sub.startsWith('show')) {
-    const [, name] = sub.split(/\s+/);
-    await cmdResumeShow(name);
-  } else {
-    await cmdResumeList();
-  }
+export default async function cmdResume(opts: ResumeCommandOptions = {}) {
+  if (opts.action === 'register') return cmdResumeRegister(opts.name);
+  if (opts.action === 'show') return cmdResumeShow(opts.name);
+  return cmdResumeList();
 }

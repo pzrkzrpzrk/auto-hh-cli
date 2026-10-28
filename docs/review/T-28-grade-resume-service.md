@@ -5,6 +5,7 @@
 - **Зависимости:** T-24, T-27 (образец: `judge`/`cover-letter`)
 - **Объём:** 1 файл домена заменён, 1 Application Service, 1 потребитель, 2 спека
 - **Пути:** актуальны на 2026-10-28
+- **Статус:** ✅ сделано (`ab70b9d`); живой прогон `grade` не выполнялся (нужен ключ ИИ)
 
 ## Проблема
 
@@ -23,26 +24,31 @@
 
 ## Что сделать
 
-- [ ] `domain/grade-resume/GradePrompt.ts` — Domain Service: `systemText()`, `userText(resume)`
-      (тексты переносятся **дословно**: их формулировки влияли на ответы модели).
-- [ ] `domain/grade-resume/ResumeGrade.ts` — VO: разбор `overallScore`, `categoryScores`,
+- [x] `domain/grade-resume/GradePrompt.ts` — Domain Service: `systemText()`, `userText(resume)`
+      (тексты переносятся **дословно**: их формулировки влияли на ответы модели). _Перенос сделан
+      `git mv` и сверен сравнением строк: 2611 символов совпали байт-в-байт._
+- [x] `domain/grade-resume/ResumeGrade.ts` — VO: разбор `overallScore`, `categoryScores`,
       списков, clamp в 0..100; неизвестная форма → `null`.
-- [ ] `application/grade/ResumeGradeService.ts` — `chat({ json: true, label: 'оценка резюме' })`,
+- [x] `application/grade/ResumeGradeService.ts` — `chat({ json: true, label: 'оценка резюме' })`,
       пустой ответ/ошибка → `null`, `logger.warn/debug` с прежними текстами
       (`gradeResume: no API client (check API key)`, `… resume not found (set RESUME_PATH)`,
       `… empty response`, `gradeResume: score=… in=… out=…`, `gradeResume failed: …`).
-- [ ] `application/grade.ts` собирает сервис из `GradeDeps` (`ai`, `resumeFiles`, `logger`).
-- [ ] `parseJSON` в `shared/text-utils.ts` — единственный парсер для всех ИИ-ответов;
+- [x] `application/grade.ts` собирает сервис из `GradeDeps` (`ai`, `resumeFiles`, `logger`).
+- [x] `parseJSON` в `shared/text-utils.ts` — единственный парсер для всех ИИ-ответов;
       `grade-resume.ts` удалить.
-- [ ] Тесты: `tests/grade-prompt.spec.ts` (тексты промпта, PDF-фолбэк) и
-      `tests/resume-grade-service.spec.ts` (успех, пустой ответ, ошибка модели, нет ключа) —
-      на фейковом `AiProvider`.
+- [x] Тесты: `tests/grade-prompt.spec.ts` (тексты промпта, PDF-фолбэк),
+      `tests/resume-grade-service.spec.ts` (успех, пустой ответ, ошибка модели, нет ключа) и
+      `tests/grade-report.spec.ts` (формат `.md` — инвариант).
+- [x] Попутно R9: запись `resume-grade.md` вынесена из presentation за порт `TextFileWriter`
+      (адаптер `infrastructure/files/text-file-writer.ts`).
 
 ## Definition of Done
 
-- [ ] `npx tsc --noEmit` → exit 0; `npm run arch` → 0 нарушений; `npm run test:types` → exit 0.
-- [ ] `Get-ChildItem src/domain -Recurse -Filter *.ts | Select-String -Pattern 'AiProvider|ai\.chat\(|logger|safeJsonParse'` → пусто.
-- [ ] Поведение не меняется: те же тексты промпта, `json: true`, те же `log.warn/debug`,
+- [x] `npx tsc --noEmit` → exit 0; `npm run arch` → 0 нарушений; `npm run test:types` → exit 0.
+- [x] В домене не осталось **использований** ИИ и логов: `Select-String` по `src/domain` на
+      `ai\.chat\(|safeJsonParse|logger\?\.` пуст; `AiProvider` и `Logger` встречаются только как
+      объявления портов (`domain/ports.ts`, `domain/logging.ts`).
+- [x] Поведение не меняется: те же тексты промпта, `json: true`, те же `log.warn/debug`,
       `null` вместо исключения, формат `resume-grade.md` и консольного отчёта прежний.
 
 ## Проверка

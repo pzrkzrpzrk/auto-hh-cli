@@ -1,5 +1,7 @@
 // Представление оценки резюме: полоски, Markdown-отчёт и консольный вывод.
-// Логика оценки — domain/grade-resume.ts и application/grade.ts; здесь только формат.
+// Правило оценки — VO ResumeGrade в домене, транспорт — application/grade; сюда форма
+// приходит через реэкспорт application (presentation не импортирует domain напрямую).
+import type { ResumeGrade } from "@/application/grade.js";
 
 function bar(score: number, max: number): string {
   const pct = Math.round((score / max) * 100);
@@ -8,9 +10,9 @@ function bar(score: number, max: number): string {
   return `${filled}${empty} ${score}/${max}`;
 }
 
-function buildMarkdown(result: Record<string, any>): string {
-  const cs = result.categoryScores || {};
-  const da = result.detailedAnalysis || [];
+function buildMarkdown(result: ResumeGrade): string {
+  const cs = result.categoryScores;
+  const da = result.detailedAnalysis;
   const lines: string[] = [];
 
   lines.push("# Проверка резюме");
@@ -20,24 +22,24 @@ function buildMarkdown(result: Record<string, any>): string {
     lines.push(result.overallAssessment + "\n");
   }
 
-  if (result.strengths?.length) {
+  if (result.strengths.length) {
     lines.push("### Сильные стороны");
-    result.strengths.forEach((s: string) => lines.push(`- ${s}`));
+    result.strengths.forEach(s => lines.push(`- ${s}`));
     lines.push("");
   }
-  if (result.weaknesses?.length) {
+  if (result.weaknesses.length) {
     lines.push("### Слабые стороны");
-    result.weaknesses.forEach((s: string) => lines.push(`- ${s}`));
+    result.weaknesses.forEach(s => lines.push(`- ${s}`));
     lines.push("");
   }
-  if (result.missing?.length) {
+  if (result.missing.length) {
     lines.push("### Отсутствует");
-    result.missing.forEach((s: string) => lines.push(`- ${s}`));
+    result.missing.forEach(s => lines.push(`- ${s}`));
     lines.push("");
   }
-  if (result.recommendations?.length) {
+  if (result.recommendations.length) {
     lines.push("### Рекомендации");
-    result.recommendations.forEach((s: string) => lines.push(`- ${s}`));
+    result.recommendations.forEach(s => lines.push(`- ${s}`));
     lines.push("");
   }
 
@@ -45,14 +47,14 @@ function buildMarkdown(result: Record<string, any>): string {
   lines.push(`| Категория | Оценка |`);
   lines.push(`|-----------|--------|`);
   const cats = [
-    ["Первое впечатление", cs.firstImpression?.score ?? 0, cs.firstImpression?.max ?? 25],
-    ["Ясность позиционирования", cs.positioning?.score ?? 0, cs.positioning?.max ?? 25],
-    ["Красные флаги", cs.redFlags?.score ?? 0, cs.redFlags?.max ?? 20],
-    ["Контекст и масштаб", cs.contextAndScale?.score ?? 0, cs.contextAndScale?.max ?? 20],
-    ["Готовность к шортлисту", cs.shortlistReadiness?.score ?? 0, cs.shortlistReadiness?.max ?? 10],
-  ];
+    ["Первое впечатление", cs.firstImpression.score, cs.firstImpression.max],
+    ["Ясность позиционирования", cs.positioning.score, cs.positioning.max],
+    ["Красные флаги", cs.redFlags.score, cs.redFlags.max],
+    ["Контекст и масштаб", cs.contextAndScale.score, cs.contextAndScale.max],
+    ["Готовность к шортлисту", cs.shortlistReadiness.score, cs.shortlistReadiness.max],
+  ] as const;
   for (const [name, score, max] of cats) {
-    lines.push(`| ${name} | ${bar(score as number, max as number)} |`);
+    lines.push(`| ${name} | ${bar(score, max)} |`);
   }
   lines.push("");
 
@@ -64,12 +66,12 @@ function buildMarkdown(result: Record<string, any>): string {
       if (item.description) {
         lines.push(item.description + "\n");
       }
-      if (item.quotes?.length) {
+      if (item.quotes.length) {
         for (const q of item.quotes) {
           lines.push(`> ${q}\n`);
         }
       }
-      if (item.recommendations?.length) {
+      if (item.recommendations.length) {
         lines.push("**Рекомендации:**\n");
         for (const r of item.recommendations) {
           lines.push(`- ${r}\n`);
@@ -81,14 +83,14 @@ function buildMarkdown(result: Record<string, any>): string {
   return lines.join("\n");
 }
 
-function formatGrade(result: Record<string, any> | null): void {
+function formatGrade(result: ResumeGrade | null): void {
   if (!result) {
     console.log("Оценка не получена (проверьте API-ключ и RESUME_PATH)");
     return;
   }
 
-  const cs = result.categoryScores || {};
-  const da = result.detailedAnalysis || [];
+  const cs = result.categoryScores;
+  const da = result.detailedAnalysis;
 
   console.log(`\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
   console.log(`  ПРОВЕРКА РЕЗЮМЕ`);
@@ -100,33 +102,33 @@ function formatGrade(result: Record<string, any> | null): void {
     console.log(`  ${result.overallAssessment}\n`);
   }
 
-  if (result.strengths?.length) {
+  if (result.strengths.length) {
     console.log("  Сильные стороны:");
-    result.strengths.forEach((s: string) => console.log(`    • ${s}`));
+    result.strengths.forEach(s => console.log(`    • ${s}`));
     console.log();
   }
-  if (result.weaknesses?.length) {
+  if (result.weaknesses.length) {
     console.log("  Слабые стороны:");
-    result.weaknesses.forEach((s: string) => console.log(`    • ${s}`));
+    result.weaknesses.forEach(s => console.log(`    • ${s}`));
     console.log();
   }
-  if (result.missing?.length) {
+  if (result.missing.length) {
     console.log("  Отсутствует:");
-    result.missing.forEach((s: string) => console.log(`    • ${s}`));
+    result.missing.forEach(s => console.log(`    • ${s}`));
     console.log();
   }
-  if (result.recommendations?.length) {
+  if (result.recommendations.length) {
     console.log("  Рекомендации:");
-    result.recommendations.forEach((s: string) => console.log(`    • ${s}`));
+    result.recommendations.forEach(s => console.log(`    • ${s}`));
     console.log();
   }
 
   console.log("  Оценки по категориям:");
-  console.log(`    ${bar(cs.firstImpression?.score ?? 0, cs.firstImpression?.max ?? 25)}  — Первое впечатление`);
-  console.log(`    ${bar(cs.positioning?.score ?? 0, cs.positioning?.max ?? 25)}      — Ясность позиционирования`);
-  console.log(`    ${bar(cs.redFlags?.score ?? 0, cs.redFlags?.max ?? 20)}      — Красные флаги`);
-  console.log(`    ${bar(cs.contextAndScale?.score ?? 0, cs.contextAndScale?.max ?? 20)}  — Контекст и масштаб`);
-  console.log(`    ${bar(cs.shortlistReadiness?.score ?? 0, cs.shortlistReadiness?.max ?? 10)}       — Готовность к шортлисту`);
+  console.log(`    ${bar(cs.firstImpression.score, cs.firstImpression.max)}  — Первое впечатление`);
+  console.log(`    ${bar(cs.positioning.score, cs.positioning.max)}      — Ясность позиционирования`);
+  console.log(`    ${bar(cs.redFlags.score, cs.redFlags.max)}      — Красные флаги`);
+  console.log(`    ${bar(cs.contextAndScale.score, cs.contextAndScale.max)}  — Контекст и масштаб`);
+  console.log(`    ${bar(cs.shortlistReadiness.score, cs.shortlistReadiness.max)}       — Готовность к шортлисту`);
 
   if (da.length) {
     console.log(`\n  Детальный разбор:`);
@@ -136,12 +138,12 @@ function formatGrade(result: Record<string, any> | null): void {
       if (item.description) {
         console.log(`    ${item.description}`);
       }
-      if (item.quotes?.length) {
+      if (item.quotes.length) {
         for (const q of item.quotes) {
           console.log(`      "${q}"`);
         }
       }
-      if (item.recommendations?.length) {
+      if (item.recommendations.length) {
         console.log(`    Рекомендации:`);
         for (const r of item.recommendations) {
           console.log(`      → ${r}`);

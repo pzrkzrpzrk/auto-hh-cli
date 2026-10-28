@@ -1,24 +1,23 @@
 // Сценарий оценки резюме: файлы и ИИ приходят портами из composition root.
 // Домен получает готовое резюме параметром и не знает ни про диск, ни про RESUMES_DIR.
-import { gradeResume } from "@/domain/grade-resume.js";
-import type { AiProvider, ResumeFiles } from "@/domain/ports.js";
-import type { Logger } from "@/domain/logging.js";
+// Оркестрация — application/grade/ResumeGradeService, здесь только точка входа шага.
+import { ResumeGradeService } from "@/application/grade/ResumeGradeService.js";
+import type { GradeDeps } from "@/application/grade/GradeDeps.js";
+import type { ResumeGrade } from "@/domain/grade-resume/ResumeGrade.js";
 
-/** Зависимости оценки: ленивый ИИ и файлы резюме. */
-export interface GradeDeps {
-  ai: (path?: string) => AiProvider | null;
-  resumeFiles: ResumeFiles;
-  logger?: Logger;
-}
+export type { GradeDeps } from "@/application/grade/GradeDeps.js";
+// DTO для печати: presentation не импортирует domain напрямую (правило depcruise).
+export type { ResumeGrade } from "@/domain/grade-resume/ResumeGrade.js";
 
-/** Оценка резюме ИИ: загружает резюме (по имени или из .env) и передаёт его домену. */
+/** Оценка резюме ИИ: загружает резюме (по имени или из .env) и передаёт его сервису. */
 export async function gradeResumeFromFile(
   opts: { resume?: string } = {},
   deps: GradeDeps,
-) {
+): Promise<ResumeGrade | null> {
   const ai = deps.ai();
-  // Без ИИ резюме не нужно: домен сам сообщит об отсутствии ключа (как и раньше),
+  const service = new ResumeGradeService(ai, deps.logger);
+  // Без ИИ резюме не нужно: сервис сам сообщит об отсутствии ключа (как и раньше),
   // а лишняя ошибка «резюме не найдено» не появится.
-  if (!ai) return gradeResume(ai, null, deps.logger);
-  return gradeResume(ai, deps.resumeFiles.load(opts.resume), deps.logger);
+  if (!ai) return service.grade(null);
+  return service.grade(deps.resumeFiles.load(opts.resume));
 }
