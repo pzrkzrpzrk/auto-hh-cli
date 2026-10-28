@@ -711,7 +711,11 @@ bin/auto-hh
 | `83b0b1f` | composition root для зависимостей сбора |
 | `0a858bd` | порт `AiProvider` и адаптер OpenAI (OCP, DIP) |
 
-Что осталось из идей (вне рамок переезда): автотесты (`node:test` + `tsx`) для чистых функций и правил — `DigestFilter.matches/select`, `chunk`, `runBatches`, `parseJSON`, `computeActualization`.
+Автотесты заведены на vitest (`npm test`, каталог `tests/`, конфиг `vitest.config.mts`):
+чистые правила и доменные функции проверяются без базы, SQLite-адаптеры — на `:memory:`
+(`SQLITE_PATH` в конфиге тестов). Первый набор: `DigestPolicy`, `computeActualization` /
+`mergeActualized`, `formatResetSummary`, `DbJanitor`. Дальше — `DigestFilter.matches/select`,
+`SkipRules`, `withCoverLetters`, `chunk`, `runBatches`, `parseJSON`, `SqliteCacheStore` и `FileJanitor`.
 
 
 

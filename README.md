@@ -205,6 +205,8 @@ npm start           # или: npm run ui, npx auto-hh, npx auto-hh ui (алиа�
 | `npm run ui` | То же меню явной командой: `npx auto-hh ui` (алиасы: `menu`, `interactive`) |
 | `npm run build` | Проверка границ слоёв + компиляция TS в JS (не обязательна для запуска) |
 | `npm run arch` | Проверить правила зависимостей слоёв (`dependency-cruiser`) |
+| `npm test` | Прогнать тесты (`vitest run`, каталог `tests/`) |
+| `npm run test:watch` | Тесты в режиме наблюдения |
 
 Любой другой аргумент (`npx auto-hh search`, `npx auto-hh digest`) отвечает подсказкой: «Команд больше нет — все шаги делаются в интерактивном меню».
 
