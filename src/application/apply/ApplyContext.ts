@@ -6,11 +6,12 @@ import type { ApplySummary } from "@/application/apply/ApplySummary.js";
 import type { DigestSelection } from "@/application/apply/DigestSelection.js";
 import type { Pacing } from "@/application/apply/Pacing.js";
 import type { SkipRule } from "@/application/apply/SkipRules.js";
+import type { ApplyOptions } from "@/application/options.js";
 
 export interface ApplyContext {
   readonly deps: ApplyDeps;
   /** Флаги команды: `type` превращается в стратегию, `limit` читает стадия лимита. */
-  readonly opts: Record<string, any>;
+  readonly opts: ApplyOptions;
   /** Стратегия выбора вакансий (latest/all). */
   readonly selection: DigestSelection;
   /** Резюме из opts.resume; null — работать по дайджестам всех резюме. */

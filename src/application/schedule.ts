@@ -3,8 +3,9 @@
 import { getNextDate } from "@/shared/cron.js";
 import log from "@/shared/logger.js";
 import type { ConfigProvider, Scheduler } from "@/domain/ports.js";
+import type { ScheduleOptions } from "@/application/options.js";
 
-export type PipelineStep = (opts?: Record<string, any>) => Promise<any>;
+export type PipelineStep = (opts?: ScheduleOptions) => Promise<unknown>;
 
 export interface ScheduleRuntimeDeps {
   /** Конфиг читается по явному пути из opts.config; сценарий не трогает env. */
@@ -41,14 +42,14 @@ export type ScheduleOutcome =
   | { kind: 'scheduled'; expression: string; steps: string[]; resume: string | null; next: Date | null };
 
 export async function runSchedule(
-  opts: Record<string, any> = {},
+  opts: ScheduleOptions = {},
   deps: ScheduleDeps,
   report?: (event: ScheduleEvent) => void,
 ): Promise<ScheduleOutcome> {
   const cfg = deps.config.load(opts.config);
   // Резюме из меню ui (если выбрано) — иначе шаги digest/cover возьмут дефолт из .env.
   // Путь к конфигу передаём шагам, чтобы альтернативный файл действовал на весь прогон.
-  const stepOpts: Record<string, any> = {
+  const stepOpts: ScheduleOptions = {
     ...(opts.resume ? { resume: opts.resume } : {}),
     ...(opts.config ? { config: opts.config } : {}),
   };

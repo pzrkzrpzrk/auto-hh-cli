@@ -5,12 +5,13 @@ import type { VacancyListItem } from "@/domain/search/types.js";
 import type { SearchQuery } from "@/domain/search/SearchQuery.js";
 import type { SearchReportWriter } from "@/domain/ports.js";
 import type { SearchEvent } from "@/application/search/SearchEvent.js";
+import type { SearchOptions } from "@/application/options.js";
 import type SearchCache from "@/application/search/SearchCache.js";
 import type { VacancyCollector } from "@/application/search/VacancyCollector.js";
 
 export interface SearchContext {
   /** Флаги команды: config, reset и прочие, которые читают стадии. */
-  readonly opts: Record<string, any>;
+  readonly opts: SearchOptions;
   readonly cfg: AppConfig;
   /** Резюме, в чью папку пишется выдача; null — no-resume. */
   readonly resume: ResumeRef | null;

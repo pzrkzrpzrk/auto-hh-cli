@@ -209,6 +209,7 @@ src/
 │   │   ├── ActualizeScenario.ts     # актуализация digest/rejected
 │   │   ├── ActualizeTarget.ts       # цели актуализации (digest/rejected)
 │   │   └── index.ts
+│   ├── options.ts              # опции команд: SearchOptions/CoverOptions/ApplyOptions…
 │   ├── config-view.ts          # просмотр config.json через ConfigProvider
 │   ├── grade.ts                # загрузка резюме + оценка
 │   ├── resume.ts               # резюме: list / register / show (порт ResumeFiles)

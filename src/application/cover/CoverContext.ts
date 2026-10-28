@@ -3,13 +3,14 @@
 import type { AiProvider } from "@/domain/ports.js";
 import type { DigestDoc, DigestEntry, Resume, Vacancy } from "@/domain/models.js";
 import type { CoverConfig, CoverDeps } from "@/application/cover/CoverDeps.js";
+import type { CoverOptions } from "@/application/options.js";
 
 /** Чем закончился прогон: ok — письма готовы, empty — генерировать нечего. */
 export type CoverOutcomeKind = 'ok' | 'empty';
 
 export interface CoverContext {
   readonly deps: CoverDeps;
-  readonly opts: Record<string, any>;
+  readonly opts: CoverOptions;
   readonly cfg: CoverConfig;
   readonly ai: AiProvider | null;
   readonly resume: Resume;

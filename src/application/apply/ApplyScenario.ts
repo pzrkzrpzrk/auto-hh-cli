@@ -16,6 +16,7 @@ import {
   LoadHistoryStage,
 } from "@/application/apply/stages.js";
 import type { ApplyContext } from "@/application/apply/ApplyContext.js";
+import type { ApplyOptions } from "@/application/options.js";
 
 export class ApplyScenario {
   private readonly pipeline = new ApplyPipeline([
@@ -29,7 +30,7 @@ export class ApplyScenario {
   constructor(private readonly deps: ApplyDeps) {}
 
   /** opts: { login?: boolean; type?: 'latest' | 'all'; limit?: number; resume?: string } — флаги команды. */
-  async run(opts: Record<string, any> = {}): Promise<ApplyOutcome> {
+  async run(opts: ApplyOptions = {}): Promise<ApplyOutcome> {
     if (opts.login) {
       await this.deps.login.login();
       return { kind: 'login' };
@@ -57,7 +58,7 @@ export class ApplyScenario {
     );
   }
 
-  private createContext(opts: Record<string, any>, resumeId: string | null): ApplyContext {
+  private createContext(opts: ApplyOptions, resumeId: string | null): ApplyContext {
     return {
       deps: this.deps,
       opts,

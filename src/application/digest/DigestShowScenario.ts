@@ -2,6 +2,7 @@
 // Команда получает готовый исход и только печатает его.
 import type { DigestEntry, DigestDoc, ResumeRef } from "@/domain/models.js";
 import type { DigestShowDeps } from "@/application/digest/DigestDeps.js";
+import type { ShowOptions } from "@/application/options.js";
 
 export type DigestShowOutcome =
   | { kind: 'mongo'; date: string; entries: DigestEntry[]; resumeLabel: string | null }
@@ -12,7 +13,7 @@ export class DigestShowScenario {
   constructor(private readonly deps: DigestShowDeps) {}
 
   /** opts.resume — показать дайджест конкретного резюме (иначе самый свежий). */
-  async run(opts: Record<string, any> = {}): Promise<DigestShowOutcome> {
+  async run(opts: ShowOptions = {}): Promise<DigestShowOutcome> {
     const resume = this.resolveResume(opts.resume);
     const digest = await this.deps.digest.latest(resume?.id).catch(() => null);
     if (digest) {

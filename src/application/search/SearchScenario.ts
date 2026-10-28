@@ -9,6 +9,7 @@ import { SearchPipeline } from "@/application/search/SearchPipeline.js";
 import { CollectFullCardsStage, CollectPagesStage, ExportSearchFileStage } from "@/application/search/stages.js";
 import type { SearchContext } from "@/application/search/SearchContext.js";
 import type { SearchEvent } from "@/application/search/SearchEvent.js";
+import type { SearchOptions } from "@/application/options.js";
 import log from "@/shared/logger.js";
 
 export class SearchScenario {
@@ -25,7 +26,7 @@ export class SearchScenario {
     ]);
   }
 
-  async run(opts: Record<string, any> = {}): Promise<void> {
+  async run(opts: SearchOptions = {}): Promise<void> {
     // Резюме нужно до сброса: папка артефактов и область reset зависят от него.
     const resume = this.deps.resumeFiles.load(opts.resume);
     const ref = resume ? { name: resume.name, id: resume.id } : null;
