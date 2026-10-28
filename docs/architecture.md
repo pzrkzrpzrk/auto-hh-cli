@@ -77,7 +77,7 @@ src/                              # 183 файла
 │   ├── resume-block.ts         # блоки резюме для Markdown
 │   ├── resume-markdown.ts      # рендер резюме в .md
 │   ├── actualize.ts            # актуализация дайджестов
-│   ├── adapt-resume.ts         # адаптация резюме под вакансию (правила)
+│   ├── adapt-resume/           # адаптация резюме: словарь, секции, отбор по бюджету
 │   ├── search/                 # VO запроса/прохода, порт VacancySource, FullCardPolicy
 │   ├── digest/                 # политика, кандидат, вердикты, Domain Services, порты
 │   ├── judge/                  # VO Verdict + тексты промпта
@@ -139,11 +139,12 @@ src/                              # 183 файла
 
 ### Раскладка домена
 
-В `domain/` нет I/O: семь «плоских» файлов (`models`, `ports`, `logging`, `actualize`, `adapt-resume`,
-`resume-block`, `resume-markdown`) и пять подпакетов:
+В `domain/` нет I/O: шесть «плоских» файлов (`models`, `ports`, `logging`, `actualize`,
+`resume-block`, `resume-markdown`) и шесть подпакетов:
 
 | Подпакет | Что внутри |
 |---|---|
+| `adapt-resume/` | словарь терминов, разбор секций, отбор по бюджету (`adaptResumeForVacancy`) |
 | `search/` | VO запроса и прохода (`SearchQuery`, `SearchBucket`, `PageKey`), порт `VacancySource`, политика догрузки `FullCardPolicy` |
 | `digest/` | `DigestPolicy`, `DigestCandidate`, `JudgementSet`, Domain Services `DigestFilter` / `DigestMatcher` / `DigestEntryFactory`, порты |
 | `judge/` | VO `Verdict`, тексты промпта `JudgePrompt` |

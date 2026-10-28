@@ -3,7 +3,7 @@
 // Раньше это был интерфейс-мешок: дефолты жили в cover-config.ts и в самом домене,
 // а сценарий принимал ещё один необязательный набор полей (CoverLetterOptions).
 // Теперь один неизменяемый объект: дефолты и клампы — здесь, env читает адаптер.
-import { DEFAULT_ADAPT_BUDGET } from "@/domain/adapt-resume.js";
+import { adaptBudget } from "@/domain/adapt-resume/index.js";
 import { CoverSignature } from "@/domain/cover-letter/CoverSignature.js";
 
 /** Сырые настройки: config.json и env передаёт адаптер, значения необязательны. */
@@ -33,8 +33,6 @@ export class CoverSettings {
   static readonly DEFAULT_PROFILE = 'опытный разработчик';
   static readonly DEFAULT_BATCH_SIZE = 20;
   static readonly DEFAULT_CONCURRENCY = 10;
-  /** Минимальный бюджет адаптации резюме — как в DigestPolicy. */
-  static readonly MIN_ADAPT_BUDGET = 500;
 
   private constructor(
     readonly coverLetterTemplate: string | undefined,
@@ -51,10 +49,7 @@ export class CoverSettings {
     return new CoverSettings(
       input.coverLetterTemplate,
       input.adaptResume !== false,
-      Math.max(
-        CoverSettings.MIN_ADAPT_BUDGET,
-        Math.floor(Number(input.adaptResumeBudget)) || DEFAULT_ADAPT_BUDGET,
-      ),
+      adaptBudget(input.adaptResumeBudget),
       positive(input.batchSize, CoverSettings.DEFAULT_BATCH_SIZE),
       input.profile || CoverSettings.DEFAULT_PROFILE,
       new CoverSignature(input.signature),

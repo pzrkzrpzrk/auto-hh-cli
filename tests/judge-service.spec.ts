@@ -90,6 +90,26 @@ describe("JudgeService.judgeBatch", () => {
     expect([...(result?.keys() ?? [])]).toEqual(["101"]);
   });
 
+  it("при adaptResume=true кладёт адаптированное резюме в блок каждой вакансии", async () => {
+    const ai = new FakeAi(() => reply("{}"));
+    await new JudgeService(ai).judgeBatch(resume, vacancies, { ...settings, adaptResume: true });
+    const prompt = JSON.stringify(ai.calls[0].messages);
+
+    expect(prompt).toContain("=== АДАПТИРОВАННОЕ РЕЗЮМЕ (вакансия #1) ===");
+    expect(prompt).toContain("=== АДАПТИРОВАННОЕ РЕЗЮМЕ (вакансия #2) ===");
+    expect(prompt).not.toContain("=== РЕЗЮМЕ СОИСКАТЕЛЯ ===");
+  });
+
+  it("PDF не адаптируется: резюме уходит общим блоком", async () => {
+    const ai = new FakeAi(() => reply("{}"));
+    const pdf: Resume = { ...resume, type: "pdf", text: undefined, filename: "cv.pdf" };
+    await new JudgeService(ai).judgeBatch(pdf, vacancies, { ...settings, adaptResume: true });
+    const prompt = JSON.stringify(ai.calls[0].messages);
+
+    expect(prompt).toContain("=== РЕЗЮМЕ СОИСКАТЕЛЯ (PDF) ===");
+    expect(prompt).not.toContain("АДАПТИРОВАННОЕ РЕЗЮМЕ");
+  });
+
   it("null при пустом ответе, ошибке и без ключа; пустой список — пустая Map", async () => {
     expect(await new JudgeService(new FakeAi(() => reply(null))).judgeBatch(resume, vacancies, settings)).toBeNull();
     expect(await new JudgeService(new FakeAi(() => { throw new Error("boom"); })).judgeBatch(resume, vacancies, settings)).toBeNull();

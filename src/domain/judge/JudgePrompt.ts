@@ -66,6 +66,11 @@ export class JudgePrompt {
     return `${header}\n${this.vacancyText(vacancy)}`;
   }
 
+  /** Блок резюме, адаптированного под конкретную вакансию пачки. */
+  adaptedResumeBlock(adapted: string, order: number): string {
+    return `=== АДАПТИРОВАННОЕ РЕЗЮМЕ (вакансия #${order}) ===\n${adapted}`;
+  }
+
   /** Поля карточки, которые видит судья. Описание очищается от HTML. */
   private vacancyText(vacancy: Vacancy): string {
     const description = stripHtml(vacancy.description);

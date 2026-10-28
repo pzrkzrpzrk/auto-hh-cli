@@ -33,7 +33,7 @@ export interface ResumeRef {
 // --- Резюме hh.ru ---------------------------------------------------------
 // Модель страницы резюме (разбор — в адаптере hh.ru).
 // Живёт в домене, потому что её использует рендер Markdown (domain/resume-markdown.ts)
-// и правила адаптации резюме под вакансию (domain/adapt-resume.ts).
+// и правила адаптации резюме под вакансию (domain/adapt-resume/).
 
 export interface HhResumeSalary {
   amount: number | null;

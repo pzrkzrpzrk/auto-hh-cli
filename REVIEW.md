@@ -266,7 +266,7 @@ P1 закрыты: R1 — T-28 (`ab70b9d`), R2 — T-29 (`fa48c17`, `9e23a14`). 
 | `catch (err: any)` в сценариях (`application/cover/CoverStage.ts:15`, `apply/ApplyStage.ts:15`, `apply/ApplicationRunner.ts:67`) | осознанная терпимость к форме ошибок ИИ/Playwright; в `grade` уже `catch (err)` + `errorMessage()` |
 | `process.env` в `composition.ts:187-188` (`RESUMES_DIR`, `RESUME_PATH`) | решение composition root: сценарий получает готовый факт `layout`, а не env (T-21/T-22) |
 | Мутабельный sink `shared/logger.ts` + `setLogSink` | точка DI для логирования до создания composition root (логи импорта конфига); параметризация логгера — отдельная задача, не ревью |
-| `domain/adapt-resume.ts:75-76` (`mongo: 'mongodb'`) | алиас технологии в словаре навыков резюме, не легаси Mongo |
+| `domain/adapt-resume/terms.ts` (`mongo: 'mongodb'`) | алиас технологии в словаре навыков резюме, не легаси Mongo |
 | `infrastructure/sqlite/rows.ts` (`fromJson<T>`, `num`, `isoFromMs`) | набор уже единый: адаптеры строк не дублируют разбор JSON |
 | `application/collect.ts` (19 строк, реэкспорт `fmtSalary`) | сознательный фасад для прежних импортов; удалять вместе с последним потребителем |
 

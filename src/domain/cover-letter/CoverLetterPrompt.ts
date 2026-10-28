@@ -91,6 +91,11 @@ ${signature}
     return `=== ВАКАНСИЯ #${order} ===\n${this.vacancyText(vacancy)}`;
   }
 
+  /** Блок резюме, адаптированного под конкретную вакансию пачки. */
+  adaptedResumeBlock(adapted: string, order: number): string {
+    return `=== РЕЗЮМЕ (релевантное для вакансии #${order}) ===\n${adapted}`;
+  }
+
   /** Короткая карточка для письма: описание обрезано до 1000 символов. */
   private vacancyText(vacancy: Vacancy): string {
     const description = stripHtml(vacancy.description).slice(0, 1000);

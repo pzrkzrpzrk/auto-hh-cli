@@ -4,7 +4,7 @@ import { CoverLetterPrompt } from "@/domain/cover-letter/CoverLetterPrompt";
 import { CoverSignature, DEFAULT_COVER_SIGNATURE } from "@/domain/cover-letter/CoverSignature";
 import { CoverTemplate } from "@/domain/cover-letter/CoverTemplate";
 import { CoverSettings } from "@/domain/cover-letter/config";
-import { DEFAULT_ADAPT_BUDGET } from "@/domain/adapt-resume";
+import { DEFAULT_ADAPT_BUDGET } from "@/domain/adapt-resume/index";
 import type { Vacancy } from "@/domain/models";
 
 const vacancy: Vacancy = {
@@ -100,5 +100,12 @@ describe("CoverLetterPrompt", () => {
     expect(block.startsWith("=== ВАКАНСИЯ #2 ===\nvacancyId: 555")).toBe(true);
     expect(prompt.batchSystem(false)).not.toContain("передано адаптированное");
     expect(prompt.batchSystem(true)).toContain("передано адаптированное");
+  });
+
+  it("блок адаптированного резюме пачки подписан номером вакансии", () => {
+    const prompt = new CoverLetterPrompt("backend");
+    expect(prompt.adaptedResumeBlock("## Опыт", 2)).toBe(
+      "=== РЕЗЮМЕ (релевантное для вакансии #2) ===\n## Опыт",
+    );
   });
 });
