@@ -24,21 +24,20 @@ async function actualize(opts: Record<string, any> = {}) {
   if (result) printActualize(result);
 }
 
-const SHOW_ACTIONS = new Set(['show', 'last', 'latest', 'view']);
-const ACTUALIZE_ACTIONS = new Set(['actualize', 'actualise', 'refresh', 'sync']);
+/** Действие пункта меню: подкоманд у CLI нет, поэтому действие приходит строкой. */
+export type DigestAction = 'build' | 'show' | 'actualize';
 
-export default async function cmdDigest(action: any = 'build', opts: Record<string, any> = {}) {
-  // Совместимость с прежним вызовом cmdDigest({ json: true }) — это показ дайджеста.
-  if (action && typeof action === 'object') {
-    opts = action;
-    action = 'show';
+export default async function cmdDigest(action: DigestAction = 'build', opts: Record<string, any> = {}) {
+  switch (action) {
+    case 'show':
+      return show(opts);
+    case 'actualize':
+      return actualize(opts);
+    case 'build':
+      return build(opts);
+    default:
+      // Строка приходит из меню/команды; ветка нужна для внешних вызовов и опечаток.
+      console.error(`Неизвестное действие "digest ${action}". Доступно: build (по умолчанию), show, actualize.`);
+      process.exitCode = 1;
   }
-
-  const name = String(action).toLowerCase();
-  if (SHOW_ACTIONS.has(name)) return show(opts);
-  if (ACTUALIZE_ACTIONS.has(name)) return actualize(opts);
-  if (name === 'build' || name === 'make' || name === 'create') return build(opts);
-
-  console.error(`Неизвестное действие "digest ${action}". Доступно: build (по умолчанию), show, actualize.`);
-  process.exitCode = 1;
 }
