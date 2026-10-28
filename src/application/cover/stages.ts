@@ -1,7 +1,7 @@
 // Стадии подготовки писем по дайджесту. Каждая — один шаг прежнего coverDigest,
 // с тем же порядком и текстами логов; I/O идёт через порты.
 import log from "@/shared/logger.js";
-import { buildCoverLettersBatch } from "@/domain/cover-letter/index.js";
+import { CoverLetterService } from "@/application/cover-letter/index.js";
 import type { DigestEntry, Vacancy } from "@/domain/models.js";
 import { AllVacanciesPolicy } from "@/domain/search/FullCardPolicy.js";
 import SearchCache from "@/application/search/SearchCache.js";
@@ -104,11 +104,9 @@ export class GenerateLettersStage extends CoverStage {
   protected async execute(ctx: CoverContext): Promise<StageResult> {
     const batchSize = ctx.cfg.batchSize;
     log.info(`Генерация писем пачками по ${batchSize} для ${ctx.items.length} вакансий`);
-    const generated = await buildCoverLettersBatch(
-      ctx.ai,
+    const generated = await new CoverLetterService(ctx.ai, ctx.cfg, log).generateBatch(
       ctx.resume,
       ctx.items,
-      batchSize,
       async partial => {
         for (const [id, letter] of partial.entries()) {
           ctx.letters.set(id, letter);
@@ -116,14 +114,6 @@ export class GenerateLettersStage extends CoverStage {
           await ctx.deps.letters.save(id, letter, ctx.resume.id)
             .catch(err => log.warn(`saveLetter ${id}: ${err.message}`));
         }
-      },
-      ctx.cfg.adaptResume,
-      {
-        profile: ctx.cfg.profile,
-        signature: ctx.cfg.signature,
-        concurrency: ctx.cfg.concurrency,
-        adaptResumeBudget: ctx.cfg.adaptResumeBudget,
-        logger: log,
       },
     );
     for (const [id, letter] of generated.entries()) ctx.letters.set(id, letter);
