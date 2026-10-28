@@ -1,10 +1,14 @@
 # Архитектура auto-hh-cli
 
-- **Статус:** этапы 1–9 выполнены — структура приведена к целевой (раздел 4), домен не зависит от инфраструктуры, все сценарии в `application/`; поиск (этап 6) и дайджест (этап 7) переведены на ООП (порты, конвейер, репортёр), этап 8 закрыл `apply`/`cover` портами (T-17/T-18) и собрал их как ООП-подсистемы (фасады, конвейеры, стратегии), этап 9 — файловый I/O (T-20), `ConfigProvider` (T-19), чистые `shared`/домен (T-21), единый composition root с портом `Scheduler` (T-22), защита границ (T-23: `dependency-cruiser` + `strict: true`) и домен без побочек (T-24); этап 10 (T-27) перевёл `domain/judge` и `domain/cover-letter` на Value Objects и Domain Services (`Verdict`, `JudgePrompt`, `CoverSignature`, `CoverTemplate`, `CoverSettings`), а вызовы ИИ, пачки и логи — в `application/judge/JudgeService` и `application/cover-letter/CoverLetterService`; документация обновлена.
-- **Дата:** 2026-10-28.
-- **Ветка:** `refactor/t-25-t-31`.
-- **Состояние кода:** `src/` — 183 файла, ≈12,2 тыс. строк; `npm run arch` → 0 нарушений (188 модулей), `npx tsc --noEmit` → exit 0 при `strict: true`; тесты — 23 файла / 136 кейсов.
-- **Хранилище (2026-10-28):** MongoDB заменена на SQLite — встроенный `node:sqlite`, файл `data/autohh.db`, адаптеры в `infrastructure/sqlite/`. Порты домена не менялись. Упоминания MongoDB ниже в хронологии этапов описывают состояние **до** миграции.
+- **Стек:** TypeScript (`nodenext`, `strict`), Node.js ≥ 22.13, CLI на `tsx`; Playwright (persistent
+  context), встроенный `node:sqlite` (`data/autohh.db`), OpenAI-совместимый ИИ, `@inquirer/prompts`,
+  `node-cron`; тесты — vitest, границы слоёв — dependency-cruiser.
+- **Состояние (2026-10-28, ветка `refactor/t-25-t-31`):** `src/` — 183 файла, ≈12,2 тыс. строк;
+  `npm run arch` → 0 нарушений (188 модулей), `npx tsc --noEmit` → exit 0, `npx vitest run` →
+  23 файла / 136 кейсов.
+- **Хранилище:** SQLite — `cache_pages`, `cache_full`, `cache_judgements`, `cache_cover_letters`,
+  `history`, `digests`, `resumes`; адаптеры в `infrastructure/sqlite/`.
+- **История задач и известный долг:** [`docs/review/`](review/README.md), [`REVIEW.md`](../REVIEW.md).
 
 ---
 
@@ -16,19 +20,19 @@ CLI-приложение автоматизирует поиск и отклик
 search → digest → cover → apply
 ```
 
-Дополнительно: `digest actualize`, `resume` (загрузка/скачивание), `grade` (оценка резюме ИИ), `schedule` (cron), `config`, `reset`.
+Дополнительно: `digest actualize`, `resume` (загрузка/скачивание), `grade` (оценка резюме ИИ),
+`schedule` (cron), `config`, `reset`.
 
-Внешние зависимости: hh.ru через Playwright, SQLite (встроенный `node:sqlite`), OpenAI-совместимый ИИ, файловая система (`data/`).
+Внешние зависимости: hh.ru через Playwright, SQLite (встроенный `node:sqlite`),
+OpenAI-совместимый ИИ, файловая система (`data/`).
 
 ---
 
 ## 2. Слои и правила зависимостей
 
-Четыре слоя плюс общие утилиты и точка сборки:
-
 | Слой | Ответственность | Может зависеть от |
 |---|---|---|
-| `domain` | бизнес-правила и модели: фильтр, судья, письма, оценка резюме, актуализация | только `shared` (и ничего из `infrastructure`, `application`, `presentation`) |
+| `domain` | бизнес-правила и модели: фильтр, судья, письма, оценка резюме, актуализация | только `shared` |
 | `application` | сценарии (use cases): оркестрация домена и портов | `domain`, `shared`, порты |
 | `infrastructure` | адаптеры: hh.ru, ИИ, SQLite, Playwright, файлы, конфигурация | `domain` (реализует порты), `shared` |
 | `presentation` | ввод-вывод: команды, меню, парсинг аргументов | `application`, `composition`, `shared` |
@@ -49,231 +53,115 @@ flowchart TD
     S -.-> D
 ```
 
-Текстовая схема (если Mermaid не отображается):
+`presentation → application → domain`, `composition → infrastructure → domain`, `shared` не зависит
+ни от одного слоя. Правила проверяются автоматически: `.dependency-cruiser.js`, `npm run arch`
+(нарушение слоя, тип-импорт не туда или цикл → exit ≠ 0); `src/composition.ts` — единственное место,
+где известны конкретные классы.
 
-```
-presentation ──▶ application ──▶ domain
-      │                │
-      └──▶ composition ─┼──▶ infrastructure ──(реализует порты)──▶ domain
-                       │
-                   shared (без зависимостей от слоёв)
-```
-
-Правила проверяются автоматически: `.dependency-cruiser.js` + `npm run arch` (входит в `npm run build`).
-Запрещены импорты `domain → infrastructure/application/presentation`, `shared → любой слой`,
-`application → infrastructure/presentation`, `infrastructure → application/presentation`,
-`presentation → infrastructure`; `src/composition.ts` — единственное исключение.
-
-Ключевое правило: **домен не импортирует инфраструктуру**. Всё, что домену нужно снаружи (кэш, история, ИИ), описано портами в `domain/ports.ts` и передаётся параметром.
+Ключевое правило: **домен не импортирует инфраструктуру**. Всё, что домену нужно снаружи (кэш,
+история, ИИ, файлы), описано портами (`domain/ports.ts`, `domain/<подпакет>/ports.ts`) и приходит
+параметром `deps`.
 
 ---
 
-## 3. Текущее состояние
-
-Структура совпадает с целевой (раздел 4): `src/` — 183 файла, ≈12,2 тыс. строк, `npm run arch` → 0 нарушений, `npx tsc --noEmit` → exit 0 при `strict: true`.
+## 3. Структура проекта
 
 ```
 src/                              # 183 файла
-├── application/                  # 66 файлов, ≈3,56 тыс. строк — сценарии (use cases)
-├── domain/                       # 34 файла, ≈2,56 тыс. строк — модели, правила, порты
-├── infrastructure/               # 52 файла, ≈4,14 тыс. строк — адаптеры hh.ru, ИИ, SQLite,
-│                                 #   Playwright, файлы, логирование, планировщик, конфигурация
-├── presentation/                 # 20 файлов, ≈1,43 тыс. строк — CLI: команды, меню, форматтеры
-├── shared/                       # 10 файлов, ≈0,31 тыс. строк — логгер-фасад, батчи, время,
-│                                 #   ретраи, текст, ошибки
-└── composition.ts                # точка сборки зависимостей
-```
-
-Счётчики — `Get-ChildItem -Recurse -File src/<слой> -Filter *.ts` на 2026-10-28.
-
-### Раскладка домена
-
-В `domain/` нет I/O: 7 «плоских» файлов (`models`, `ports`, `actualize`, `adapt-resume`,
-`resume-block`, `resume-markdown`, `grade-resume`) и четыре подпакета — `search/` (VO запроса, порт
-источника и политика догрузки), `digest/` (политика, кандидат, вердикты, Domain Services и порты),
-`judge/` (Value Object вердикта + тексты промпта) и `cover-letter/` (подпись, шаблон, промпт, настройки).
-
-С этапа 10 (T-27) в `judge/` и `cover-letter/` нет ни `AiProvider`, ни логгера, ни `parseJSON`:
-домен отвечает за правила и тексты, а `application/judge/JudgeService` и
-`application/cover-letter/CoverLetterService` — за транспорт, пачки и диагностику.
-Проверка: `Select-String -Path src/domain/judge/*.ts,src/domain/cover-letter/*.ts -Pattern 'AiProvider|chat\(|logger'`
-→ пусто.
-
-`filter.ts` перенесён в `domain/digest/` и переписан как Domain Service `DigestFilter`
-(2026-10-19): правила `config.filter` и регионы «любые вакансии» задаются в конструкторе
-(`DigestFilter.from(cfg)`), наружу — `matches(vacancy)` и `select(items, cache)`. Фильтр
-использует только конвейер дайджеста (`application/digest/stages.ts`), поиск его не вызывает.
-
-### Исходные проблемы (as-is до этапов 1–7) — все закрыты
-
-1. **Слои не были видны по каталогам.** В корне `src/` смешивались утилиты (`time`, `retry`),
-   инфраструктура (`browser`, `config`, `env`) и доменные модели (`types.ts`)
-   → разнесены по `shared/`, `infrastructure/`, `domain/`.
-2. **`domain/collect.ts` — не домен.** Он выполнял сеть, писал в кэш, читал историю
-   → `application/collect.ts`.
-3. **`clients/` и `store/` — один слой** в двух каталогах
-   → `infrastructure/{hh,ai,sqlite,files,playwright,config}`.
-4. **Бизнес-логика в командах.** `cmd-digest.ts` (380 строк) содержал фильтрацию, судью и сборку
-   дайджеста; `cmd-cover.ts` (146) — цикл генерации писем; `cmd-apply.ts` (97) — цикл откликов
-   → сценарии в `application/`, команды только выбирают действие и печатают.
-5. **`cli/apply/steps.ts` (219 строк)** — Playwright-адаптер, а не слой представления
-   → `infrastructure/playwright/apply-steps.ts`.
-6. **Домен смотрел в инфраструктуру:** `domain/resume-markdown.ts` импортировал типы из
-   `clients/hh-resume.ts` → типы `HhResume*` перенесены в `domain/models.ts`.
-7. **Загрузка резюме из файлов внутри домена:** `domain/grade-resume.ts` вызывал `loadResume()`
-   (fs) → файл читает `application/grade.ts` и передаёт резюме параметром.
-
----
-
-## 4. Целевая структура (реализована)
-
-```
-src/
 ├── domain/
 │   ├── models.ts               # Vacancy, Resume, DigestEntry, HhResume*
 │   ├── ports.ts                # CacheStore, HistoryStore, DataJanitor, ResumeFiles,
 │   │                           #   SearchReportWriter, AppConfig, ConfigProvider, Logger,
-│   │                           #   SearchDeps, ResumeSource, SourceProvider, AiProvider
-│   ├── resume-block.ts
-│   ├── actualize.ts
-│   ├── adapt-resume.ts
-│   ├── resume-markdown.ts
-│   ├── judge/                  # чистый домен судьи
-│   │   ├── Verdict.ts          # Value Object: инвариант fit/score/reason/comment + разбор ответа
-│   │   ├── JudgePrompt.ts      # Domain Service: system/batch-система и блок вакансии
-│   │   └── index.ts
-│   ├── cover-letter/           # чистый домен писем
-│   │   ├── CoverSignature.ts   # Value Object подписи (+ плейсхолдер по умолчанию)
-│   │   ├── CoverTemplate.ts    # Value Object шаблона {title}/{employer}/{area}/{signature}
-│   │   ├── CoverLetterPrompt.ts # Domain Service: одиночный и батчевый промпт
-│   │   ├── config.ts           # CoverSettings (VO) + CoverConfig (совместимый alias)
-│   │   └── index.ts
-│   ├── grade-resume.ts
-│   ├── search/                 # VO и порт источника вакансий
-│   │   ├── SearchQuery.ts      # config.search → проходы и страницы
-│   │   ├── SearchBucket.ts     # проход: префикс, подпись, регион, график
-│   │   ├── PageKey.ts          # ключ страницы в кэше + «страница 0 всегда свежая»
-│   │   ├── VacancySource.ts    # порт: searchVacancies / getVacancy
-│   │   ├── FullCardPolicy.ts   # Strategy: skipSeen для search/digest/cover
-│   │   └── types.ts            # VacancyListItem, SearchParams, SearchCacheSnapshot
-│   └── digest/                 # VO и порты дайджеста
-│       ├── DigestFilter.ts     # Domain Service: локальный пре-фильтр (config.filter)
-│       ├── DigestPolicy.ts     # Value Object: minScore/maxRun/dryRun/useJudge
-│       ├── DigestCandidate.ts  # кандидат, вердикт фильтра, AcceptedCandidate, события отбора
-│       ├── JudgementSet.ts     # вердикты судьи: pending/merge/toSnapshot
-│       ├── DigestMatcher.ts    # Domain Service: отбор accepted/rejected (без логов)
-│       ├── DigestEntryFactory.ts # Domain Service: маппинг кандидата в запись (без истории)
-│       ├── ports.ts            # DigestRepository, JudgementCache, CoverLetterCache, ...
-│       ├── types.ts            # конфиг/флаги запуска/снимок кэша
-│       └── index.ts
+│   │                           #   ResumeSource, SourceProvider, AiProvider, Scheduler
+│   ├── logging.ts              # порт Logger для ИИ-вызовов
+│   ├── resume-block.ts         # блоки резюме для Markdown
+│   ├── resume-markdown.ts      # рендер резюме в .md
+│   ├── actualize.ts            # актуализация дайджестов
+│   ├── adapt-resume.ts         # адаптация резюме под вакансию (правила)
+│   ├── search/                 # VO запроса/прохода, порт VacancySource, FullCardPolicy
+│   ├── digest/                 # политика, кандидат, вердикты, Domain Services, порты
+│   ├── judge/                  # VO Verdict + тексты промпта
+│   ├── cover-letter/           # подпись, шаблон, промпт, CoverSettings
+│   └── grade-resume/           # VO ResumeGrade + GradePrompt
 │
 ├── application/
-│   ├── collect.ts              # flattenCollected (+ реэкспорт fmtSalary из shared)
-│   ├── digest.ts               # фасад: buildDigest / showDigest / actualizeDigests
-│   ├── cover.ts                # runCover() — обёртка над CoverScenario
-│   ├── cover/                  # ООП-реализация писем
-│   │   ├── CoverScenario.ts    # Facade: проверки → стратегия режима → результат
-│   │   ├── CoverMode.ts        # Strategy: одна вакансия или весь дайджест
-│   │   ├── SingleVacancyMode.ts # карточка hh.ru → письмо → cacheCoverLetters
-│   │   ├── DigestCoverMode.ts  # конвейер стадий по последнему дайджесту
-│   │   ├── CoverPipeline.ts    # Chain of Responsibility: стадии и «стоп»
-│   │   ├── CoverStage.ts       # Template Method: enabled → execute → onError
-│   │   ├── stages.ts           # дайджест → лимит → письма → карточки → выбор → генерация → запись
-│   │   ├── CoverContext.ts     # состояние прогона для стадий
-│   │   ├── CoverDeps.ts        # порты сценария, CoverConfig/CoverOutcome/OnVacancy
-│   │   ├── CoverPlan.ts        # Value Object: счётчики плана и готовности
-│   │   └── index.ts
-│   ├── cover-letter/           # Application Service генерации писем
-│   │   ├── CoverLetterService.ts # ИИ, пачки, onBatch, fallback на шаблон
-│   │   └── index.ts
-│   ├── apply.ts                # runApply() — обёртка над ApplyScenario
-│   ├── apply/                  # ООП-реализация отклика
-│   │   ├── ApplyScenario.ts    # Facade: вход → конвейер плана → сессия → цикл
-│   │   ├── ApplyPipeline.ts    # Chain of Responsibility: стадии плана
-│   │   ├── ApplyStage.ts       # Template Method: enabled → execute → onError
-│   │   ├── stages.ts           # дайджест → архив → лимит → письма → история
-│   │   ├── ApplyContext.ts     # план отклика и политики прогона
-│   │   ├── ApplyDeps.ts        # порты сценария, ApplyOutcome, ApplySettings
-│   │   ├── ApplicationRunner.ts # цикл откликов: вход, пропуски, счётчики
-│   │   ├── SkipRules.ts        # Chain of Responsibility: почему пропустить
-│   │   ├── DigestSelection.ts  # Strategy: latest/all
-│   │   ├── Pacing.ts           # Strategy: пауза (+ Null Object для проверок)
-│   │   ├── ApplySummary.ts     # Value Object: ok/fail/skipped
-│   │   └── index.ts
-│   ├── search.ts               # runSearch() — обёртка над SearchScenario
-│   ├── search/                 # ООП-реализация поиска
-│   │   ├── SearchScenario.ts   # фасад: сброс → источник → конвейер
-│   │   ├── SearchPipeline.ts   # цепочка стадий
-│   │   ├── SearchStage.ts      # Template Method: включена → execute → onError
-│   │   ├── stages.ts           # страницы, файл, полные карточки
-│   │   ├── SearchContext.ts    # состояние прогона для стадий
-│   │   ├── SearchEvent.ts      # события фаз + порт SearchReporter
-│   │   ├── VacancyCollector.ts # Application Service: страницы и карточки
-│   │   ├── SearchCache.ts      # Repository кэша (cache_pages/cache_full)
-│   │   ├── PageIterator.ts     # Iterator страниц прохода
-│   │   └── SearchRequestBuilder.ts # Builder параметров запроса
-│   ├── digest/                 # ООП-реализация дайджеста
-│   │   ├── DigestScenario.ts   # Facade: политика → конвейер → результат
-│   │   ├── DigestPipeline.ts   # Chain of Responsibility: стадии и «стоп»
-│   │   ├── DigestStage.ts      # Template Method: общий каркас стадии
-│   │   ├── stages.ts           # кэш → резюме → карточки → фильтр → судья → отбор → запись
-│   │   ├── DigestContext.ts    # состояние прогона для стадий
-│   │   ├── DigestEvent.ts      # события фаз + порт DigestReporter
-│   │   ├── DigestDeps.ts       # порты сборки/показа/актуализации
-│   │   ├── JudgeStrategy.ts    # Strategy: как спрашивать ИИ (батч/поштучно)
-│   │   ├── DigestJudgeRunner.ts # Application Service: пачки, кэш, частичное сохранение
-│   │   ├── DigestShowScenario.ts    # SQLite → письма → .md fallback
-│   │   ├── ActualizeScenario.ts     # актуализация digest/rejected
-│   │   ├── ActualizeTarget.ts       # цели актуализации (digest/rejected)
-│   │   └── index.ts
-│   ├── judge/                  # Application Service судейства
-│   │   ├── JudgeService.ts     # ИИ-вызовы, разбор вердикта, логи, ошибки → null
-│   │   └── index.ts
-│   ├── options.ts              # опции команд: SearchOptions/CoverOptions/ApplyOptions…
+│   ├── search/                 # SearchScenario, Pipeline, стадии, VacancyCollector, SearchCache,
+│   │                           #   PageIterator, SearchRequestBuilder, SearchEvent
+│   ├── digest/                 # DigestScenario/Pipeline/стадии, DigestJudgeRunner, JudgeStrategy,
+│   │                           #   DigestShowScenario, ActualizeScenario
+│   ├── cover/                  # CoverScenario, CoverMode, стадии, CoverPlan, CoverDeps
+│   ├── apply/                  # ApplyScenario, Pipeline, ApplicationRunner, SkipRules,
+│   │                           #   DigestSelection, Pacing, ApplySummary
+│   ├── judge/JudgeService.ts   # ИИ-вызовы, разбор вердикта, логи, «ошибка → null»
+│   ├── cover-letter/CoverLetterService.ts  # ИИ, пачки, onBatch, fallback на шаблон
+│   ├── grade/ResumeGradeService.ts         # ИИ-оценка резюме
+│   ├── search.ts / digest.ts / cover.ts / apply.ts   # совместимые фасады run<X>()
+│   ├── collect.ts              # flattenCollected (+ реэкспорт fmtSalary)
 │   ├── config-view.ts          # просмотр config.json через ConfigProvider
 │   ├── grade.ts                # загрузка резюме + оценка
-│   ├── resume.ts               # резюме: list / register / show (порт ResumeFiles)
-│   ├── resume-download.ts      # скачивание резюме (порты ResumeSource, ResumeFiles)
+│   ├── resume.ts               # резюме: list / register / show
+│   ├── resume-download.ts      # скачивание резюме
 │   ├── schedule.ts             # прогон пайплайна по cron
-│   ├── history.ts              # история откликов (порт HistoryStore)
-│   └── reset.ts                # сброс данных (порт DataJanitor)
+│   ├── history.ts              # история откликов
+│   └── reset.ts                # сброс данных
 │
 ├── infrastructure/
-│   ├── hh/{client.ts, session.ts, search-page-reader.ts, vacancy-page-reader.ts,
-│   │       resume-page-reader.ts, resume-dom-blocks.ts, resume-pdf.ts,
-│   │       vacancy-mapping.ts, vacancy-fields.ts, resume-parser.ts, resume-raw.ts,
-│   │       resume-codes.ts, resume-lookup.ts, resume-sections.ts,
-│   │       vacancy-source.ts, resume-source.ts, source-provider.ts}
-│   │                            # адаптеры портов: сессия браузера, читатели страниц,
-│   │                            #   чистый разбор состояния, жизненный цикл источника
-│   ├── ai/client.ts
-│   ├── sqlite/{db.ts, schema.ts, rows.ts, cache-store.ts, digest-store.ts, history-store.ts,
-│   │   │      resume-store.ts, digest-repository.ts, judgement-cache.ts,
-│   │   │      cover-letter-cache.ts, resume-registry.ts, db-janitor.ts}
-│   ├── files/{resume-loader.ts, resume-files.ts, file-janitor.ts,
-│   │          search-output.ts, search-report-writer.ts, digest-files.ts,
-│   │          digest-file-source.ts, digest-artifacts.ts}
-│   ├── janitor.ts               # композит DataJanitor: файлы (FileJanitor) + БД (DbJanitor)
-│   ├── logging/logger.ts        # адаптер LogSink: app.log + DEBUG
+│   ├── hh/                     # client (фасад), session, search/vacancy/resume-page-reader,
+│   │                           #   resume-dom-blocks, resume-pdf, vacancy-fields/vacancy-mapping,
+│   │                           #   resume-raw/codes/lookup/sections/parser,
+│   │                           #   vacancy-source, resume-source, source-provider
+│   ├── ai/client.ts            # единый OpenAI-совместимый клиент
+│   ├── sqlite/                 # db, schema, rows, cache-store, digest-store, history-store,
+│   │                           #   resume-store, digest-repository, judgement-cache,
+│   │                           #   cover-letter-cache, resume-registry, db-janitor
+│   ├── files/                  # resume-loader, resume-files, file-janitor, search-output,
+│   │                           #   search-report-writer, digest-files, digest-file-source,
+│   │                           #   digest-artifacts, text-file-writer
+│   ├── janitor.ts              # композит DataJanitor: файлы (FileJanitor) + БД (DbJanitor)
+│   ├── logging/logger.ts       # адаптер LogSink: app.log + DEBUG
 │   ├── scheduling/node-cron.ts # адаптер Scheduler: единственный import node-cron
-│   ├── playwright/{browser.ts, apply-steps.ts, application-gateway.ts}
-│   └── config/{config.ts, env.ts, paths.ts, apply-config.ts, cover-config.ts, db-config.ts}
+│   ├── playwright/             # browser, apply-steps, application-gateway
+│   └── config/                 # config, env, paths, apply-config, cover-config, db-config
 │
 ├── presentation/cli/
 │   ├── index.ts
 │   ├── commands/cmd-*.ts       # только выбор действия и печать
-│   ├── format/{grade-report.ts, search-report.ts, digest-report.ts}  # консольные представления
-│   └── menu/{menu,options,resume,resume-download,steps}.ts
+│   ├── format/                 # grade-report, search-report, digest-report
+│   └── menu/                   # menu, options, resume, resume-download, steps
 │
-├── shared/{logger,logging,batches,retry,text-utils,time,cron,path-utils,format}.ts
-└── composition.ts              # единая точка new HHClient(): vacancySource/resumeSource
+├── shared/{logger,logging,batches,retry,text-utils,time,errors,hash,path-utils,format}.ts
+└── composition.ts              # точка сборки: источники hh.ru, ИИ, хранилища, closeResources()
 ```
 
-Отличия от исходного состояния:
+Размеры слоёв (2026-10-28): `application` — 66 файлов / ≈3,56 тыс. строк, `domain` — 34 / ≈2,56,
+`infrastructure` — 52 / ≈4,14, `presentation` — 20 / ≈1,43, `shared` — 10 / ≈0,31.
+Счётчики: `Get-ChildItem -Recurse -File src/<слой> -Filter *.ts`.
 
-- Появились явные `application/`, `infrastructure/`, `presentation/`, `shared/`.
-- `domain/` содержит только модели, правила и порты.
-- Команды в `presentation` становятся тонкими: парсинг аргументов → вызов сценария → вывод.
+### Раскладка домена
+
+В `domain/` нет I/O: семь «плоских» файлов (`models`, `ports`, `logging`, `actualize`, `adapt-resume`,
+`resume-block`, `resume-markdown`) и пять подпакетов:
+
+| Подпакет | Что внутри |
+|---|---|
+| `search/` | VO запроса и прохода (`SearchQuery`, `SearchBucket`, `PageKey`), порт `VacancySource`, политика догрузки `FullCardPolicy` |
+| `digest/` | `DigestPolicy`, `DigestCandidate`, `JudgementSet`, Domain Services `DigestFilter` / `DigestMatcher` / `DigestEntryFactory`, порты |
+| `judge/` | VO `Verdict`, тексты промпта `JudgePrompt` |
+| `cover-letter/` | `CoverSignature`, `CoverTemplate`, `CoverLetterPrompt`, `CoverSettings` |
+| `grade-resume/` | VO `ResumeGrade`, `GradePrompt` |
+
+В `judge/`, `cover-letter/` и `grade-resume/` нет ни `AiProvider`, ни логгера, ни `parseJSON`:
+домен отвечает за правила и тексты, а `application/{judge,cover-letter,grade}/*Service` — за транспорт,
+пачки и диагностику. Проверка:
+`Select-String -Path src/domain/judge/*.ts,src/domain/cover-letter/*.ts,src/domain/grade-resume/*.ts -Pattern 'AiProvider|chat\(|logger|parseJSON'` → пусто.
+
+`DigestFilter` — Domain Service: правила `config.filter` и регионы «любые вакансии» собираются в
+конструкторе (`DigestFilter.from(cfg)`), наружу — `matches(vacancy)` и `select(items, cache)`. Фильтр
+использует только конвейер дайджеста (`application/digest/stages.ts`), поиск его не вызывает.
+
+---
+
+## 4. Паттерны по шагам
 
 ### Паттерны поиска (этап 6)
 
@@ -291,7 +179,7 @@ src/
 | Iterator | `PageIterator` | кэш/источник и break по страницам |
 | Value Object | `SearchQuery`, `SearchBucket`, `PageKey` | правила проходов и ключей кэша |
 
-Инвариант: тексты `log.*`/`console.*` и порядок фаз не изменились — после каждого шага сверялись с HEAD.
+Инвариант: тексты `log.*`/`console.*` и порядок фаз не менялись.
 
 ### Паттерны дайджеста (этап 7)
 
@@ -309,29 +197,18 @@ src/
 | Factory | `DigestEntryFactory` | `DigestEntry` из кандидата (чистый маппинг, без истории) |
 | Facade | `DigestScenario`, `DigestShowScenario`, `ActualizeScenario` | один вход для команды на каждый шаг |
 
-Ниже — что именно даёт каждый паттерн, а не только где он лежит.
-
-**Value Object — `DigestPolicy`.** Собирает `minScore`, `maxRun`, `dryRun`, `useJudge`, `adaptResume`, размер пачки и параллелизм в один неизменяемый объект. Раньше это были отдельные `const` внутри `buildDigest`, и любая ветка могла прочитать не то поле; теперь политика создаётся один раз и передаётся стадиям. `DigestCandidate`/`AcceptedCandidate` фиксируют форму кандидата, а `JudgementSet` инкапсулирует `Map` вердиктов и даёт операции `pending()`, `merge()`, `toSnapshot()`.
-
-**Domain Service — `DigestMatcher`.** Правило «кто в дайджест, кто в rejected» вместе с лимитом `maxRun`; I/O и логов здесь нет, поэтому правило проверяется без базы. Факты для логов матчер возвращает событиями (`DigestSelectionEvent`), а печатает их `SelectStage`. `DigestEntryFactory` — чистый маппинг принятого кандидата в `DigestEntry`; отметку истории (`markApplied` с `digestOnly`) и лог `Match` делает та же стадия. `DigestJudgeRunner` оркестрирует пачки и сохранение, но сам вызов ИИ спрятан за стратегией.
-
-**Domain Service — `DigestFilter`.** Локальный пре-фильтр: правила `config.filter` (архив, компании, ключевые слова, зарплата, локация) и регионы «любые вакансии» из `config.search.area` собираются один раз в конструкторе (`DigestFilter.from(cfg)`), наружу — `matches(vacancy)` и `select(items, cache)`. Раньше это были функции с мешком `any` (`vacancyMatchesFilter`/`selectCandidates`); теперь фильтр создаётся в `DigestScenario` и передаётся стадии через контекст, а `LocalFilterStage` только логирует пропуски и отмечает историю.
-
-**Ports & Adapters — `domain/digest/ports.ts`.** `DigestRepository`, `JudgementCache`, `CoverLetterCache`, `ResumeRegistry`, `ResumeProvider`, `DigestFileSource` и `DigestCacheStore` описывают ровно то, что нужно сценарию. Реализации — в `infrastructure/sqlite` и `infrastructure/files`; `Select-String 'infrastructure/(sqlite|files|hh)' src/application/digest` не находит совпадений. Конфиг приходит через `DigestDeps.config` (`ConfigProvider`, T-19), а не читается сценарием с диска.
-
-**Repository — `SqliteDigestRepository`.** Прячет выбор `writeDigest`/`writeRejected` и `writeActualDigest`/`writeActualRejected` за `save(kind)`, `saveActual(kind)`, `latest()`, `byDate()`, `all()` и `listDocs()`. `ActualizeScenario` больше не держит таблицу функций записи: цели описаны `DigestKind` и `ActualizeTarget`, поэтому новый артефакт добавляется одной строкой.
-
-**Strategy — `JudgeStrategy`.** `AiJudgeStrategy` делегирует в `JudgeService` (`application/judge`), поэтому домен судьи остаётся без I/O; в проверках подставляется детерминированная стратегия, и `DigestJudgeRunner` не меняется. `ActualizeTarget` применяет ту же идею к актуализации: `digest` и `rejected` отличаются только `kind` и подписью в логе.
-
-**Template Method — `DigestStage`.** `run()` проверяет, не остановлен ли конвейер, и вызывает `execute()`; стадия не дублирует эту проверку. Ошибки не глушатся: падение пачки судьи пробрасывается наверх (`onError: throw`), как в прежнем `buildDigest`.
-
-**Chain of Responsibility — `DigestPipeline`.** Стадии `LoadCache → RegisterResume → CollectCards → LocalFilter → Judge → Select → Persist` идут строго по порядку; `stop` возвращается при пустом кэше, пустой выдаче и в dry-run. Порядок и тексты логов совпадают с прежней реализацией — это проверено скриптом сверки литералов.
-
-**Observer — `DigestEvent`.** Сценарий сообщает `matched` и `digest-saved`, не зная про консоль; `ConsoleDigestReporter` печатает TOP MATCHES и подсказку про письма. Команда стала 44 строки: выбрать действие и подключить репортёр.
-
-**Factory — `DigestEntryFactory`.** Один конструктор записи: поля `id/title/employer/area/salary/url/publishedAt/score/reason/comment/coverLetter` формируются в одном месте. Для rejected используется тот же тип без письма и комментария (`RejectedEntry`), поэтому формат `.md` не меняется.
-
-**Facade — `DigestScenario`.** Команда вызывает `build(opts)`; внутри — `DigestPolicy.from`, `withSource`, конвейер и результат. `DigestShowScenario` и `ActualizeScenario` дают такой же простой вход для `show`/`actualize`, а `application/digest.ts` оставляет совместимые `buildDigest`/`showDigest`/`actualizeDigests`.
+- `DigestPolicy` — один неизменяемый объект вместо пачки `const` (`minScore`, `maxRun`, `dryRun`,
+  `useJudge`, `adaptResume`, размер пачки, параллелизм); `JudgementSet` инкапсулирует `Map` вердиктов
+  и даёт `pending()`, `merge()`, `toSnapshot()`.
+- `DigestMatcher` — правило «кто в дайджест, кто в rejected» вместе с лимитом `maxRun`; факты для
+  логов возвращает событиями (`DigestSelectionEvent`), печатает их `SelectStage`. Отметку истории
+  (`markApplied` с `digestOnly`) и лог `Match` делает та же стадия.
+- `DigestEntryFactory` — единственный конструктор записи: поля
+  `id/title/employer/area/salary/url/publishedAt/score/reason/comment/coverLetter` формируются в одном
+  месте; для rejected — тот же тип без письма и комментария, поэтому формат `.md` не меняется.
+- Стадии `LoadCache → RegisterResume → CollectCards → LocalFilter → Judge → Select → Persist` идут
+  строго по порядку; `stop` возвращается при пустом кэше, пустой выдаче и в dry-run. Ошибка пачки
+  судьи пробрасывается наверх (`onError: throw`), как в прежнем `buildDigest`.
 
 Поток сборки:
 
@@ -357,7 +234,8 @@ sequenceDiagram
     R-->>CMD: .md по регионам
 ```
 
-Показ и актуализация — отдельные сценарии с теми же портами: `DigestShowScenario` (SQLite → письма → `.md` fallback) и `ActualizeScenario` (документы → `computeActualization` → перезапись и `actual.md`).
+Показ и актуализация — отдельные сценарии с теми же портами: `DigestShowScenario` (SQLite → письма →
+`.md` fallback) и `ActualizeScenario` (документы → `computeActualization` → перезапись и `actual.md`).
 
 ### Паттерны отклика (этап 8)
 
@@ -373,19 +251,16 @@ sequenceDiagram
 | Null Object | `NoPacing` | проверки без ожидания |
 | Value Object | `ApplySummary` | ok/fail/skipped и их сводка в одном объекте |
 
-**Ports & Adapters — `ApplyDeps`.** `DigestRepository`, `CoverLetterCache`, `HistoryStore`, `ApplicationGateway` и `LoginGateway` — всё, что нужно сценарию; `application/apply/` не импортирует `infrastructure` (совпадения в `Select-String` — только комментарии и литерал `via: 'playwright'`, поле схемы истории).
-
-**Facade — `ApplyScenario`.** `run(opts)` обрабатывает ручной вход, собирает `ApplyContext`, прогоняет конвейер плана и только затем открывает сессию через `gateway.withSession`: ошибка подготовки плана не поднимает браузер, а `finally` адаптера закрывает его при любом исходе. `application/apply.ts` сохраняет прежнюю точку входа `runApply`.
-
-**Strategy — `DigestSelection`.** `LatestDigestSelection` читает `byDate(dateKey())`, `AllDigestsSelection` — `all()`; `digestSelection(type)` выбирает класс по флагу команды. Новый источник (дайджест за конкретную дату) — ещё одна реализация, сценарий не меняется.
-
-**Chain of Responsibility — `SkipRules`.** `SkipRule.check()` идёт по звеньям: `MissingLetterRule` (warn, считается в `skipped`) → `AlreadyAppliedRule` (info, не считается; `digestOnly` не блокирует отклик). Решение несёт уровень лога и вклад в сводку, поэтому `ApplicationRunner` не знает причин пропуска.
-
-**Template Method + Chain — `ApplyStage`/`ApplyPipeline`.** Пять стадий (`LoadDigest → FilterArchived → Limit → AttachLetters → LoadHistory`) заполняют `ApplyContext`; порядок и тексты логов совпадают с прежним `runApply`. Ошибка любой стадии валит прогон (`onError: throw`), как раньше.
-
-**Strategy + Null Object — `Pacing`.** `RandomPacing` инкапсулирует `sleep(rand(MIN_DELAY, MAX_DELAY))`, `NoPacing` — заглушка для проверок. Пауза вызывается только после реальной попытки отклика — пропуски не растягивают прогон (прежнее поведение сохранено).
-
-**Value Object — `ApplySummary`.** Счётчики `ok/fail/skipped` и строка `ok=N, fail=N, skipped=N` формируются в одном месте; наружу — тот же `ApplyOutcome { kind: 'done', ... }`.
+- `ApplyDeps` — всё, что нужно сценарию: `DigestRepository`, `CoverLetterCache`, `HistoryStore`,
+  `ApplicationGateway`, `LoginGateway`. `ApplyScenario.run()` обрабатывает ручной вход, собирает
+  `ApplyContext`, прогоняет конвейер плана и только затем открывает сессию через
+  `gateway.withSession` — ошибка подготовки плана не поднимает браузер.
+- `SkipRules` идёт по звеньям: `MissingLetterRule` (warn, считается в `skipped`) →
+  `AlreadyAppliedRule` (info, не считается; `digestOnly` не блокирует отклик). Решение несёт уровень
+  лога и вклад в сводку, поэтому `ApplicationRunner` не знает причин пропуска.
+- `Pacing` вызывается только после реальной попытки отклика — пропуски не растягивают прогон.
+  `ApplySummary` формирует строку `ok=N, fail=N, skipped=N`; наружу — тот же
+  `ApplyOutcome { kind: 'done', … }`.
 
 ### Паттерны писем (этап 8)
 
@@ -400,15 +275,19 @@ sequenceDiagram
 | Repository + Application Service | `SearchCache`, `VacancyCollector`, `AllVacanciesPolicy` | догрузка описаний тем же кодом, что search/digest |
 | Observer (callback) | `OnVacancy` | команда печатает заголовок вакансии в прежнем порядке вывода |
 
-**Facade + Strategy — `CoverScenario`/`CoverMode`.** `run()` читает конфиг и резюме один раз, проверяет шаблон и по наличию id выбирает режим. `SingleVacancyMode` открывает источник через `withSource` (RAII), получает карточку, отдаёт её в `OnVacancy`, генерирует письмо и пишет в `cacheCoverLetters`. `DigestCoverMode` собирает `CoverContext` и запускает конвейер.
-
-**Template Method + Chain — `CoverStage`/`CoverPipeline`.** Семь стадий (`LoadDigest → Limit → AttachLetters → EnsureCards → SelectItems → GenerateLetters → PersistDigest`) заполняют контекст. `stop` возвращается при пустом дайджесте/ошибке хранилища, когда все письма уже есть и когда ни у одной вакансии нет описания; тексты и порядок логов совпадают с прежним `coverDigest`.
-
-**Value Object — `CoverPlan`/`CoverProgress`.** `CoverPlan` считает `existing = total - pending` и печатает «Вакансий: N, письма уже есть: N, генерируем: N»; `CoverProgress` — «Сопроводительных готово: N/N» и решает, писать ли дайджест. Логи не могут разойтись с числами, потому что строка и арифметика в одном объекте.
-
-**Repository + Application Service — без нового кода.** `EnsureCardsStage` читает `cache_full` через `CacheStore.getFullByVacancyIds`, догружает недостающее `VacancyCollector` с `AllVacanciesPolicy` (просмотренные не пропускаем) и пишет через `SearchCache.saveFull` — тот же путь, что в search/digest.
-
-`application/cover.ts` остался совместимой обёрткой `runCover(vacancyId, opts, deps, onVacancy)`; `cmd-cover.ts` и `composition.ts` не менялись.
+- `CoverScenario.run()` читает конфиг и резюме один раз, проверяет шаблон и по наличию id выбирает
+  режим. `SingleVacancyMode` открывает источник через `withSource` (RAII), получает карточку, отдаёт
+  её в `OnVacancy`, генерирует письмо и пишет в `cache_cover_letters`; `DigestCoverMode` собирает
+  `CoverContext` и запускает конвейер.
+- Семь стадий (`LoadDigest → Limit → AttachLetters → EnsureCards → SelectItems → GenerateLetters →
+  PersistDigest`) заполняют контекст; `stop` — при пустом дайджесте/ошибке хранилища, когда все письма
+  уже есть и когда ни у одной вакансии нет описания.
+- `CoverPlan` считает `existing = total - pending` и печатает «Вакансий: N, письма уже есть: N,
+  генерируем: N»; `CoverProgress` — «Сопроводительных готово: N/N» и решает, писать ли дайджест.
+  Строка и арифметика в одном объекте, поэтому логи не расходятся с числами.
+- `EnsureCardsStage` читает `cache_full`, догружает недостающее `VacancyCollector` с
+  `AllVacanciesPolicy` (просмотренные не пропускаем) и пишет через `SearchCache.saveFull` — тот же
+  путь, что в search/digest.
 
 ### Паттерны судьи и писем (этап 10, T-27)
 
@@ -421,15 +300,18 @@ sequenceDiagram
 | Strategy | `JudgeStrategy` | `DigestJudgeRunner` не знает, батч это или поштучный запрос |
 | Adapter + DIP | `infrastructure/config/cover-config.ts` | env/config.json → `CoverSettings.from(...)`, домен env не читает |
 
-**Value Object — `Verdict`.** Инвариант собран в класс: при `fit=true` заполняется `comment` (или берётся `reason`, или шаблонная фраза), при `fit=false` — `reason`; `score` зажимается в 1..10, строки тримятся. `listFromModel` принимает и голый массив (GLM), и `{"verdicts": [...]}`, а `toJudgement()` отдаёт ровно те поля, что лежат в `cache_judgements` (`score/fit/reason/comment`).
-
-**Domain Service — `JudgePrompt`/`CoverLetterPrompt`.** Тексты перенесены дословно (системный текст, батчевые добавки, блоки вакансий, образец письма). Проверка чистоты домена: `Select-String -Path src/domain/judge/*.ts,src/domain/cover-letter/*.ts -Pattern 'AiProvider|chat\(|logger'` → пусто.
-
-**Application Service — `JudgeService`/`CoverLetterService`.** Здесь остались подписи запросов (`судья <id>`, `судья батч N`, `письма батч N`, `письмо`), тексты логов, `try/catch` и порядок `chunk → runBatches → onBatch`. `CoverLetterService.generateOne` держит прежний fallback «ИИ → шаблон», `generateBatch` сохраняет частичный прогресс после каждой пачки.
-
-**Value Object — `CoverSettings`.** Дефолты (`опытный разработчик`, пачка 20, параллелизм 10) и клампы (бюджет ≥ 500, пачка/параллелизм ≥ 1) живут в домене; `cover-config.ts` только читает env и config.json и вызывает `CoverSettings.from(...)`. Имя `CoverConfig` осталось type-alias'ом, поэтому сценарии и порты не менялись.
-
-Проверки этапа: `npx tsc --noEmit` → exit 0, `npm run arch` → 0 нарушений (171 модуль), `npx vitest run tests/judge-verdict.spec.ts tests/judge-service.spec.ts tests/cover-template.spec.ts tests/cover-letter-service.spec.ts` → 29 тестов, `node bin/auto-hh --help` → exit 0.
+- `Verdict` держит инвариант: при `fit=true` заполняется `comment` (или берётся `reason`, или шаблонная
+  фраза), при `fit=false` — `reason`; `score` зажимается в 1..10, строки тримятся. `listFromModel`
+  принимает и голый массив (GLM), и `{"verdicts": [...]}`, а `toJudgement()` отдаёт ровно те поля, что
+  лежат в `cache_judgements` (`score/fit/reason/comment`).
+- Тексты промптов перенесены в домен дословно (системный текст, батчевые добавки, блоки вакансий,
+  образец письма). В сервисах остались подписи запросов (`судья <id>`, `судья батч N`, `письма батч N`,
+  `письмо`), тексты логов, `try/catch` и порядок `chunk → runBatches → onBatch`.
+  `CoverLetterService.generateOne` держит прежний fallback «ИИ → шаблон», `generateBatch` сохраняет
+  частичный прогресс после каждой пачки.
+- `CoverSettings` хранит дефолты (`опытный разработчик`, пачка 20, параллелизм 10) и клампы
+  (бюджет ≥ 500, пачка/параллелизм ≥ 1); `cover-config.ts` только читает env и config.json и вызывает
+  `CoverSettings.from(...)`.
 
 ### Резюме как измерение данных (2026-10-21)
 
@@ -443,307 +325,35 @@ sequenceDiagram
 | Запись дайджеста | `resumeId` (кто судил), `coverLetterResumeId` (под кого письмо) | `domain/models.ts` |
 | Отклики | `history.meta.resumeId` | `application/apply/ApplicationRunner.ts` |
 
-- `search` / `digest` / `cover` принимают `opts.resume`; writer и репозиторий получают `ResumeRef` и сами выбирают папку на диске и ключ записи в SQLite.
-- `apply` группирует записи по `coverLetterResumeId → resumeId` и берёт письмо строго под это резюме; записи без резюме идут legacy-путём без фильтра.
-- Изменение содержимого (sha256 в реестре) при регистрации очищает вердикты и письма этого резюме — они относились к старому тексту (`RegisterResumeStage`).
-- `DataJanitor` (`infrastructure/janitor.ts`) чистит папку резюме, строки `digests`, `cache_judgements`, `cache_cover_letters` и отклики этого резюме; кэш `cache_pages`/`cache_full` — только по флагу `includeSearchCache` (шаг `search --reset`, который сразу перезапишет кэш). Диск чистит `FileJanitor`, таблицы — `DbJanitor`.
+- `search` / `digest` / `cover` принимают `opts.resume`; writer и репозиторий получают `ResumeRef` и
+  сами выбирают папку на диске и ключ записи в SQLite.
+- `apply` группирует записи по `coverLetterResumeId → resumeId` и берёт письмо строго под это резюме;
+  записи без резюме идут legacy-путём без фильтра.
+- Изменение содержимого (sha256 в реестре) при регистрации очищает вердикты и письма этого резюме —
+  они относились к старому тексту (`RegisterResumeStage`).
+- `DataJanitor` чистит папку резюме, строки `digests`, `cache_judgements`, `cache_cover_letters` и
+  отклики этого резюме; кэш `cache_pages`/`cache_full` — только по флагу `includeSearchCache`
+  (шаг `search --reset`, который сразу перезапишет кэш). Диск чистит `FileJanitor`, таблицы — `DbJanitor`.
 
 ---
 
-## 5. Таблица переносов
+## 5. Инварианты (не менять при переносе)
 
-| Группа | Сейчас | Куда | Причина |
-|---|---|---|---|
-| Модели | `src/types.ts` | `domain/models.ts` | доменные модели, а не утилита |
-| Домен | `domain/{resume-block,actualize,resume-markdown,grade-resume}.ts`, `domain/{judge,cover-letter,digest}/*`, `domain/ports.ts` | `domain/` (внутри слоя `filter.ts` стал `domain/digest/DigestFilter.ts`) | уже верный слой |
-| Сценарий | `domain/collect.ts` | `application/collect.ts` | сеть + кэш + история |
-| hh.ru | `clients/hh-client.ts`, `clients/hh-resume.ts` | `infrastructure/hh/` | адаптер внешнего сайта |
-| ИИ | `clients/ai-client.ts` | `infrastructure/ai/client.ts` | адаптер SDK |
-| SQLite | `clients/db.ts`, `store/{cache,digest,history,resume,search}-store.ts` | `infrastructure/sqlite/` | адаптеры базы (встроенный `node:sqlite`) |
-| Сброс | `store/reset.ts` | `application/reset.ts` | сценарий, а не хранилище |
-| Браузер | `browser.ts`, `cli/apply/steps.ts` | `infrastructure/playwright/` | Playwright-адаптер |
-| Файлы | `resume.ts` | `infrastructure/files/resume-loader.ts` | чтение с диска |
-| Выдача в файл | `store/search-store.ts` | `infrastructure/files/search-output.ts` | запись `.md` |
-| Конфигурация | `config.ts`, `env.ts`, `paths.ts` | `infrastructure/config/` | чтение файлов и env |
-| Настройки отклика | `cli/apply/config.ts` | `infrastructure/config/apply-config.ts` | env для Playwright |
-| Утилиты | `logger.ts`, `concurrency.ts`, `retry.ts`, `text-utils.ts`, `time.ts` | `shared/` | нет бизнес-смысла |
-| Команды | `cli/index.ts`, `cli/cmd-*.ts` | `presentation/cli/` | ввод-вывод |
-| Меню | `cli/ui/*` | `presentation/cli/menu/` | ввод-вывод |
-| Сборка | `composition.ts` | остаётся в корне `src/` | composition root |
-
-Правило при переезде: меняются только пути в импортах. Расширения `.js` сохраняются (требование `moduleResolution: nodenext`), имена env-переменных и CLI-команд не меняются.
-
----
-
-## 6. Этапы миграции
-
-Каждый этап завершается проверкой: `npx tsc --noEmit` → exit 0, затем запуск `node bin/auto-hh` (меню открывается). Этапы независимы, но порядок важен.
-
-### Этап 1 — каркас (механический переезд)
-
-1. Создать каталоги `application/`, `infrastructure/{hh,ai,sqlite,files,playwright,config}/`, `presentation/cli/`, `shared/`.
-2. Перенести файлы по таблице из раздела 5, обновляя импорты.
-3. Обновить `bin/auto-hh`: `require('../src/cli/index')` → `require('../src/presentation/cli/index')`.
-4. Поправить `tsconfig.json`, если изменился `include` (сейчас `src/**/*.ts` — менять не нужно).
-
-Риск: только битые пути; tsc их ловит. Ожидаемый объём: один коммит, ~80–100 правок импортов.
-
-### Этап 2 — чистота домена
-
-1. Перенести типы `HhResume*` в `domain/models.ts`, чтобы `resume-markdown.ts` не импортировал `infrastructure/hh`.
-2. Убрать `loadResume()` из `domain/grade-resume.ts`: резюме передаётся параметром, загрузка — в `application/grade.ts`.
-
-Проверка зависимости: `grep "infrastructure" src/domain` не должен находить совпадений.
-
-**Выполнено (2026-10-19).** Типы `HhResume*` перенесены в `domain/models.ts`; реэкспорт из `infrastructure/hh/resume.ts` жил до T-25 (этап 11) и затем удалён — адаптеры берут типы из домена. `loadResume()` убран из домена: сценарий `application/grade.ts` загружает резюме и передаёт его параметром. Заодно закрыты ещё две утечки: `sanitizeSegment`/`UNKNOWN_REGION` вынесены в `shared/path-utils.ts` (реэкспорт из `paths.ts` сохранён), а `domain/cover-letter/*` больше не читает `config.json` — флаг `adaptResume` передаётся из `cmd-cover`. Проверка: `grep "infrastructure" src/domain` → 0 совпадений, `npx tsc --noEmit` → exit 0.
-
-### Этап 3 — use cases
-
-По одному сценарию, начиная с самого крупного:
-
-1. `cmd-digest.ts` → `application/digest.ts` (фильтр + судья + сборка дайджеста), команда остаётся оболочкой.
-2. `cmd-cover.ts` → `application/cover.ts`.
-3. `cmd-apply.ts` → `application/apply.ts` (цикл откликов; действия страницы уже в `infrastructure/playwright`).
-4. `cmd-search.ts` → `application/search.ts`.
-5. `cmd-grade-resume.ts` + `loadResume` → `application/grade.ts`.
-
-**Выполнено (2026-10-19):** все пять шагов — `application/{digest,cover,apply,search,grade}.ts`. Команды только выбирают действие, печатают и выставляют код возврата; порядок вывода сохранён колбэками (`onMatched`, `onVacancy`) и событиями (`SearchEvent`).
-
-После каждого шага: `tsc --noEmit` и ручная проверка соответствующего пункта меню, если доступна база.
-
-### Этап 4 — документация
-
-1. Обновить `README.md`: дерево `src/`, ссылки на файлы.
-2. Обновить `docs/review/*` и `REVIEW.md`: старые пути в тикетах помечать как исторические.
-3. Отметить в этом документе фактическое состояние (исходная структура → целевая структура).
-
-**Выполнено (2026-10-19):** дерево `src/` в `README.md` соответствует слоям, ссылка на селекторы ведёт в `infrastructure/playwright/apply-steps.ts`; в `REVIEW.md` и `docs/review/README.md` добавлена пометка, что пути в отчётах исторические.
-
-### Этап 5 — остальные команды (выполнено 2026-10-19)
-
-Все команды без бизнес-логики: `cmd-resume-download` → `application/resume-download.ts`, `cmd-resume` → `application/resume.ts`, `cmd-schedule` → `application/schedule.ts` (порт `Scheduler` отдаёт и постановку задачи, и next run), `cmd-history` → `application/history.ts`, `cmd-grade-resume` → формат в `presentation/cli/format/grade-report.ts`, показ дайджеста и файловый fallback → `application/digest.ts` + `infrastructure/files/digest-files.ts`.
-
-Приём тот же, что на этапе 3: сценарий возвращает исход (`kind`) и события фаз, команда печатает и выставляет код возврата — порядок вывода в консоли сохраняется. Проверка после каждого шага: `tsc --noEmit` → 0, `node bin/auto-hh --version` → 1.0.0, сверка всех сообщений `console.*`/`log.*` со старым файлом.
-
-### Этап 6 — поиск на ООП (выполнено 2026-10-19)
-
-1. VO и порт источника: `domain/search/{SearchQuery,SearchBucket,PageKey,VacancySource,types}.ts`.
-2. Адаптеры `HHVacancySource`/`HHResumeSource` и `HHSourceProvider` (открыть → работа → закрыть).
-3. `SearchCache` — репозиторий `cache_pages`/`cache_full`; `flatten()` проверен на идентичность прежнему `flattenCollected`.
-4. `VacancyCollector` + `SearchRequestBuilder` + `PageIterator` + `FullCardPolicy`.
-5. `SearchScenario` + `SearchPipeline` + стадии (`CollectPages`, `ExportSearchFile`, `CollectFullCards`), `runSearch()` остался обёрткой.
-6. `ConsoleSearchReporter` в `presentation/cli/format/`; `cmd-search.ts` — 10 строк.
-7. digest/cover получают `SourceProvider` и используют тот же коллектор; 8. resume-download — порт `ResumeSource`.
-9. Удалён процедурный код `collect.ts` (`collectVacancies`, `ensureFullVacancies`, `searchBuckets`), остались `flattenCollected` и `fmtSalary` (на этапе 7 `fmtSalary` переехал в `shared/format.ts`, в `collect.ts` остался реэкспорт).
-
-Проверка: `new HHClient()` и импорты `infrastructure/hh` остались только в `composition.ts`; `tsc` → 0; порядок событий и тексты сверены на фейковом источнике (`found → files-saved → full-start → full-progress → full-cards → done`, ветка `nothing-found` без `done`).
-
-### Этап 7 — дайджест на ООП (выполнено 2026-10-19)
-
-1. VO и порты: `domain/digest/{DigestPolicy,DigestCandidate,JudgementSet,ports,types}.ts`; `fmtSalary` вынесен в `shared/format.ts` (домен больше не тянет `application/collect.ts`).
-2. Domain Services: `DigestMatcher` (правило отбора) и `DigestEntryFactory` (чистый маппинг записи).
-3. Адаптеры: `MongoDigestRepository`, `MongoJudgementCache`, `MongoCoverLetterCache`, `MongoResumeRegistry`, `FileDigestSource`, `FileResumeFiles`; `cache-store` получил `saveJudgementsMap`.
-4. `DigestJudgeRunner` + `JudgeStrategy`: пачки, кэш вердиктов, частичное сохранение и поштучный фолбэк.
-5. Конвейер: `DigestScenario` + `DigestStage` (Template Method) + `DigestPipeline` (Chain) + 7 стадий с прежним порядком логов.
-6. `DigestShowScenario` и `ActualizeScenario` (+ `ActualizeTarget`); `application/digest.ts` стал фасадом из трёх обёрток.
-7. `ConsoleDigestReporter` в `presentation/cli/format/digest-report.ts`; `cmd-digest.ts` — 44 строки.
-
-Проверка: `tsc --noEmit` → 0 после каждого коммита, `node bin/auto-hh --version` → 1.0.0; скрипт сверки литералов `log.*`/`console.*` с `origin/development` — 0 расхождений; smoke на фейковых портах: accept/reject и `maxRun`, dry-run без записей, пустой кэш и пустая выдача, показ mongo/files/none, актуализация и её dry-run, батч-фолбэк и повторное использование вердиктов.
-
-E2E с живыми hh.ru, Mongo и ИИ не запускался — проверка шла на фейковых портах.
-
-### Этап 8 — `apply` и `cover` за порты и на ООП (выполнено 2026-10-19, T-17/T-18)
-
-1. Порты в `domain/ports.ts`: `ApplicationSession` (`ensureLoggedIn`, `apply`), `ApplicationGateway`
-   (`withSession` — RAII по образцу `SourceProvider`), `LoginGateway`, `ApplyResult`;
-   `CacheStore.getFullByVacancyIds`. `CoverLetterCache` расширен: `attach(entries, { force })` и
-   `save(vacancyId, letter)`.
-2. Адаптер `infrastructure/playwright/application-gateway.ts` — единственное место, где шаг отклика
-   касается Playwright (`openBrowser`, `ensureLoggedIn`, `applyToVacancy`, ручной вход).
-3. `application/apply/` — ООП-сценарий: `ApplyScenario` (Facade) + `ApplyPipeline`/`ApplyStage`
-   (Chain + Template Method) + пять стадий плана + `ApplicationRunner`; стратегии `DigestSelection`
-   и `Pacing`, цепочка `SkipRules`, VO `ApplySummary`. `application/apply.ts` оставил
-   `runApply(opts, deps)`; браузер закрывается в `finally` адаптера; `history.load()` — один раз на прогон.
-4. `application/cover/` — ООП-сценарий: `CoverScenario` (Facade) + стратегии `CoverMode`
-   (`SingleVacancyMode`/`DigestCoverMode`) + конвейер семи стадий (Template Method + Chain)
-   + VO `CoverPlan`/`CoverProgress`. `application/cover.ts` оставил
-   `runCover(vacancyId, opts, deps, onVacancy)`; `CoverConfig` (шаблон, `adaptResume`,
-   `COVER_BATCH_SIZE`) собирает `composition.ts`.
-5. `composition.ts`: `applyDeps` + `coverDeps`; `cmd-apply`/`cmd-cover` только передают зависимости.
-
-Проверка: `application → infrastructure` — 26 импортов в 12 файлах → **15 в 10**;
-`npx tsc --noEmit` → 0; smoke на фейковых портах: cover — 9 сценариев (одна вакансия,
-`not-found`, кэш + пачка с обновлением дайджеста, все письма готовы, `force`, `limit`, пустой
-дайджест/ошибка Mongo, нет описаний, нет резюме); apply — 7 сценариев (архивные, `type=all`,
-`limit`, `not-logged-in` с закрытием сессии, ручной вход, `ok=false`/исключение в `fail`,
-пауза только после реальной попытки).
-
-### Этап 9 — файловый I/O за портами (выполнено 2026-10-19, T-20)
-
-1. Порты в `domain/ports.ts`: `DataJanitor { clearAll(): Promise<ResetSummary> }`,
-   `ResumeFiles { ensureDir, list, load, pathFor, exists, save }`,
-   `SearchReportWriter { write(entries, opts) }`; `SearchDeps` получил `janitor` и `reportWriter`.
-   `ResumeRegistry` расширен `listRegistered()` — список резюме помечает файлы датой регистрации.
-2. Адаптеры `infrastructure/files/`: `data-janitor.ts` (перенос очистки `reset.ts` без изменения
-   поведения), `resume-files.ts` (list/load/ensureDir/save/пути `.md` и pdf), `search-report-writer.ts`
-   (обёртка над `search-output.ts`). `FileResumeProvider` слит с `FileResumeFiles` — один адаптер
-   на все сценарии.
-3. `application/{reset,resume,resume-download,history}.ts` и `search/{stages,SearchScenario}.ts`
-   работают только с портами; сброс приходит в `SearchScenario` через `deps.janitor` и выполняется
-   до открытия источника, как и раньше.
-4. `composition.ts`: `resetDeps`, `historyDeps`, `resumeDeps`, `resumeDownloadDeps`;
-   `searchDeps` собирается с `config`, `janitor` и `reportWriter`; при этом сохранены
-   `applyDeps`/`coverDeps` (ООП-подсистемы этапа 8). Команды передают deps, не собирая адаптеры.
-
-Проверка: `Get-ChildItem -Recurse -File src\application -Filter *.ts | Select-String -Pattern 'from "fs"|from "path"|mongo/'` → пусто;
-`npx tsc --noEmit` → 0; `node bin/auto-hh --version` → 1.0.0; смоук на фейковых портах —
-файлы резюме (save/overwrite/list/load/путь PDF), скачивание с событиями, reset/history/search
-через порты, стадия выдачи через `SearchReportWriter` и её ошибка без падения поиска.
-
-### Этап 9.1 — конфиг за портом (выполнено 2026-10-19, T-19)
-
-1. `domain/ports.ts`: `AppConfig` — DTO config.json (`api`, `apply`, `adaptResume`, `search`,
-   `filter`, `schedule` + неизвестные ключи) и `ConfigProvider { load(path?) }`; `SearchDeps`
-   получил `config`.
-2. `infrastructure/config/config.ts`: `FileConfigProvider` — явный путь важнее `CONFIG_PATH`,
-   кэш по абсолютному пути, один `configProvider` на процесс; `loadConfig(path?)` остался
-   совместимой обёрткой для `cmd-config`.
-3. `DigestDeps`, `ActualizeDeps`, `ScheduleDeps` получили `config`; `CoverDeps.config` принимает
-   путь. `DigestScenario`, `ActualizeScenario`, `SearchScenario`, `schedule` и `CoverScenario`
-   вызывают `deps.config.load(opts.config)` / `deps.config(opts.config)`;
-   `process.env.CONFIG_PATH` в `application` больше не присваивается.
-4. `composition.ts`: общий провайдер для `searchDeps`, `digestDeps`, `actualizeDeps`,
-   `coverConfig` и `aiProvider`; `aiProvider(path?)` берёт ключ/`baseUrl` из того же файла,
-   что и сценарий; `runSchedule` передаёт `config` в шаги, `cmd-schedule` получает провайдер
-   из composition.
-5. `SearchContext.cfg` типизирован `AppConfig`; стадия выдачи пишет через `deps.reportWriter`
-   (T-20) и берёт запрос из `cfg.search?.text`.
-
-Проверка: `Get-ChildItem src\application -Recurse -Filter *.ts | Select-String -Pattern 'CONFIG_PATH|config/config'` → пусто;
-`npx tsc --noEmit` → 0; смоук провайдера (явный путь, `CONFIG_PATH`, мемоизация, отсутствие
-мутации env) и проброса `opts.config` в digest/search/cover/actualize/schedule → exit 0.
-
-### Этап 9.2 — `shared` и домен без инфраструктуры (выполнено 2026-10-19, T-21)
-
-1. `shared/logger.ts` — чистый фасад `LogSink` без `fs`/env; файловая реализация —
-   `infrastructure/logging/logger.ts` (единственное место с `LOG_FILE` и `DEBUG`),
-   composition root регистрирует sink. Домен получает `Logger` параметром:
-   `gradeResume`, `judge*`, письма (T-24 убрал логгер из `DigestMatcher`/`DigestEntryFactory`).
-2. `shared/concurrency.ts` заменён на `shared/batches.ts`: `chunk`/`runBatches` без env и
-   глобального логгера; прогресс/ошибки — через необязательный `logger`, параллелизм — параметром.
-   Env-настройки `JUDGE_BATCH_SIZE`/`AI_CONCURRENCY`/`COVER_BATCH_SIZE` читает composition
-   (`DigestDeps.settings`, `CoverConfig`).
-3. `shared/retry.ts` больше не импортирует `openai` и env: transient-ошибки по `err.name`/`status`,
-   `attempts`/`baseDelayMs`/`maxDelayMs` передаёт `infrastructure/ai/client.ts`.
-4. Профиль и подпись писем (`APPLICANT_PROFILE`, `COVER_SIGNATURE`) приходят из `CoverConfig`;
-   домен не читает `process.env`.
-
-Проверка: `Select-String -Path src\shared -Pattern '../infrastructure|from "openai"'` → пусто;
-`Select-String -Path src\domain -Pattern 'process.env|shared/logger|shared/concurrency'` → пусто;
-`npx tsc --noEmit` → 0; смоук логов (файл, уровни, `Europe/Moscow`) и `retryOnTransient` → ok.
-
-### Этап 9.3 — единый composition root и порт `Scheduler` (выполнено 2026-10-19, T-22)
-
-1. `domain/ports.ts` — `Scheduler { validate, schedule }`; `application/schedule.ts` больше
-   не импортирует `node-cron`, а получает планировщик через `ScheduleRuntimeDeps`.
-2. `infrastructure/scheduling/node-cron.ts` — единственный `import cron` в проекте; адаптер
-   оборачивает async-колбэк, сохраняя обработку ошибок шагов.
-3. `composition.ts` — `scheduleDeps` (config + scheduler), `gradeDeps` (ai + resumeFiles + logger)
-   и `closeResources()`; `cmd-schedule` добавляет `steps`, `cmd-grade-resume` получает `gradeDeps`.
-4. `application/config-view.ts` — просмотр конфига; `cmd-config` берёт `configProvider` из composition.
-   `menu/resume*` используют `application/resume` (`listResumeFiles`/`readResumeFile`) и `resumeDeps`.
-5. `presentation/cli/index.ts` закрывает Mongo через `closeResources()`; `presentation` не импортирует
-   инфраструктуру.
-
-Проверка: `Select-String -Path src\application -Pattern 'node-cron|infrastructure/'` → пусто;
-`Select-String -Path src\presentation -Pattern 'infrastructure/'` → пусто; `npx tsc --noEmit` → 0;
-смоук `runSchedule` (scheduled/invalid/no-cron, шаги и события), `gradeDeps`, `showConfig` → exit 0.
-
-### Этап 9.4 — защита границ (выполнено 2026-10-19, T-23)
-
-1. `dependency-cruiser` (dev) и `.dependency-cruiser.js`: правила из раздела 2, `tsPreCompilationDeps: true`
-   (type-only импорт тоже считается зависимостью). `npm run arch` → `depcruise src`; `npm run build` =
-   `npm run arch && tsc`, поэтому сборка падает на нарушении слоёв.
-2. T-22 убрал реальные импорты инфраструктуры из `application`/`presentation`; T-23 фиксирует это правило,
-   чтобы новые обходы composition root не появлялись. Проверено временным импортом
-   `application/collect.ts → infrastructure/mongo/db.ts` — `npm run arch` падает, строка удалена.
-3. `tsconfig.json`: `"strict": true` (включая `strictNullChecks`); 121 ошибка закрыта без `@ts-ignore`.
-   Для `catch (err: unknown)` добавлен `shared/errors.ts` (`errorMessage`, `errorName`).
-4. Порты без `any`: `CacheStore.savePage(state: SearchCacheSnapshot)`, `saveFullVacancy(vacancy: Vacancy)`,
-   `HistoryStore.load(): HistoryState`, `JudgementCache.save(Record<string, Judgement>)`;
-   `SearchCacheSnapshot.pages/fullById` — `VacancyListItem[]`/`Vacancy`.
-
-Проверка: `npm run arch` → 0; `npx tsc --noEmit` → 0; `npm run build` → 0.
-
-Ограничения: `Vacancy`/`DigestEntry` уточнены под реальные `null` (hh.ru, вердикт без судьи) — это
-типы, не поведение; форматы `.md`, меню и коллекции Mongo не менялись. Открыты T-25 (разбить адаптеры hh.ru),
-T-26 (тесты на фейковых портах).
-
-### Этап 9.5 — домен без побочек (выполнено 2026-10-19, T-24)
-
-1. `DigestEntryFactory` — чистый маппер: `create(accepted)` синхронный, без `HistoryStore`/`Logger`.
-   `markApplied` с `digestOnly: true` и лог `Match` перенесены в `SelectStage`.
-2. `DigestMatcher` не логирует: возвращает `accepted/rejected` + `events` (`DigestSelectionEvent`),
-   `SelectStage` печатает те же строки в прежнем порядке.
-3. `FullCardPolicy`/`SkipSeenPolicy`/`AllVacanciesPolicy` → `domain/search/FullCardPolicy.ts`;
-   `VacancyCollector` и стадии search/digest/cover импортируют политику из домена.
-4. `JudgementService` → `DigestJudgeRunner`; шапки `VacancyCollector`/`DigestJudgeRunner` —
-   «Application Service»: это оркестрация I/O через порты, а не доменное правило.
-5. Домен не импортирует `shared/logger`: `Logger` — порт `domain/logging.ts`, нужен только ИИ-вызовам.
-
-Проверка: `npm run arch` → 0; `npx tsc --noEmit` → 0; `npm run build` → 0;
-`Select-String -Path src\domain\digest -Pattern 'markApplied|history\.|logger'` → пусто;
-смоук на фейковых портах: логи, `DigestEntry` и `markApplied` совпадают с прежними (включая dry-run).
-
-Ограничения: `Vacancy`/`DigestEntry` не менялись; формат `.md`, меню и схема SQLite те же.
-Тогда оставались открытыми T-25 (адаптеры hh.ru) и T-26 (тесты); закрыты на этапе 11.
-
-### Этап 11 — адаптеры hh.ru, планировщик, документация (выполнено 2026-10-28, T-25/T-30/T-31)
-
-1. `infrastructure/hh/client.ts` (804) и `resume.ts` (743) разложены по ответственности:
-   `session.ts` (браузер, капча, initial state, порт `PageFetcher`), `search-page-reader.ts`,
-   `vacancy-page-reader.ts`, `resume-page-reader.ts`, `resume-dom-blocks.ts` (браузерный скрипт),
-   `resume-pdf.ts`; разбор состояния — чистые `vacancy-fields.ts` + `vacancy-mapping.ts` и
-   `resume-raw.ts` + `resume-codes.ts` + `resume-lookup.ts` + `resume-sections.ts` + `resume-parser.ts`.
-   `client.ts` (52 строки) — фасад; публичные порты и селекторы не менялись.
-2. `Scheduler.nextRun(expression)` вместо `shared/cron.ts`: адаптер `NodeCronScheduler` берёт
-   `getNextRun()` у стоящей задачи (или у временной, которую сразу останавливает), сценарий
-   считает next run один раз на постановку.
-3. Документация и конфигурация: `env()` отдаёт только `userAgent`/`requestDelayMs`, `loadConfig()`
-   удалён, `tsconfig` больше не включает несуществующий `scripts/`, README/`architecture.md`
-   описывают SQLite-таблицы и предупреждают про `data/browser-profile` (cookies сессии).
-4. Тесты: `hh-vacancy-mapping`, `hh-resume-parser`, `hh-page-readers` (чистые данные и фейковый
-   `PageFetcher`), `schedule-next-run` (фейковый `Scheduler`).
-
-Проверка: `npx tsc --noEmit` → 0, `npm run arch` → 0, `npm run test:types` → 0,
-`npx vitest run` → 23 файла / 136 кейсов, `node bin/auto-hh --help` → exit 0.
-
----
-
-## 7. Инварианты (не менять при переносе)
-
-- **Переменные окружения:** все имена `HH_*`, `PW_*`, `AI_*`, `CONFIG_PATH`, `RESUME_PATH`, `RESUMES_DIR`, `EXCLUDED_COMPANIES`, `APPLICANT_PROFILE`, `REQUEST_DELAY_MS`.
+- **Переменные окружения:** все имена `HH_*`, `PW_*`, `AI_*`, `CONFIG_PATH`, `RESUME_PATH`,
+  `RESUMES_DIR`, `EXCLUDED_COMPANIES`, `APPLICANT_PROFILE`, `REQUEST_DELAY_MS`.
 - **CLI и меню:** имена подкоманд, флаги и пункты интерактивного меню.
-- **SQLite:** таблицы `cache_pages`, `cache_full`, `cache_judgements`, `cache_cover_letters`, `history`, `digests`, `resumes` и их поля.
-- **Файлы:** раскладка `data/` (`search/`, `digests/`, `rejected/`, `resumes/`, `app.log`, `browser-profile/`); форматы `digest.md` (поля `id/title/employer/area/salary/url/publishedAt/score/reason/comment/coverLetter`), `rejected.md` (те же без письма и комментария) и `actual.md` (сводный снимок с `archived/lastSeenAt/checkedAt`).
+- **SQLite:** таблицы `cache_pages`, `cache_full`, `cache_judgements`, `cache_cover_letters`,
+  `history`, `digests`, `resumes` и их поля.
+- **Файлы:** раскладка `data/` (`search/`, `digests/`, `rejected/`, `resumes/`, `app.log`,
+  `browser-profile/`); форматы `digest.md` (поля
+  `id/title/employer/area/salary/url/publishedAt/score/reason/comment/coverLetter`), `rejected.md`
+  (те же без письма и комментария) и `actual.md` (сводный снимок с `archived/lastSeenAt/checkedAt`).
 - **Точка входа:** `bin/auto-hh` загружает `dotenv`, `tsx/cjs` и вызывает `run()` из `cli/index`.
 - **Сборка:** `tsconfig` (`rootDir: src`, `module: nodenext`), импорты с явным `.js`.
 
 ---
 
-## 8. Варианты глубины
-
-| Вариант | Что делает | Объём | Риск |
-|---|---|---|---|
-| **A. Только папки** | Этап 1: переезд файлов, код не трогаем | 1–2 коммита | низкий |
-| **B. Слои + use cases** | A + этапы 2–4 | ~6–8 коммитов | средний |
-| **C. Полная Clean Architecture** | B + интерфейсы для файлов, времени, логгера; тесты | много | высокий |
-
-**Рекомендация: B.** Сначала A — структура сразу читается, риск минимален. Затем этапами выносить сценарии. Вариант C потребует абстрагировать `fs`, `console`, `Date` и прочее; для CLI это чаще усложняет код, чем помогает.
-
----
-
-## 9. Точки входа и конфигурация
+## 6. Точки входа и конфигурация
 
 ```
 bin/auto-hh
@@ -753,38 +363,26 @@ bin/auto-hh
 ```
 
 - `npm start` → `node bin/auto-hh`; `npm run ui` → `node bin/auto-hh ui`.
-- `npm run build` (`npm run arch && tsc`) сначала проверяет границы слоёв, затем собирает `src/` в `dist/` — при переносе файлов `rootDir: src` сохраняется, структура `dist/` повторяет новую.
-- Пути `data/` резолвятся централизованно в `infrastructure/config/paths.ts` (бывший `src/paths.ts`), поэтому глубина каталога файла больше не влияет на путь.
+- `npm run build` (`npm run arch && tsc`) сначала проверяет границы слоёв, затем собирает `src/` в
+  `dist/`; структура `dist/` повторяет `src/`.
+- Пути `data/` резолвятся централизованно в `infrastructure/config/paths.ts`, поэтому глубина каталога
+  файла не влияет на путь.
+- `config.json` читает только `FileConfigProvider` (`infrastructure/config/config.ts`); сценарии
+  получают `ConfigProvider` или готовые VO (`CoverSettings`, `DigestPolicy`, `AppConfig`).
 
 ---
 
-## 10. Статус SOLID-рефакторинга (контекст)
+## 7. История этапов
 
-До архитектурного переезда в ветке `refactoring/add-solid` выполнены 12 коммитов:
+Подробности, DoD и коммиты — в тикетах [`docs/review/`](review/README.md).
 
-| Коммит | Что закрыто |
-|---|---|
-| `d65ad39` | общие утилиты времени, env, пула (`chunk`, `runBatches`) |
-| `46ae53d` | числовые env через helpers |
-| `e49c9f6` | `withCoverLetters` вместо трёх копий |
-| `1c62d02` | `ensureFullVacancies` вместо дублей загрузки карточек |
-| `2d95c2d` | порты `CacheStore`/`HistoryStore` (DIP, ISP) |
-| `7344c9a` | `selectCandidates` — чистая функция отбора (SRP) |
-| `d997047` | единый `openBrowser` и `PROFILE` (D14) |
-| `cc7ebee` | шаги из `applyToVacancy` (K2, D12) |
-| `13eb4f7` | распил `cmd-apply` на `config`/`steps` |
-| `3f28bea` | `hh-client.ts` без `@ts-nocheck` (LSP) |
-| `83b0b1f` | composition root для зависимостей сбора |
-| `0a858bd` | порт `AiProvider` и адаптер OpenAI (OCP, DIP) |
-
-Автотесты заведены на vitest (`npm test`, каталог `tests/`, конфиг `vitest.config.mts`):
-чистые правила и доменные функции проверяются без базы, SQLite-адаптеры — на `:memory:`
-(`:memory:` + `connect({ file: ':memory:' })`, env тесту не нужен). У тестов свой
-`tests/tsconfig.json` (алиас `@/`, `moduleResolution: bundler`, `types: ["node"]`):
-он даёт IDE и `npm run test:types` те же пути, что у сборки, не расширяя `rootDir: src`.
-Первый набор: `DigestPolicy`, `computeActualization` /
-`mergeActualized`, `formatResetSummary`, `DbJanitor`. Дальше — `DigestFilter.matches/select`,
-`SkipRules`, `withCoverLetters`, `chunk`, `runBatches`, `parseJSON`, `SqliteCacheStore` и `FileJanitor`.
-
-
-
+| Этап | Тикеты | Результат |
+|---|---|---|
+| 1–4 | — | каркас `src/{domain,application,infrastructure,presentation,shared}`, чистый домен, сценарии в `application`, команды-оболочки |
+| 5 | — | остальные команды переведены на сценарии (`resume`, `resume-download`, `schedule`, `history`, `grade`) |
+| 6 | — | поиск на ООП: `SearchScenario`, `VacancyCollector`, `SearchCache`, `SearchReporter` |
+| 7 | — | дайджест: конвейер стадий, `DigestFilter`/`DigestMatcher`/`DigestEntryFactory`, `DigestJudgeRunner`, показ и актуализация |
+| 8 | T-17, T-18 | `apply` и `cover` за портами и как ООП-подсистемы (фасады, конвейеры, стратегии) |
+| 9 | T-19…T-24 | `ConfigProvider`, файловый I/O за портами, чистые `shared` и домен, composition root + `Scheduler`, `dependency-cruiser` + `strict`, домен без побочек |
+| 10 | T-27, T-28 | VO и Domain Services в `judge`/`cover-letter`/`grade-resume`, ИИ-вызовы в `application` |
+| 11 | T-25, T-30, T-31 | адаптеры hh.ru разложены на сессию/читателей/парсер, `Scheduler.nextRun()` вместо `shared/cron.ts`, документация и `env()` приведены к коду |
