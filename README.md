@@ -58,7 +58,9 @@ cp config.example.json config.json   # затем отредактируйте c
 #    Несколько:  RESUMES_DIR=./resumes (каждый файл .md/.txt/.pdf = отдельное резюме)
 ```
 
-Запуск не требует компиляции — CLI исполняет TypeScript напрямую через `tsx`. Скрипт `npm run build` (`tsc`) нужен только если вы собираете чистый JS.
+Запуск не требует компиляции — CLI исполняет TypeScript напрямую через `tsx`. Скрипт `npm run build` (`arch && tsc`) нужен только если вы собираете чистый JS.
+
+Проверки перед коммитом: `npx tsc --noEmit` (типы `src/`), `npm run arch` (границы слоёв), `npm run lint` (ESLint 10 + `typescript-eslint`, конфиг `eslint.config.mjs`), `npm run test:types` и адресный `npx vitest run tests/<файл>.spec.ts`. Полные `npm run build` и `npm test` — для финального прогона, а не для каждой правки.
 
 ---
 

@@ -2,9 +2,10 @@
 
 Стек проекта: TypeScript (`nodenext`, `strict`), Node.js ≥ 22.13, CLI на `tsx`,
 тесты на vitest (`tests/**/*.spec.ts`, `vitest.config.mts`), границы слоёв —
-dependency-cruiser (`.dependency-cruiser.js`). ESLint, Prettier, Vue и jest
-в проекте **нет** — не вызывай их и не добавляй ради проверки. Оболочка —
-PowerShell (Windows): `head`/`tail` и bash-идиомы не работают.
+dependency-cruiser (`.dependency-cruiser.js`), линтер — ESLint 10
+(`eslint.config.mjs`: flat config + `typescript-eslint`). Prettier, Vue и jest
+в проекте **нет** — не добавляй их ради проверки. Оболочка — PowerShell
+(Windows): `head`/`tail` и bash-идиомы не работают.
 
 ### Команды проверки (только они)
 
@@ -12,6 +13,7 @@ PowerShell (Windows): `head`/`tail` и bash-идиомы не работают.
 | --- | --- | --- |
 | Типы исходников | `npx tsc --noEmit` | `src/**/*.ts` + `scripts/**/*.ts`, без записи в `dist/` |
 | Типы тестов | `npm run test:types` (`tsc -p tests`) | `tests/**/*.ts` со своим `tests/tsconfig.json` |
+| Линт TS | `npm run lint` (`eslint "src/**/*.ts" "tests/**/*.ts"`) | правила + `no-console` по слоям; автофикс — `npm run lint:fix` |
 | Один файл тестов | `npx vitest run tests/<файл>.spec.ts --reporter=dot` | только изменённый спек |
 | Один кейс | `npx vitest run tests/<файл>.spec.ts -t "<имя теста>"` | точечно, пока кейс падает |
 | Границы слоёв | `npm run arch` (`depcruise src`) | нарушения → `error`, exit ≠ 0 |
@@ -26,7 +28,8 @@ PowerShell (Windows): `head`/`tail` и bash-идиомы не работают.
   они ходят в hh.ru через Playwright, тратят лимит ИИ, пишут в `data/` и могут
   блокировать аккаунт. Логику проверяем тестами на фейковых портах.
 - `npm start` / `npm run ui` — интерактивное меню блокирует терминал.
-- Линтеры, которых нет в `package.json`; не добавляй зависимости ради проверки.
+- Линтеры и форматтеры, которых нет в `package.json` (Prettier, stylelint и т.п.):
+  в проекте есть только ESLint — его и запускай через `npm run lint`.
 - Чтение `.env` / `config.json` в тестах: юнит-тестам env не нужен, настройки
   передаются параметром.
 
@@ -34,13 +37,14 @@ PowerShell (Windows): `head`/`tail` и bash-идиомы не работают.
 
 | Изменение | Обязательный минимум |
 | --- | --- |
-| `src/domain`, `src/shared` | `npx tsc --noEmit` + спеки затронутых правил |
-| `src/application/**` | `npx tsc --noEmit` + `npm run arch` + спеки сценария/стадии |
-| `src/infrastructure/**` (SQLite, Playwright, AI, файлы) | `npx tsc --noEmit` + `npm run arch` + спеки адаптера на `:memory:`/tmp |
-| `src/presentation/**`, команды и меню | `npx tsc --noEmit` + `node bin/auto-hh --help` |
-| новые файлы или импорты между слоями | `npm run arch` **всегда**: цикл или импорт не в ту сторону валит проверку |
-| `tests/**` | `npm run test:types` + адресный `npx vitest run tests/<файл>.spec.ts` |
-| env-ключи (`src/infrastructure/config`, `.env.example`) | `npx tsc --noEmit` + сверить `.env.example` и `README.md`, секретов не добавлять |
+| `src/domain`, `src/shared` | `npx tsc --noEmit` + `npm run lint` + спеки затронутых правил |
+| `src/application/**` | `npx tsc --noEmit` + `npm run lint` + `npm run arch` + спеки сценария/стадии |
+| `src/infrastructure/**` (SQLite, Playwright, AI, файлы) | `npx tsc --noEmit` + `npm run lint` + `npm run arch` + спеки адаптера на `:memory:`/tmp |
+| `src/presentation/**`, команды и меню | `npx tsc --noEmit` + `npm run lint` + `node bin/auto-hh --help` |
+| новые файлы или импорты между слоями | `npm run arch` **всегда**: цикл или импорт не в ту сторону валит проверку; плюс `npm run lint` |
+| `tests/**` | `npm run test:types` + `npm run lint` + адресный `npx vitest run tests/<файл>.spec.ts` |
+| env-ключи (`src/infrastructure/config`, `.env.example`) | `npx tsc --noEmit` + `npm run lint` + сверить `.env.example` и `README.md`, секретов не добавлять |
+| `eslint.config.mjs` | `npm run lint` по всему каталогу: правка правил не должна ломать зелёный прогон |
 
 ### Правила для тестов
 
