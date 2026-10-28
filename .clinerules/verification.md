@@ -13,7 +13,7 @@ dependency-cruiser (`.dependency-cruiser.js`), линтер — ESLint 10
 | --- | --- | --- |
 | Типы исходников | `npx tsc --noEmit` | `src/**/*.ts` + `scripts/**/*.ts`, без записи в `dist/` |
 | Типы тестов | `npm run test:types` (`tsc -p tests`) | `tests/**/*.ts` со своим `tests/tsconfig.json` |
-| Линт TS | `npm run lint` (`eslint "src/**/*.ts" "tests/**/*.ts"`) | правила + `no-console` по слоям; автофикс — `npm run lint:fix` |
+| Линт TS | `npm run lint` (`eslint "src/**/*.ts" "tests/**/*.ts"`) | **один раз в конце задачи**, не после каждой правки; автофикс — `npm run lint:fix` |
 | Один файл тестов | `npx vitest run tests/<файл>.spec.ts --reporter=dot` | только изменённый спек |
 | Один кейс | `npx vitest run tests/<файл>.spec.ts -t "<имя теста>"` | точечно, пока кейс падает |
 | Границы слоёв | `npm run arch` (`depcruise src`) | нарушения → `error`, exit ≠ 0 |
@@ -37,14 +37,20 @@ dependency-cruiser (`.dependency-cruiser.js`), линтер — ESLint 10
 
 | Изменение | Обязательный минимум |
 | --- | --- |
-| `src/domain`, `src/shared` | `npx tsc --noEmit` + `npm run lint` + спеки затронутых правил |
-| `src/application/**` | `npx tsc --noEmit` + `npm run lint` + `npm run arch` + спеки сценария/стадии |
-| `src/infrastructure/**` (SQLite, Playwright, AI, файлы) | `npx tsc --noEmit` + `npm run lint` + `npm run arch` + спеки адаптера на `:memory:`/tmp |
-| `src/presentation/**`, команды и меню | `npx tsc --noEmit` + `npm run lint` + `node bin/auto-hh --help` |
-| новые файлы или импорты между слоями | `npm run arch` **всегда**: цикл или импорт не в ту сторону валит проверку; плюс `npm run lint` |
-| `tests/**` | `npm run test:types` + `npm run lint` + адресный `npx vitest run tests/<файл>.spec.ts` |
-| env-ключи (`src/infrastructure/config`, `.env.example`) | `npx tsc --noEmit` + `npm run lint` + сверить `.env.example` и `README.md`, секретов не добавлять |
-| `eslint.config.mjs` | `npm run lint` по всему каталогу: правка правил не должна ломать зелёный прогон |
+| `src/domain`, `src/shared` | `npx tsc --noEmit` + спеки затронутых правил |
+| `src/application/**` | `npx tsc --noEmit` + `npm run arch` + спеки сценария/стадии |
+| `src/infrastructure/**` (SQLite, Playwright, AI, файлы) | `npx tsc --noEmit` + `npm run arch` + спеки адаптера на `:memory:`/tmp |
+| `src/presentation/**`, команды и меню | `npx tsc --noEmit` + `node bin/auto-hh --help` |
+| новые файлы или импорты между слоями | `npm run arch` **всегда**: цикл или импорт не в ту сторону валит проверку |
+| `tests/**` | `npm run test:types` + адресный `npx vitest run tests/<файл>.spec.ts` |
+| env-ключи (`src/infrastructure/config`, `.env.example`) | `npx tsc --noEmit` + сверить `.env.example` и `README.md`, секретов не добавлять |
+| `eslint.config.mjs` | `npm run lint` по всему каталогу — правка правил не должна ломать зелёный прогон |
+
+**Линт — только в конце.** `npm run lint` запускается один раз, когда задача или этап
+доделаны: перед финальным коммитом и отчётом. Не гоняй его после каждой правки файла
+и не вставляй в промежуточные коммиты подзадач — там достаточно `tsc` и адресных тестов.
+Если линтер покраснел в конце, замечания чинятся одним коммитом `fix(lint): ...`
+(или `npm run lint:fix` + ручной разбор).
 
 ### Правила для тестов
 
@@ -69,6 +75,8 @@ dependency-cruiser (`.dependency-cruiser.js`), линтер — ESLint 10
 ### Definition of done
 
 - Проверка пройдена только при exit code 0 по всем строкам матрицы.
+- `npm run lint` прогоняется один раз в конце задачи и попадает в отчёт отдельной
+  строкой (`lint → 0 problems`); в промежуточных коммитах его не запускаем.
 - В отчёте перечисли, что именно запускал (команда + результат), а не «всё ок».
 - Если проверку выполнить нельзя (нужен живой hh.ru, ИИ-ключ, сеть) — скажи прямо,
   что она не запускалась, и укажи замену (фейковые порты, smoke `--help`).
