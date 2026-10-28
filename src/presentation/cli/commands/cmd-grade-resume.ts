@@ -1,21 +1,22 @@
 // Команда grade-resume: оценка резюме ИИ.
 // Форматирование (консоль + Markdown) — presentation/cli/format/grade-report.ts,
-// оценка — application/grade.ts (резюме читается там, домен файлов не знает).
-import { writeFileSync } from "fs";
-import { join } from "path";
-import { gradeDeps } from "@/composition.js";
+// оценка — application/grade.ts, запись файла — порт TextFileWriter из composition root.
+import { gradeDeps, gradeReportFile } from "@/composition.js";
 import { gradeResumeFromFile } from "@/application/grade.js";
 import { buildMarkdown, formatGrade } from "@/presentation/cli/format/grade-report.js";
 
-async function cmdGradeResume(opts: Record<string, any> = {}) {
+/** Параметры пункта меню: имя резюме (без него — резюме по умолчанию из .env). */
+interface GradeCommandOptions {
+  resume?: string;
+}
+
+async function cmdGradeResume(opts: GradeCommandOptions = {}) {
   const result = await gradeResumeFromFile({ resume: opts.resume }, gradeDeps);
   formatGrade(result);
 
   if (result) {
-    const md = buildMarkdown(result);
-    const filePath = join(process.cwd(), "resume-grade.md");
-    writeFileSync(filePath, md, "utf-8");
-    console.log(`\n  Результат сохранён: resume-grade.md\n`);
+    const saved = gradeReportFile.save("resume-grade.md", buildMarkdown(result));
+    console.log(`\n  Результат сохранён: ${saved}\n`);
   }
 }
 
