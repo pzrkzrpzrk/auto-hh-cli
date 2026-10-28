@@ -24,6 +24,8 @@ export interface Scheduler {
   validate(expression: string): boolean;
   /** Поставить задачу; колбэк может быть async. */
   schedule(expression: string, fn: () => void | Promise<void>): void;
+  /** Ближайшее срабатывание выражения; null — расчёт невозможен (как «неизвестно» в CLI). */
+  nextRun(expression: string): Date | null;
 }
 
 /**
