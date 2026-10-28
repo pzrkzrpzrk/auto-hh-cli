@@ -6,6 +6,7 @@ import type { AiProvider } from "@/domain/ports.js";
 import type { Resume } from "@/domain/models.js";
 import type { CoverConfig, CoverDeps, CoverOutcome, OnVacancy } from "@/application/cover/CoverDeps.js";
 import type { CoverMode } from "@/application/cover/CoverMode.js";
+import type { CoverOptions } from "@/application/options.js";
 import { DigestCoverMode } from "@/application/cover/DigestCoverMode.js";
 import { SingleVacancyMode } from "@/application/cover/SingleVacancyMode.js";
 
@@ -18,7 +19,7 @@ export class CoverScenario {
    */
   async run(
     vacancyId: string | undefined,
-    opts: Record<string, any>,
+    opts: CoverOptions,
     onVacancy?: OnVacancy,
   ): Promise<CoverOutcome> {
     const cfg = this.deps.config(opts.config);
@@ -41,7 +42,7 @@ export class CoverScenario {
   /** Стратегия режима: наличие id решает, что запускать. */
   private selectMode(
     id: string,
-    opts: Record<string, any>,
+    opts: CoverOptions,
     cfg: CoverConfig,
     resume: Resume,
     ai: AiProvider | null,

@@ -10,6 +10,34 @@
 module.exports = {
   forbidden: [
     {
+      name: 'no-circular',
+      comment: 'циклы запрещены: они размывают направление зависимостей',
+      severity: 'error',
+      from: {},
+      to: { circular: true },
+    },
+    {
+      name: 'core-no-node-builtins',
+      comment: 'домен и сценарии не трогают node built-ins напрямую — только через порты',
+      severity: 'error',
+      from: { path: '^src/(domain|application)' },
+      to: { dependencyTypes: ['core'] },
+    },
+    {
+      name: 'presentation-no-domain',
+      comment: 'CLI знает application и composition; DTO печати реэкспортирует application',
+      severity: 'error',
+      from: { path: '^src/presentation' },
+      to: { path: '^src/domain' },
+    },
+    {
+      name: 'application-no-composition',
+      comment: 'composition root подключает сценарии, а не наоборот',
+      severity: 'error',
+      from: { path: '^src/application' },
+      to: { path: '^src/composition' },
+    },
+    {
       name: 'domain-independent',
       comment: 'domain зависит только от shared — не от infrastructure/application/presentation',
       severity: 'error',

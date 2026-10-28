@@ -23,7 +23,7 @@ export class ApplicationRunner {
     applied: Record<string, any>,
   ): Promise<ApplyOutcome> {
     if (!await session.ensureLoggedIn()) {
-      // process.exit() здесь оборвал бы finally в withSession и незаписанные данные в Mongo.
+      // process.exit() здесь оборвал бы finally в withSession и незаписанные данные в SQLite.
       return { kind: 'not-logged-in' };
     }
 

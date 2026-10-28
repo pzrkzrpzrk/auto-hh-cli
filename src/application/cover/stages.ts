@@ -17,7 +17,7 @@ export class LoadDigestStage extends CoverStage {
   protected async execute(ctx: CoverContext): Promise<StageResult> {
     ctx.digest = await ctx.deps.digests.latest(ctx.resume.id).catch(() => null);
     if (!ctx.digest || !ctx.digest.entries.length) {
-      log.warn('Дайджест для выбранного резюме пуст — сначала соберите его: пункт меню «🧠 Собрать дайджест» (нужна MongoDB)');
+      log.warn('Дайджест для выбранного резюме пуст — сначала соберите его: пункт меню «🧠 Собрать дайджест» (нужна база данных)');
       ctx.outcome = 'empty';
       return 'stop';
     }

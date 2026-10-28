@@ -2,13 +2,15 @@ node_modules/
 .env
 config.json
 data/
+*.db
+*.db-wal
+*.db-shm
 data/resumes/resume.md
 resume.txt
 resume.pdf
 *.log
 .idea/
 .claude/
-.clinerules/
 /dist/
 /.playwright-mcp/
 packages/

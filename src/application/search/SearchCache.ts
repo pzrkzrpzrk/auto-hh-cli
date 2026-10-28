@@ -9,7 +9,7 @@ class SearchCache {
     private readonly store: CacheStore,
   ) {}
 
-  /** Загрузить снимок кэша через порт хранилища (без знания про Mongo). */
+  /** Загрузить снимок кэша через порт хранилища (без знания про базу). */
   static async load(store: CacheStore, date?: Date): Promise<SearchCache> {
     const doc = await store.load(date);
     return new SearchCache(doc, store);

@@ -1,5 +1,5 @@
 // Адаптер порта DigestFileSource: последние .md-файлы дайджеста на диске.
-// Fallback для `digest show`, когда MongoDB недоступна: чтение файлов живёт здесь,
+// Fallback для `digest show`, когда база данных недоступна: чтение файлов живёт здесь,
 // а не в сценарии. Сначала папка резюме, затем legacy data/digests.
 import fs from "fs";
 import { digestDir, LEGACY_DIGEST_DIR } from "@/infrastructure/config/paths.js";

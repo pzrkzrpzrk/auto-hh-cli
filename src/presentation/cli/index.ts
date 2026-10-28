@@ -6,13 +6,18 @@ import {  Command  } from "commander";
 import cmdUi from "@/presentation/cli/menu/menu.js";
 import { closeResources } from "@/composition.js";
 
+// package.json лежит вне rootDir: src, поэтому JSON-импорт не проходит сборку —
+// версию берём через require, как и делает CommonJS-обёртка bin/auto-hh.
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { version } = require("../../../package.json") as { version: string };
+
 const program = new Command();
 
 program
   .name('auto-hh')
   .usage('[options]')
   .description('CLI для поиска, фильтрации и отклика на вакансии hh.ru')
-  .version(require('../../../package.json').version);
+  .version(version);
 
 // Меню — единственная точка входа CLI: остальные шаги доступны только из него.
 program

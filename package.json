@@ -10,19 +10,18 @@
     "ui": "node bin/auto-hh ui",
     "build": "npm run arch && tsc",
     "arch": "depcruise src",
-    "watch": "tsc --watch",
-    "migrate:up": "migrate-mongo up",
-    "migrate:down": "migrate-mongo down",
-    "migrate:create": "migrate-mongo create"
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:types": "tsc -p tests",
+    "lint": "eslint \"src/**/*.ts\" \"tests/**/*.ts\"",
+    "lint:fix": "eslint \"src/**/*.ts\" \"tests/**/*.ts\" --fix",
+    "watch": "tsc --watch"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.96.0",
     "@inquirer/prompts": "^7.10.1",
-    "axios": "^1.7.7",
     "commander": "^14.0.3",
     "dotenv": "^16.4.5",
-    "migrate-mongo": "^14.0.7",
-    "mongodb": "^7.2.0",
     "node-cron": "^4.2.1",
     "openai": "^6.37.0",
     "playwright": "^1.48.0",
@@ -30,9 +29,16 @@
     "typescript": "^6.0.3"
   },
   "private": true,
+  "engines": {
+    "node": ">=22.13"
+  },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/node": "^25.7.0",
     "@types/node-cron": "^3.0.11",
-    "dependency-cruiser": "^18.6.0"
+    "dependency-cruiser": "^18.6.0",
+    "eslint": "^10.13.0",
+    "typescript-eslint": "^8.72.1",
+    "vitest": "^5.0.5"
   }
 }

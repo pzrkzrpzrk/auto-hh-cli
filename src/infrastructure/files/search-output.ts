@@ -1,6 +1,6 @@
 // Выдача поиска в Markdown: data/hh-parsing/<имя - resumeId>/search/<ГГГГ-ММ-ДД>/<Регион>/search.md.
 // Файл накапливает за день только новые вакансии (дедуп по id) — по регионам отдельно; источник правды
-// для шагов digest/cover остаётся в Mongo (cachePages), здесь только просмотр и сравнение выдачи без базы.
+// для шагов digest/cover остаётся в SQLite (cache_pages), здесь только просмотр и сравнение выдачи без базы.
 import fs from "fs";
 import path from "path";
 import type { ResumeRef, SearchEntry, SearchFileResult } from "@/domain/models.js";

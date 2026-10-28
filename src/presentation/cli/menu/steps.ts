@@ -107,7 +107,7 @@ export async function runResumeMenu(ctx: UiContext) {
       new Separator(),
       { name: "list — показать доступные резюме", value: "list" },
       { name: "show — показать резюме", value: "show" },
-      { name: "register — зарегистрировать в MongoDB", value: "register" },
+      { name: "register — зарегистрировать в базе", value: "register" },
       new Separator(),
       { name: "← назад", value: "back" },
     ],
@@ -176,7 +176,7 @@ export async function runReset(ctx: UiContext) {
 
   if (scope === "all") {
     const run = await confirm({
-      message: "Удалить ВСЁ (файлы + MongoDB)? Действие необратимо.",
+      message: "Удалить ВСЁ (файлы + база)? Действие необратимо.",
       default: false,
     });
     if (!run) {
@@ -196,7 +196,7 @@ export async function runReset(ctx: UiContext) {
     return;
   }
 
-  let label = name;
+  let label: string;
   try {
     const resume = readResumeFile(name, resumeDeps);
     if (!resume) throw new Error("not found");

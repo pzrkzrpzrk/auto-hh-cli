@@ -1,26 +1,14 @@
 // Зависимости сценария писем — только порты (DIP).
-// config.json, MongoDB, диск и ИИ подставляет composition root, поэтому сценарий
+// config.json, SQLite, диск и ИИ подставляет composition root, поэтому сценарий
 // можно прогнать с подставными портами, без базы и ключа.
 import type { AiProvider, CollectDeps, SourceProvider } from "@/domain/ports.js";
 import type { CoverLetterCache, DigestRepository, ResumeProvider } from "@/domain/digest/ports.js";
 import type { VacancySource } from "@/domain/search/VacancySource.js";
 
+import type { CoverConfig } from "@/domain/cover-letter/config.js";
+
 /** Настройки писем из config.json/env — читает composition root, сценарий их только использует. */
-export interface CoverConfig {
-  coverLetterTemplate?: string;
-  /** Адаптировать резюме под каждую вакансию (config.adaptResume !== false). */
-  adaptResume: boolean;
-  /** Лимит символов на адаптированное резюме (config.adaptResumeBudget). */
-  adaptResumeBudget: number;
-  /** Сколько вакансий уходит в один запрос к ИИ (COVER_BATCH_SIZE). */
-  batchSize: number;
-  /** Профиль соискателя (APPLICANT_PROFILE). */
-  profile: string;
-  /** Подпись письма (COVER_SIGNATURE, иначе плейсхолдер). */
-  signature: string;
-  /** Параллелизм пачек писем (AI_CONCURRENCY). */
-  concurrency: number;
-}
+export type { CoverConfig };
 
 /** Зависимости сценария писем — только порты. */
 export interface CoverDeps {

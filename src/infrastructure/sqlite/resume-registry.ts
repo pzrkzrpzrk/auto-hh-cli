@@ -1,9 +1,9 @@
-// Адаптер порта ResumeRegistry: регистрация резюме в коллекции resumes.
-import { findResume, listResumes, registerResume } from "@/infrastructure/mongo/resume-store.js";
+// Адаптер порта ResumeRegistry: регистрация резюме в таблице resumes.
+import { findResume, listResumes, registerResume } from "@/infrastructure/sqlite/resume-store.js";
 import type { RegisteredResume, ResumeRegistration, ResumeRegistry } from "@/domain/digest/ports.js";
 import type { Resume } from "@/domain/models.js";
 
-class MongoResumeRegistry implements ResumeRegistry {
+class SqliteResumeRegistry implements ResumeRegistry {
   register(resume: Resume): Promise<ResumeRegistration> {
     return registerResume(resume);
   }
@@ -17,4 +17,4 @@ class MongoResumeRegistry implements ResumeRegistry {
   }
 }
 
-export default MongoResumeRegistry;
+export default SqliteResumeRegistry;

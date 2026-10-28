@@ -1,4 +1,4 @@
-// Команда history: история откликов из MongoDB (коллекция history).
+// Команда history: история откликов из SQLite (коллекция history).
 // Чтение и выборки — application/history.ts, здесь только печать.
 import { loadHistoryView } from "@/application/history.js";
 import { historyDeps } from "@/composition.js";
@@ -8,7 +8,7 @@ async function cmdHistory(opts: Record<string, any> = {}) {
   const outcome = await loadHistoryView(historyDeps);
 
   if (outcome.kind === 'error') {
-    log.error(`Не удалось прочитать историю откликов из MongoDB: ${outcome.message}`);
+    log.error(`Не удалось прочитать историю откликов из базы: ${outcome.message}`);
     process.exitCode = 1;
     return;
   }

@@ -63,7 +63,7 @@ export class ExportSearchFileStage extends SearchStage {
     return 'continue';
   }
 
-  // Ошибка записи не должна выглядеть как провал поиска: данные уже в Mongo, только логируем.
+  // Ошибка записи не должна выглядеть как провал поиска: данные уже в базе, только логируем.
   protected onError(err: any, ctx: SearchContext): StageResult {
     log.error(`Search file dump failed: ${err.message}`);
     ctx.report({ type: 'files-failed', message: err.message });

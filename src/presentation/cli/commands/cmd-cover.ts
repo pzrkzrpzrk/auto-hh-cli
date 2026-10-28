@@ -2,9 +2,8 @@
 // Без id: письма для всех вакансий последнего дайджеста. С id: одно письмо для вакансии.
 // Сценарий — в application/cover.ts, здесь только печать результата и код возврата.
 import { coverDeps } from "@/composition.js";
-import { runCover } from "@/application/cover.js";
+import { runCover, type Vacancy } from "@/application/cover.js";
 import { fmtSalary } from "@/application/collect.js";
-import type { Vacancy } from "@/domain/models.js";
 import log from "@/shared/logger.js";
 
 function printVacancy(full: Vacancy, vacancyId: string) {

@@ -21,13 +21,27 @@ export interface ResumeDownloadOptions {
   overwrite?: boolean;
 }
 
+/**
+ * Раскладка резюме на диске — факт из конфигурации (env читает composition root).
+ * Нужна для предупреждения: при одиночном RESUME_PATH без RESUMES_DIR скачанное
+ * резюме не попадёт в список резюме меню.
+ */
+export interface ResumeDownloadLayout {
+  /** Задан RESUMES_DIR: скачанные резюме видны в меню. */
+  usesResumesDir: boolean;
+  /** Задан RESUME_PATH (одиночное резюме). */
+  hasSingleResume: boolean;
+}
+
 export interface ResumeDownloadDeps {
   /** Фабрика с жизненным циклом: открыть источник → скачать → закрыть. */
   source: SourceProvider<ResumeSource>;
   /** Файлы резюме на диске: каталог, запись .md, пути PDF. */
   files: ResumeFiles;
-  /** Регистрация скачанного резюме в MongoDB. */
+  /** Регистрация скачанного резюме в SQLite. */
   registry: ResumeRegistry;
+  /** Откуда берутся пути (RESUMES_DIR / RESUME_PATH) — решает composition root. */
+  layout: ResumeDownloadLayout;
 }
 
 export interface ResumeDownloadResult {
@@ -56,7 +70,7 @@ export async function downloadResumes(
   report?: (event: ResumeDownloadEvent) => void,
 ): Promise<ResumeDownloadResult[]> {
   deps.files.ensureDir();
-  if (!process.env.RESUMES_DIR && process.env.RESUME_PATH) {
+  if (!deps.layout.usesResumesDir && deps.layout.hasSingleResume) {
     log.warn('RESUME_PATH задан без RESUMES_DIR: скачанное резюме ляжет рядом с RESUME_PATH и не попадёт в список резюме. Задайте RESUMES_DIR, чтобы использовать его в меню.');
   }
 
@@ -84,7 +98,7 @@ async function downloadWith(
   }
 
   const results: ResumeDownloadResult[] = [];
-  // MongoDB может быть не поднята: пробуем один раз и дальше не тормозим на таймаутах.
+  // База может быть недоступна: пробуем один раз и дальше не тормозим на таймаутах.
   let mongoUnavailable = false;
 
   for (const item of items) {
@@ -142,9 +156,9 @@ async function downloadWith(
           const resume = deps.files.load(name);
           if (resume) await deps.registry.register(resume);
         } catch (err) {
-          // MongoDB может быть не поднят — скачанное резюме от этого не страдает.
+          // База может быть недоступна — скачанное резюме от этого не страдает.
           mongoUnavailable = true;
-          log.warn(`Резюме ${name} скачано, но не зарегистрировано в MongoDB: ${errorMessage(err)}`);
+          log.warn(`Резюме ${name} скачано, но не зарегистрировано в базе: ${errorMessage(err)}`);
         }
       }
     } catch (err) {

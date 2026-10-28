@@ -1,4 +1,4 @@
-// Зависимости сценариев дайджеста: только порты домена, без Mongo и fs.
+// Зависимости сценариев дайджеста: только порты домена, без хранилища и fs.
 // Раньше этот интерфейс жил рядом со свободными функциями в application/digest.ts;
 // теперь он в модуле сценария, а composition root импортирует его отсюда.
 import type { AiProvider, CollectDeps, ConfigProvider, SourceProvider } from "@/domain/ports.js";
@@ -29,6 +29,11 @@ export interface DigestDeps {
   settings: DigestSettings;
   /** Провайдер ИИ создаётся лениво — ровно там, где он нужен (как раньше); путь — из opts.config. */
   ai: (path?: string) => AiProvider | null;
+  /**
+   * Есть ли ключ ИИ для этого конфига (config.json → api.apiKey или env). Решение принимает
+   * composition root: сценарий не читает env, а политика получает готовый факт.
+   */
+  aiAvailable: (path?: string) => boolean;
   /** Хранилища сбора: кэш (с загрузкой снимка) и история откликов. */
   collect: CollectDeps & { cacheStore: DigestCacheStore };
   /** Источник вакансий с жизненным циклом (браузер открывается только при догрузке). */
@@ -37,7 +42,7 @@ export interface DigestDeps {
   judgements: JudgementCache;
   /** Дайджесты и rejected: показ и запись артефактов. */
   digest: DigestRepository;
-  /** Регистрация резюме в Mongo (без неё вердикты не связать с резюме). */
+  /** Регистрация резюме в SQLite (без неё вердикты не связать с резюме). */
   resumes: ResumeRegistry;
   /** Чтение резюме с диска. */
   resumeFiles: ResumeProvider;

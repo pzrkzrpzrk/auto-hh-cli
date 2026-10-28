@@ -3,7 +3,8 @@
 import type { DigestEvent, DigestReporter } from "@/application/digest/DigestEvent.js";
 import type { DigestShowOutcome } from "@/application/digest/DigestShowScenario.js";
 import type { ActualizeResult } from "@/application/digest/ActualizeScenario.js";
-import type { DigestEntry } from "@/domain/models.js";
+import type { DigestEntry } from "@/application/digest.js";
+import type { ShowOptions } from "@/application/options.js";
 import log from "@/shared/logger.js";
 
 const TOP_LIMIT = 10;
@@ -34,8 +35,8 @@ export class ConsoleDigestReporter implements DigestReporter {
   }
 }
 
-/** Печать исхода `digest show`: Mongo → карточки/JSON, файлы → содержимое, пусто → подсказка. */
-export function printDigestShow(outcome: DigestShowOutcome, opts: Record<string, any> = {}): void {
+/** Печать исхода `digest show`: SQLite → карточки/JSON, файлы → содержимое, пусто → подсказка. */
+export function printDigestShow(outcome: DigestShowOutcome, opts: ShowOptions = {}): void {
   if (outcome.kind === 'none') {
     log.info('No digest found. Сначала соберите дайджест: пункт меню «🧠 Собрать дайджест»');
     return;

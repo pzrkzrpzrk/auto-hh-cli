@@ -15,6 +15,7 @@ import {
   SelectItemsStage,
 } from "@/application/cover/stages.js";
 import type { CoverContext } from "@/application/cover/CoverContext.js";
+import type { CoverOptions } from "@/application/options.js";
 
 export class DigestCoverMode implements CoverMode {
   private readonly pipeline = new CoverPipeline([
@@ -32,7 +33,7 @@ export class DigestCoverMode implements CoverMode {
     private readonly cfg: CoverConfig,
     private readonly ai: AiProvider | null,
     private readonly resume: Resume,
-    private readonly opts: Record<string, any>,
+    private readonly opts: CoverOptions,
   ) {}
 
   async run(): Promise<CoverOutcome> {
