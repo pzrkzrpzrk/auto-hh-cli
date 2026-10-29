@@ -1,7 +1,6 @@
 // Рендер резюме hh.ru в Markdown: файл должны читать ИИ-шаги (digest/cover/grade),
 // поэтому HTML описаний превращаем в текст, а не сохраняем разметку.
 import type { HhResumeData, HhResumeEducationItem, HhResumeSalary } from "@/domain/models.js";
-import { sanitizeSegment } from "@/shared/path-utils.js";
 
 const CURRENCY_SIGNS: Record<string, string> = {
   RUR: '₽',
@@ -15,15 +14,6 @@ const CURRENCY_SIGNS: Record<string, string> = {
   AZN: '₼',
   UZS: 'soʻm',
   KGS: 'сом',
-};
-
-// Транслитерация — чтобы имена файлов оставались ASCII и одинаково работали
-// в Windows-консоли, git и любых shell-командах.
-const TRANSLIT: Record<string, string> = {
-  а: 'a', б: 'b', в: 'v', г: 'g', д: 'd', е: 'e', ё: 'e', ж: 'zh', з: 'z',
-  и: 'i', й: 'y', к: 'k', л: 'l', м: 'm', н: 'n', о: 'o', п: 'p', р: 'r',
-  с: 's', т: 't', у: 'u', ф: 'f', х: 'h', ц: 'ts', ч: 'ch', ш: 'sh', щ: 'sch',
-  ъ: '', ы: 'y', ь: '', э: 'e', ю: 'yu', я: 'ya',
 };
 
 function decodeEntities(value: string): string {
@@ -76,26 +66,6 @@ function formatPeriod(start: string | null, end: string | null): string | null {
 function fullName(data: HhResumeData): string | null {
   const name = [data.lastName, data.firstName, data.middleName].filter(Boolean).join(' ').trim();
   return name || null;
-}
-
-function translit(value: string): string {
-  return value
-    .toLowerCase()
-    .split('')
-    .map(char => TRANSLIT[char] ?? char)
-    .join('');
-}
-
-/** Имя файла резюме: <ФИО/должность>-<8 символов hash>. Стабильно между запусками. */
-export function slugifyResumeName(data: HhResumeData, hash: string): string {
-  const base = [data.lastName, data.firstName].filter(Boolean).join('-')
-    || data.title
-    || 'resume';
-  const slug = sanitizeSegment(translit(base))
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/-+/g, '-')
-    .replace(/^-|-$/g, '');
-  return `${slug || 'resume'}-${String(hash).slice(0, 8).toLowerCase()}`;
 }
 
 function renderEducationItem(item: HhResumeEducationItem): string[] {

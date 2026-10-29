@@ -159,6 +159,8 @@ export interface ResumeFiles {
   exists(file: string): boolean;
   /** Записать .md; saved=false — файл уже был и overwrite выключен. */
   save(name: string, markdown: string, opts?: { overwrite?: boolean }): { file: string; saved: boolean };
+  /** Перенести файлы резюме под новое имя: `.md` и `pdf/<name>.pdf`, если они есть. */
+  rename(fromName: string, toName: string): void;
 }
 
 /** Запись текстового артефакта (отчёт CLI): команда только печатает возвращённый путь. */
