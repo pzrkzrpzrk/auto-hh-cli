@@ -3,9 +3,10 @@
 // Источник резюме можно передать снаружи (меню уже открыло сессию) — тогда сценарий
 // её не закрывает: владелец браузера закрывает сам.
 import type { HhResumeSummary } from "@/domain/models.js";
-import type { ResumeFiles, ResumeSource, SourceProvider } from "@/domain/ports.js";
+import type { ResumeFile, ResumeFiles, ResumeSource, SourceProvider } from "@/domain/ports.js";
 import type { ResumeRegistry } from "@/domain/digest/ports.js";
-import { renderResumeMarkdown, slugifyResumeName } from "@/domain/resume-markdown.js";
+import { renderResumeMarkdown } from "@/domain/resume-markdown.js";
+import { resumeFileName } from "@/domain/resume-name.js";
 import { errorMessage, errorName } from "@/shared/errors.js";
 import log from "@/shared/logger.js";
 
@@ -64,6 +65,18 @@ export type ResumeDownloadEvent =
   | { type: 'pdf-skipped'; file: string }
   | { type: 'summary'; saved: number; skipped: number; failed: number; dir: string };
 
+/**
+ * Имя файла этого же резюме под прежним именем: раньше оно строилось без отчества
+ * и должности. Хвост hash общий у старой и новой схемы, поэтому по нему файл
+ * находится, и повторное скачивание не плодит дубли с другим resumeId
+ * (id выводится из имени файла).
+ */
+function legacyFileName(files: ResumeFile[], name: string, hash: string): string | null {
+  const suffix = `-${String(hash).slice(0, 8).toLowerCase()}`;
+  const match = files.find(file => file.name !== name && file.name.toLowerCase().endsWith(suffix));
+  return match?.name ?? null;
+}
+
 export async function downloadResumes(
   opts: ResumeDownloadOptions = {},
   deps: ResumeDownloadDeps,
@@ -121,7 +134,24 @@ async function downloadWith(
         continue;
       }
 
-      const name = slugifyResumeName(data, item.hash);
+      const name = resumeFileName(data, item.hash);
+      const legacy = legacyFileName(deps.files.list(), name, item.hash);
+
+      // Файл этого же резюме уже лежит под прежним именем: без подтверждения
+      // перезаписи второй файл не создаём.
+      if (legacy && !opts.overwrite) {
+        result.name = legacy;
+        result.file = deps.files.pathFor(legacy, 'md');
+        result.skipped = true;
+        report?.({ type: 'file-skipped', title: item.title, file: result.file });
+        results.push(result);
+        continue;
+      }
+      if (legacy) {
+        deps.files.rename(legacy, name);
+        log.info(`Резюме «${item.title}»: файл ${legacy} переименован в ${name}`);
+      }
+
       result.name = name;
 
       const file = deps.files.pathFor(name, 'md');

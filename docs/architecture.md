@@ -67,7 +67,7 @@ flowchart TD
 ## 3. Структура проекта
 
 ```
-src/                              # 183 файла
+src/                              # 188 файлов
 ├── domain/
 │   ├── models.ts               # Vacancy, Resume, DigestEntry, HhResume*
 │   ├── ports.ts                # CacheStore, HistoryStore, DataJanitor, ResumeFiles,
@@ -76,6 +76,7 @@ src/                              # 183 файла
 │   ├── logging.ts              # порт Logger для ИИ-вызовов
 │   ├── resume-block.ts         # блоки резюме для Markdown
 │   ├── resume-markdown.ts      # рендер резюме в .md
+│   ├── resume-name.ts          # имя файла резюме: ФИО-должность-hash
 │   ├── actualize.ts            # актуализация дайджестов
 │   ├── adapt-resume/           # адаптация резюме: словарь, секции, отбор по бюджету
 │   ├── search/                 # VO запроса/прохода, порт VacancySource, FullCardPolicy

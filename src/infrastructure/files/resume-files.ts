@@ -37,6 +37,17 @@ class FileResumeFiles implements ResumeFiles, ResumeProvider {
     fs.writeFileSync(file, markdown, 'utf-8');
     return { file, saved: true };
   }
+
+  rename(fromName: string, toName: string): void {
+    if (fromName === toName) return;
+    for (const kind of ['md', 'pdf'] as const) {
+      const from = this.pathFor(fromName, kind);
+      if (!fs.existsSync(from)) continue;
+      const to = this.pathFor(toName, kind);
+      fs.mkdirSync(path.dirname(to), { recursive: true });
+      fs.renameSync(from, to);
+    }
+  }
 }
 
 export default FileResumeFiles;
